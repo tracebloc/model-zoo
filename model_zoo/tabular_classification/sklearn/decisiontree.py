@@ -1,14 +1,14 @@
 import torch.nn as nn
-from sklearn.naive_bayes import GaussianNB
+from sklearn.tree import DecisionTreeClassifier
 
 framework = "sklearn"
-model_type = "naive"
+model_type = "tree"
 main_method = "MyModel"
 image_size = 69
 batch_size = 4
 output_classes = 2
-category = "generic_classification"
+category = "tabular_classification"
 num_feature_points = 69
 
 def MyModel():
-    return GaussianNB()
+    return DecisionTreeClassifier(random_state=42)
