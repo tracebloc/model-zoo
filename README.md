@@ -1,4 +1,6 @@
 # Model Zoo
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 
 A collection of machine learning models and implementations for various tasks.
 
@@ -16,6 +18,9 @@ cd model-zoo
 
 Each model in the repository is organized in its own directory with its specific requirements and usage instructions. Please refer to the individual model directories for detailed documentation.
 For more detailed information on how to use model for training, go to [Start Training](https://traceblocdocsdev.azureedge.net/category/start-training)
+
+## 📜 License
+This project is licensed under the MIT License - see the [LICENSE.txt](LICENSE.txt) file for details.
 
 ## 📞 Support
 
