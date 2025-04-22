@@ -20,7 +20,7 @@ Each model in the repository is organized in its own directory with its specific
 For more detailed information on how to use model for training, go to [Start Training](https://traceblocdocsdev.azureedge.net/category/start-training)
 
 ## 📜 License
-This project is licensed under the MIT License - see the [LICENSE.txt](LICENSE.txt) file for details.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ## 📞 Support
 
