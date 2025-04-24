@@ -8,7 +8,7 @@ main_class = "VisionTransformer"
 image_size = 224
 batch_size = 16
 category = "image_classification"
-output_classes = 3
+output_classes = 2
 
 
 class VisionTransformer(nn.Module):

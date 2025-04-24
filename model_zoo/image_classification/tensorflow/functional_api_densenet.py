@@ -6,7 +6,7 @@ framework = "tensorflow"
 main_method = "MyModel"
 input_shape = 224
 batch_size = 16
-output_classes = 3
+output_classes = 2
 category = "image_classification"
 
 

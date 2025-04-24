@@ -5,7 +5,7 @@ framework = "pytorch"
 main_class = "MyModel"
 image_size = 224
 batch_size = 16
-output_classes = 3
+output_classes = 2
 category = "image_classification"
 
 
