@@ -4,7 +4,6 @@ from sklearn.neural_network import MLPClassifier
 framework = "sklearn"
 model_type = "tree"
 main_method = "MyModel"
-image_size = 69
 batch_size = 4
 output_classes = 2
 category = "tabular_classification"
