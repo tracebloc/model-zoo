@@ -4,7 +4,7 @@ from tensorflow.keras.utils import plot_model
 
 framework = "tensorflow"
 main_method = "MyModel"
-input_shape = 224
+image_size = 224
 batch_size = 16
 output_classes = 2
 category = "image_classification"
@@ -75,7 +75,7 @@ def projection_block(input_tensor, filters, strides=2):
 # Final model to return
 
 
-def MyModel(input_shape=(224, 224, 3), classes=output_classes):
+def MyModel(input_shape=(image_size, image_size, 3), classes=output_classes):
     input = layers.Input(shape=input_shape)
 
     x = layers.Conv2D(filters=64, kernel_size=(7, 7), strides=2, padding="same")(input)
