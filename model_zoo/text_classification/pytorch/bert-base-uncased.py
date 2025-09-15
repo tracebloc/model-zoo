@@ -7,6 +7,7 @@ main_class = "MyModel"
 category = "text_classification"
 model_type = ""
 batch_size = 16
+sequence_length = 512
 output_classes = 134
 
 def MyModel(num_classes=output_classes):

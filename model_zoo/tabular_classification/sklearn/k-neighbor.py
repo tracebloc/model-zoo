@@ -2,7 +2,7 @@ import torch.nn as nn
 from sklearn.neighbors import KNeighborsClassifier
 
 framework = "sklearn"
-model_type = "knn"
+model_type = "clustering"
 main_method = "MyModel"
 image_size = 69
 batch_size = 4

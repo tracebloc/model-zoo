@@ -2,9 +2,8 @@ import torch.nn as nn
 from sklearn.svm import SVC
 
 framework = "sklearn"
-model_type = "tree"
+model_type = "svm"
 main_method = "MyModel"
-image_size = 69
 batch_size = 4
 output_classes = 2
 category = "tabular_classification"
