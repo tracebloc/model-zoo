@@ -10,7 +10,6 @@ image_size = 256
 batch_size = 8
 output_classes = 2
 category = "semantic_segmentation"
-input_channels = 3
 
 
 class Segmenter(nn.Module):

@@ -9,7 +9,6 @@ image_size = 256
 batch_size = 8
 output_classes = 2
 category = "semantic_segmentation"
-input_channels = 3
 
 
 class BasicBlock(nn.Module):
@@ -108,7 +107,7 @@ class HRModule(nn.Module):
 class HRNet(nn.Module):
     """HRNet for semantic segmentation"""
     
-    def __init__(self, n_channels=input_channels, n_classes=output_classes):
+    def __init__(self, n_channels=3, n_classes=output_classes):
         super(HRNet, self).__init__()
         self.n_channels = n_channels
         self.n_classes = n_classes

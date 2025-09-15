@@ -9,8 +9,6 @@ image_size = 256
 batch_size = 8
 output_classes = 2
 category = "semantic_segmentation"
-input_channels = 3
-
 
 class DoubleConv(nn.Module):
     """(convolution => [BN] => ReLU) * 2"""
@@ -85,7 +83,7 @@ class OutConv(nn.Module):
 
 
 class UNet(nn.Module):
-    def __init__(self, n_channels=input_channels, n_classes=output_classes, bilinear=False):
+    def __init__(self, n_channels=3, n_classes=output_classes, bilinear=False):
         super(UNet, self).__init__()
         self.n_channels = n_channels
         self.n_classes = n_classes

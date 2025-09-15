@@ -9,7 +9,6 @@ image_size = 256
 batch_size = 8
 output_classes = 2 
 category = "semantic_segmentation"
-input_channels = 3
 
 
 class VGGBlock(nn.Module):
@@ -31,7 +30,7 @@ class VGGBlock(nn.Module):
 
 
 class FCN(nn.Module):
-    def __init__(self, n_channels=input_channels, n_classes=output_classes):
+    def __init__(self, n_channels=3, n_classes=output_classes):
         super(FCN, self).__init__()
         self.n_channels = n_channels
         self.n_classes = n_classes

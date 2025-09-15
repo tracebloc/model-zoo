@@ -4,7 +4,7 @@ from sklearn.svm import SVC
 from sklearn.ensemble import GradientBoostingClassifier
 
 framework = "sklearn"
-model_type = "tree"
+model_type = "ensemble"
 main_method = "MyModel"
 batch_size = 4
 output_classes = 2
