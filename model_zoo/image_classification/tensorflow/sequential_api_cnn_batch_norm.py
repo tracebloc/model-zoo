@@ -3,15 +3,15 @@ from tensorflow.keras import layers, models
 
 framework = "tensorflow"
 main_method = "MyModel"
-input_shape = 224
+image_size = 224
 batch_size = 16
-output_classes = 3
+output_classes = 2
 category = "image_classification"
 
 # define lenet model
 
 
-def MyModel(input_shape=(224, 224, 3), classes=output_classes):
+def MyModel(input_shape=(image_size, image_size, 3), classes=output_classes):
     model = models.Sequential()
     # layer conv 1
     model.add(layers.Conv2D(32, 3, activation="relu", input_shape=input_shape))

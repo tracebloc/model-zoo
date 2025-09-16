@@ -3,9 +3,9 @@ from tensorflow.keras import layers, utils
 
 framework = "tensorflow"
 main_method = "MyModel"
-input_shape = 224
+image_size = 224
 batch_size = 16
-output_classes = 3
+output_classes = 2
 category = "image_classification"
 
 # entry flow block
@@ -136,7 +136,7 @@ def exit_flow(input_tensor, classes):
 # define final model
 
 
-def MyModel(input_shape=(224, 224, 3), classes=output_classes):
+def MyModel(input_shape=(image_size, image_size, 3), classes=output_classes):
     input = layers.Input(shape=input_shape)
 
     x = entry_flow(input)

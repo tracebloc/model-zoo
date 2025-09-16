@@ -8,6 +8,7 @@ category = "text_classification"
 model_type = ""
 input_shape = 512
 batch_size = 16
+sequence_length = 512
 output_classes = 2
 
 

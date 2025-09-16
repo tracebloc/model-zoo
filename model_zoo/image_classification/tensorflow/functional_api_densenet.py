@@ -4,9 +4,9 @@ from tensorflow.keras import layers, utils
 # Dense Block
 framework = "tensorflow"
 main_method = "MyModel"
-input_shape = 224
+image_size = 224
 batch_size = 16
-output_classes = 3
+output_classes = 2
 category = "image_classification"
 
 
@@ -54,7 +54,7 @@ def transition_layers(input_tensor, theta=0.5):
 # DenseNet-169 - final model to return
 
 
-def MyModel(input_shape=(224, 224, 3), classes=output_classes):
+def MyModel(input_shape=(image_size, image_size, 3), classes=output_classes):
     k = 32  # growth rate
 
     input = layers.Input(shape=input_shape)

@@ -5,9 +5,9 @@ import math
 
 framework = "tensorflow"
 main_method = "MyModel"
-input_shape = 224
+image_size = 224
 batch_size = 16
-output_classes = 3
+output_classes = 2
 category = "image_classification"
 
 
@@ -93,7 +93,7 @@ def scale_width(filters, width_coefficient=1, depth_divisor=8):
 # final Model
 
 
-def MyModel(input_shape=(224, 224, 3), classes=output_classes):
+def MyModel(input_shape=(image_size, image_size, 3), classes=output_classes):
     # Setting some hyperparameters for EfficientNet-B0
 
     input_shape = input_shape
