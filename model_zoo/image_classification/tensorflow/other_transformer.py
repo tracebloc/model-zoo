@@ -6,7 +6,7 @@ subprocess.call(["pip", "install", "tensorflow_addons"])
 from vit_keras import vit
 import tensorflow as tf
 
-ramework = "tensorflow"
+framework = "tensorflow"
 main_method = "MyModel"
 image_size = 224
 batch_size = 16
