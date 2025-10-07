@@ -41,7 +41,7 @@ def transition_layers(input_tensor, theta=0.5):
     return the output tensor
     """
 
-    filters = input_tensor.shape[-1] * theta
+    filters = int(input_tensor.shape[-1] * theta)
 
     x = layers.BatchNormalization()(input_tensor)
     x = layers.ReLU()(x)
