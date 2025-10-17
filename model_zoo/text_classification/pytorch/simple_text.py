@@ -6,14 +6,13 @@ framework = "pytorch"
 main_class = "SimpleTextClassifier"
 category = "text_classification"
 model_type = ""
-input_shape = 512
-batch_size = 16
-sequence_length = 512
-output_classes = 2
+batch_size = 32
+sequence_length = 5
+output_classes = 5
 
 
 class SimpleTextClassifier(nn.Module):
-    def __init__(self, embed_dim=512, num_classes=2):
+    def __init__(self, embed_dim=512, num_classes=5):
         super(SimpleTextClassifier, self).__init__()
         # Assuming that the embeddings are already handled by the tokenizer
         self.fc1 = nn.Linear(embed_dim, 128)  # First dense layer
