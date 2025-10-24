@@ -7,7 +7,7 @@ main_class = "SimpleTextClassifier"
 category = "text_classification"
 model_type = ""
 batch_size = 32
-sequence_length = 5
+sequence_length = 512 # mandatory for non huggingface model
 output_classes = 5
 
 

@@ -2,7 +2,6 @@ from transformers import AutoModelForSequenceClassification
 from transformers import AutoConfig
 
 model_id = "distilbert-base-uncased-finetuned-sst-2-english"
-hf_token = "<PROVIDE HF TOKEN>"
 framework = "pytorch"
 main_class = "MyModel"
 category = "text_classification"
