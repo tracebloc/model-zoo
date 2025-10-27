@@ -4,9 +4,9 @@ framework = "pytorch"
 model_type = ""
 main_class = "SimpleFCN"
 batch_size = 4
-output_classes = 2
+output_classes = 5
 category = "tabular_classification"
-num_feature_points = 69
+num_feature_points = 50
 
 class SimpleFCN(nn.Module):
     def __init__(self):

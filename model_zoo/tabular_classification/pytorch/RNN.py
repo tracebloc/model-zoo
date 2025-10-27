@@ -4,9 +4,9 @@ framework = "pytorch"
 model_type = ""
 main_class = "SimpleRNN"
 batch_size = 4
-output_classes = 2
+output_classes = 5
 category = "tabular_classification"
-num_feature_points = 69
+num_feature_points = 50
 
 class SimpleRNN(nn.Module):
     def __init__(self, input_size=num_feature_points, hidden_size=128, num_layers=1):
