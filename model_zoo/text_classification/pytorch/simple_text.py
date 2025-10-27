@@ -7,12 +7,13 @@ main_class = "SimpleTextClassifier"
 category = "text_classification"
 model_type = ""
 batch_size = 32
-sequence_length = 512 # mandatory for non huggingface model
+# mandatory for non huggingface model
+sequence_length = 5
 output_classes = 5
 
 
 class SimpleTextClassifier(nn.Module):
-    def __init__(self, embed_dim=512, num_classes=5):
+    def __init__(self, embed_dim=sequence_length, num_classes=5):
         super(SimpleTextClassifier, self).__init__()
         # Assuming that the embeddings are already handled by the tokenizer
         self.fc1 = nn.Linear(embed_dim, 128)  # First dense layer
