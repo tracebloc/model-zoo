@@ -4,12 +4,12 @@ framework = "pytorch"
 model_type = ""
 main_class = "SimpleCNN"
 batch_size = 4
-output_classes = 5
+output_classes = 2
 category = "tabular_classification"
-num_feature_points = 50
+num_feature_points = 31
 
 class SimpleCNN(nn.Module):
-    def __init__(self, input_size=num_feature_points):
+    def __init__(self, input_size=69):
         super(SimpleCNN, self).__init__()
         self.conv1 = nn.Conv1d(in_channels=1, out_channels=16, kernel_size=3, padding=1)
         self.conv2 = nn.Conv1d(in_channels=16, out_channels=32, kernel_size=3, padding=1)
