@@ -6,7 +6,7 @@ main_class = "SimpleCNN"
 batch_size = 4096
 output_classes = 2
 category = "tabular_classification"
-num_feature_points = 29
+num_feature_points = 10
 
 class SimpleCNN(nn.Module):
     def __init__(self, input_size=num_feature_points):

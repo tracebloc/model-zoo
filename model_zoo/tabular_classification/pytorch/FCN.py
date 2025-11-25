@@ -6,7 +6,7 @@ main_class = "SimpleFCN"
 batch_size = 4096
 output_classes = 2
 category = "tabular_classification"
-num_feature_points = 29
+num_feature_points = 10
 
 class SimpleFCN(nn.Module):
     def __init__(self):
