@@ -2,7 +2,7 @@ import torch.nn as nn
 from lightgbm import LGBMClassifier
 
 framework = "sklearn"
-model_type = "tree"
+model_type = "lightgbm"
 main_method = "MyModel"
 batch_size = 4
 output_classes = 5

@@ -1,7 +1,7 @@
 from lightgbm import LGBMRegressor
 
 framework = "sklearn"
-model_type = "tree"
+model_type = "lightgbm"
 main_method = "MyModel"
 batch_size = 4
 output_classes = 3

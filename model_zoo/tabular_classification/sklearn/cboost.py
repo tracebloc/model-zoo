@@ -2,7 +2,7 @@ import torch.nn as nn
 from catboost import CatBoostClassifier
 
 framework = "sklearn"
-model_type = "tree"
+model_type = "catboost"
 main_method = "MyModel"
 batch_size = 4
 output_classes = 5
