@@ -11,12 +11,15 @@ output_classes = 5
 category = "tabular_classification"
 num_feature_points = 50
 
+
 def MyModel():
-    gbm = GradientBoostingClassifier(n_estimators=100, learning_rate=0.1, random_state=42)
+    gbm = GradientBoostingClassifier(
+        n_estimators=100, learning_rate=0.1, random_state=42
+    )
     svm = SVC(probability=True, kernel="rbf", random_state=42)
 
     stacked_model = StackingClassifier(
-        estimators=[('gbm', gbm), ('svm', svm)],
-        final_estimator=LogisticRegression(random_state=42)
+        estimators=[("gbm", gbm), ("svm", svm)],
+        final_estimator=LogisticRegression(random_state=42),
     )
     return stacked_model

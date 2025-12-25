@@ -40,7 +40,9 @@ class CPMStage(nn.Module):
 
 
 class CPM(nn.Module):
-    def __init__(self, in_channels=3, num_feature_points=num_feature_points, num_stages=6):
+    def __init__(
+        self, in_channels=3, num_feature_points=num_feature_points, num_stages=6
+    ):
         super(CPM, self).__init__()
         self.in_channels = in_channels
         self.num_feature_points = num_feature_points

@@ -57,33 +57,33 @@ class SegNet(nn.Module):
         # Encoder
         x1 = self.enc1(x)
         x1_pool, id1 = F.max_pool2d(x1, kernel_size=2, stride=2, return_indices=True)
-        
+
         x2 = self.enc2(x1_pool)
         x2_pool, id2 = F.max_pool2d(x2, kernel_size=2, stride=2, return_indices=True)
-        
+
         x3 = self.enc3(x2_pool)
         x3_pool, id3 = F.max_pool2d(x3, kernel_size=2, stride=2, return_indices=True)
-        
+
         x4 = self.enc4(x3_pool)
         x4_pool, id4 = F.max_pool2d(x4, kernel_size=2, stride=2, return_indices=True)
-        
+
         x5 = self.enc5(x4_pool)
         x5_pool, id5 = F.max_pool2d(x5, kernel_size=2, stride=2, return_indices=True)
 
         # Decoder
         x5_unpool = F.max_unpool2d(x5_pool, id5, kernel_size=2, stride=2)
         x5_dec = self.dec5(x5_unpool)
-        
+
         x4_unpool = F.max_unpool2d(x5_dec, id4, kernel_size=2, stride=2)
         x4_dec = self.dec4(x4_unpool)
-        
+
         x3_unpool = F.max_unpool2d(x4_dec, id3, kernel_size=2, stride=2)
         x3_dec = self.dec3(x3_unpool)
-        
+
         x2_unpool = F.max_unpool2d(x3_dec, id2, kernel_size=2, stride=2)
         x2_dec = self.dec2(x2_unpool)
-        
+
         x1_unpool = F.max_unpool2d(x2_dec, id1, kernel_size=2, stride=2)
         x1_dec = self.dec1(x1_unpool)
 
-        return x1_dec 
+        return x1_dec

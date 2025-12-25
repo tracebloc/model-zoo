@@ -25,7 +25,9 @@ class KeypointHead(nn.Module):
     def forward(self, x):
         x = torch.relu(self.conv1(x))
         x = self.conv2(x)
-        x = self.adaptive_pool(x)  # Reduce to [batch_size, num_feature_points * 3, 1, 1]
+        x = self.adaptive_pool(
+            x
+        )  # Reduce to [batch_size, num_feature_points * 3, 1, 1]
         x = x.view(x.size(0), -1)  # Flatten to [batch_size, num_feature_points * 3]
         return x
 
@@ -81,5 +83,7 @@ class CascadedPyramidNetwork(nn.Module):
         # Adjust the shape to (batch_size, num_feature_points, 3)
         batch_size = keypoint_predictions.shape[0]
         num_feature_points = keypoint_predictions.shape[1] // 3
-        keypoint_predictions = keypoint_predictions.view(batch_size, num_feature_points, 3)
+        keypoint_predictions = keypoint_predictions.view(
+            batch_size, num_feature_points, 3
+        )
         return keypoint_predictions

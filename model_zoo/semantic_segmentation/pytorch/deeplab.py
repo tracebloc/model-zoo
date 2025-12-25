@@ -14,18 +14,14 @@ category = "semantic_segmentation"
 class DeepLabV3(nn.Module):
     def __init__(self, backbone="resnet50"):
         super(DeepLabV3, self).__init__()
-        
+
         if backbone == "resnet50":
             self.model = deeplabv3_resnet50(
-                pretrained=False, 
-                progress=True, 
-                num_classes=output_classes
+                pretrained=False, progress=True, num_classes=output_classes
             )
         elif backbone == "resnet101":
             self.model = deeplabv3_resnet101(
-                pretrained=False, 
-                progress=True, 
-                num_classes=output_classes
+                pretrained=False, progress=True, num_classes=output_classes
             )
         else:
             raise ValueError(f"Unsupported backbone: {backbone}")
@@ -43,4 +39,4 @@ class DeepLabV3(nn.Module):
 # class DeepLabV3ResNet101(DeepLabV3):
 #     """DeepLabV3 with ResNet-101 backbone"""
 #     def __init__(self):
-#         super(DeepLabV3ResNet101, self).__init__(backbone="resnet101") 
+#         super(DeepLabV3ResNet101, self).__init__(backbone="resnet101")

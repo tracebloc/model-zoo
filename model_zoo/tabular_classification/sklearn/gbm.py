@@ -10,6 +10,7 @@ output_classes = 5
 category = "tabular_classification"
 num_feature_points = 50
 
+
 def MyModel():
     model = GradientBoostingClassifier(n_estimators=100, random_state=42)
     return model

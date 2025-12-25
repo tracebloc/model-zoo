@@ -15,7 +15,6 @@ category = "keypoint_detection"
 num_feature_points = 16
 
 
-
 class KeypointHead(nn.Module):
     def __init__(self, in_channels, num_feature_points):
         super(KeypointHead, self).__init__()
@@ -26,6 +25,7 @@ class KeypointHead(nn.Module):
         x = torch.relu(self.conv1(x))
         x = self.conv2(x)
         return x
+
 
 class CascadedPyramidNetwork(nn.Module):
     def __init__(self, num_feature_points=num_feature_points):
@@ -53,7 +53,9 @@ class CascadedPyramidNetwork(nn.Module):
         self.keypoint_head = KeypointHead(256, num_feature_points)
 
         # Upsample layer to match the input image size
-        self.upsample = nn.Upsample(size=(image_size, image_size), mode='bilinear', align_corners=False)
+        self.upsample = nn.Upsample(
+            size=(image_size, image_size), mode="bilinear", align_corners=False
+        )
 
     def forward(self, x):
         # Process the input tensor through the initial ResNet layers

@@ -13,7 +13,9 @@ num_feature_points = 16
 
 
 class HRNetKeypointDetection(nn.Module):
-    def __init__(self, num_feature_points: int = num_feature_points, input_channels: int = 3):
+    def __init__(
+        self, num_feature_points: int = num_feature_points, input_channels: int = 3
+    ):
         super(HRNetKeypointDetection, self).__init__()
         self.num_feature_points = num_feature_points
 
@@ -34,10 +36,14 @@ class HRNetKeypointDetection(nn.Module):
         )
 
         # Final layer to predict keypoint heatmaps
-        self.heatmap_conv = nn.Conv2d(512, num_feature_points, kernel_size=1, stride=1, padding=0)
+        self.heatmap_conv = nn.Conv2d(
+            512, num_feature_points, kernel_size=1, stride=1, padding=0
+        )
 
         # Upsample layer to match the input image size
-        self.upsample = nn.Upsample(size=(image_size, image_size), mode='bilinear', align_corners=False)
+        self.upsample = nn.Upsample(
+            size=(image_size, image_size), mode="bilinear", align_corners=False
+        )
 
     def forward(self, x: torch.Tensor):
         # Input shape: (batch_size, input_channels, height, width)

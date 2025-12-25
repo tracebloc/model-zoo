@@ -7,7 +7,7 @@ framework = "pytorch"
 main_class = "FCN"
 image_size = 256
 batch_size = 8
-output_classes = 2 
+output_classes = 2
 category = "semantic_segmentation"
 
 
@@ -57,7 +57,7 @@ class FCN(nn.Module):
     def _initialize_weights(self):
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
-                nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
+                nn.init.kaiming_normal_(m.weight, mode="fan_out", nonlinearity="relu")
                 if m.bias is not None:
                     nn.init.constant_(m.bias, 0)
             elif isinstance(m, nn.BatchNorm2d):
@@ -76,11 +76,11 @@ class FCN(nn.Module):
         x = self.fc6(x)
         x = F.relu(x)
         x = F.dropout2d(x, p=0.5, training=self.training)
-        
+
         x = self.fc7(x)
         x = F.relu(x)
         x = F.dropout2d(x, p=0.5, training=self.training)
-        
+
         x = self.score_fc(x)
 
         # FCN-8s: Add skip connections
@@ -88,21 +88,27 @@ class FCN(nn.Module):
         score_pool4 = self.score_pool4(pool4)
 
         # Upsample and add skip connections
-        x = F.interpolate(x, score_pool4.size()[2:], mode='bilinear', align_corners=True)
+        x = F.interpolate(
+            x, score_pool4.size()[2:], mode="bilinear", align_corners=True
+        )
         x = x + score_pool4
-        
-        x = F.interpolate(x, score_pool3.size()[2:], mode='bilinear', align_corners=True)
+
+        x = F.interpolate(
+            x, score_pool3.size()[2:], mode="bilinear", align_corners=True
+        )
         x = x + score_pool3
-        
+
         # Final upsampling to input size
-        x = F.interpolate(x, size=(x.size(2)*8, x.size(3)*8), mode='bilinear', align_corners=True)
+        x = F.interpolate(
+            x, size=(x.size(2) * 8, x.size(3) * 8), mode="bilinear", align_corners=True
+        )
 
         return x
 
 
 class FCNResNet(nn.Module):
     """FCN with ResNet backbone - alternative implementation"""
-    
+
     def __init__(self, n_channels=input_channels, n_classes=output_classes):
         super(FCNResNet, self).__init__()
         self.n_channels = n_channels
@@ -137,11 +143,13 @@ class FCNResNet(nn.Module):
 
     def _make_block(self, in_channels, out_channels, stride=1):
         return nn.Sequential(
-            nn.Conv2d(in_channels, out_channels, 3, stride=stride, padding=1, bias=False),
+            nn.Conv2d(
+                in_channels, out_channels, 3, stride=stride, padding=1, bias=False
+            ),
             nn.BatchNorm2d(out_channels),
             nn.ReLU(inplace=True),
             nn.Conv2d(out_channels, out_channels, 3, padding=1, bias=False),
-            nn.BatchNorm2d(out_channels)
+            nn.BatchNorm2d(out_channels),
         )
 
     def forward(self, x):
@@ -165,16 +173,18 @@ class FCNResNet(nn.Module):
         skip1 = self.skip1(skip1)
 
         # Upsample and add skip connections
-        x = F.interpolate(x, skip3.size()[2:], mode='bilinear', align_corners=True)
+        x = F.interpolate(x, skip3.size()[2:], mode="bilinear", align_corners=True)
         x = x + skip3
-        
-        x = F.interpolate(x, skip2.size()[2:], mode='bilinear', align_corners=True)
+
+        x = F.interpolate(x, skip2.size()[2:], mode="bilinear", align_corners=True)
         x = x + skip2
-        
-        x = F.interpolate(x, skip1.size()[2:], mode='bilinear', align_corners=True)
+
+        x = F.interpolate(x, skip1.size()[2:], mode="bilinear", align_corners=True)
         x = x + skip1
 
         # Final upsampling to input size
-        x = F.interpolate(x, size=(x.size(2)*4, x.size(3)*4), mode='bilinear', align_corners=True)
+        x = F.interpolate(
+            x, size=(x.size(2) * 4, x.size(3) * 4), mode="bilinear", align_corners=True
+        )
 
-        return x 
+        return x

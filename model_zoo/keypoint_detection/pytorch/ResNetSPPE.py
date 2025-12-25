@@ -13,6 +13,7 @@ output_classes = 1
 category = "keypoint_detection"
 num_feature_points = 16
 
+
 class ResNetSPPE(nn.Module):
     def __init__(self, num_feature_points=num_feature_points, input_channels=3):
         super(ResNetSPPE, self).__init__()

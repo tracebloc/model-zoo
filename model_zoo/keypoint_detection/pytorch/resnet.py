@@ -14,6 +14,7 @@ output_classes = 1
 category = "keypoint_detection"
 num_feature_points = 16
 
+
 class SimpleBaseline(nn.Module):
     def __init__(self, num_feature_points=num_feature_points):
         super(SimpleBaseline, self).__init__()
@@ -52,7 +53,9 @@ class SimpleBaseline(nn.Module):
 
         # Extract keypoints by finding the maximum locations in the heatmaps
         batch_size, num_feature_points, _, _ = heatmap.size()
-        keypoints = torch.zeros((batch_size, num_feature_points, 3), device=heatmap.device)
+        keypoints = torch.zeros(
+            (batch_size, num_feature_points, 3), device=heatmap.device
+        )
 
         for i in range(num_feature_points):
             heatmap_i = heatmap[:, i, :, :].reshape(batch_size, -1)

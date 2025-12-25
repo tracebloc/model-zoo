@@ -13,6 +13,7 @@ output_classes = 1
 category = "keypoint_detection"
 num_feature_points = 16
 
+
 class ResidualBlock(nn.Module):
     def __init__(self, in_channels, out_channels):
         super(ResidualBlock, self).__init__()
@@ -69,9 +70,7 @@ class Hourglass(nn.Module):
         for up, skip in zip(self.upsample_layers, reversed(skip_connections)):
             x = F.interpolate(x, scale_factor=2, mode="nearest")
             if x.size(2) != skip.size(2) or x.size(3) != skip.size(3):
-                x = F.pad(
-                    x, (0, skip.size(3) - x.size(3), 0, skip.size(2) - x.size(2))
-                )
+                x = F.pad(x, (0, skip.size(3) - x.size(3), 0, skip.size(2) - x.size(2)))
             x = up(x) + skip
 
         x = F.interpolate(x, size=original_size, mode="bilinear", align_corners=False)
@@ -99,7 +98,13 @@ class StackHourglass(nn.Module):
         )
         self.output_layers = nn.ModuleList(
             [
-                nn.Conv2d(stack_channels, num_feature_points, kernel_size=1, stride=1, padding=0)
+                nn.Conv2d(
+                    stack_channels,
+                    num_feature_points,
+                    kernel_size=1,
+                    stride=1,
+                    padding=0,
+                )
                 for _ in range(num_stacks)
             ]
         )

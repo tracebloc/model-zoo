@@ -12,6 +12,7 @@ output_classes = 1
 category = "keypoint_detection"
 num_feature_points = 16
 
+
 class MyModel(nn.Module):
     def __init__(self, num_feature_points=16):
         super(MyModel, self).__init__()
@@ -41,7 +42,9 @@ class MyModel(nn.Module):
 
     def initialize_fc_layers(self):
         """Initialize fully connected layers once flattened size is known."""
-        self.coords_fc = nn.Linear(self.flattened_size, self.num_feature_points * 3).to(self.device)
+        self.coords_fc = nn.Linear(self.flattened_size, self.num_feature_points * 3).to(
+            self.device
+        )
 
     def forward(self, x):
         if self.flattened_size is None:
@@ -64,6 +67,8 @@ class MyModel(nn.Module):
 
         # Calculate coordinates
         coords = self.coords_fc(x_flat)
-        coords = coords.view(-1, self.num_feature_points, 3)  # Reshape to [batch_size, num_feature_points, 2]
+        coords = coords.view(
+            -1, self.num_feature_points, 3
+        )  # Reshape to [batch_size, num_feature_points, 2]
 
         return coords

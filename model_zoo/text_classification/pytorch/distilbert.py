@@ -12,7 +12,6 @@ output_classes = 5
 
 
 def MyModel(num_classes=output_classes):
-
     return AutoModelForSequenceClassification.from_pretrained(
         model_id, num_labels=num_classes, ignore_mismatched_sizes=True
     )

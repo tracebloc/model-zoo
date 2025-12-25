@@ -12,6 +12,7 @@ output_classes = 1
 category = "keypoint_detection"
 num_feature_points = 16
 
+
 class ResidualBlock(nn.Module):
     def __init__(self, in_channels, out_channels):
         super(ResidualBlock, self).__init__()
@@ -77,7 +78,9 @@ class Hourglass(nn.Module):
 
 
 class StackHourglass(nn.Module):
-    def __init__(self, num_stacks=8, stack_channels=256, num_feature_points=num_feature_points):
+    def __init__(
+        self, num_stacks=8, stack_channels=256, num_feature_points=num_feature_points
+    ):
         super(StackHourglass, self).__init__()
         self.num_stacks = num_stacks
         self.num_channels = stack_channels

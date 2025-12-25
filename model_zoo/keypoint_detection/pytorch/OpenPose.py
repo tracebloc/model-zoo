@@ -10,6 +10,7 @@ output_classes = 1
 category = "keypoint_detection"
 num_feature_points = 16
 
+
 class VGGBackbone(nn.Module):
     def __init__(self):
         super(VGGBackbone, self).__init__()

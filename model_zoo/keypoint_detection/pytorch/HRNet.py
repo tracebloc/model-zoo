@@ -11,8 +11,11 @@ output_classes = 1
 category = "keypoint_detection"
 num_feature_points = 16
 
+
 class HRNetKeypointDetection(nn.Module):
-    def __init__(self, num_feature_points: int = num_feature_points, input_channels: int = 3):
+    def __init__(
+        self, num_feature_points: int = num_feature_points, input_channels: int = 3
+    ):
         super(HRNetKeypointDetection, self).__init__()
         self.num_feature_points = num_feature_points
 
@@ -48,6 +51,8 @@ class HRNetKeypointDetection(nn.Module):
         )
 
         # Final layer to get the keypoints and visibility
-        keypoints = self.fc(pooled_features).view(batch_size, self.num_feature_points, 3)
+        keypoints = self.fc(pooled_features).view(
+            batch_size, self.num_feature_points, 3
+        )
 
         return keypoints

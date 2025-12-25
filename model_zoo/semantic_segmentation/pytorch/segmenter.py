@@ -15,12 +15,10 @@ category = "semantic_segmentation"
 class Segmenter(nn.Module):
     def __init__(self, model_name="nvidia/segformer-b0-finetuned-ade-512-512"):
         super(Segmenter, self).__init__()
-        
+
         # Load Segformer model from Hugging Face
         self.model = SegformerForSemanticSegmentation.from_pretrained(
-            model_name,
-            num_labels=output_classes,
-            ignore_mismatched_sizes=True
+            model_name, num_labels=output_classes, ignore_mismatched_sizes=True
         )
 
     def forward(self, x):
@@ -62,4 +60,4 @@ class Segmenter(nn.Module):
 # class SegmenterB5(Segmenter):
 #     """Segmenter with Segformer-B5 backbone"""
 #     def __init__(self):
-#         super(SegmenterB5, self).__init__(model_name="nvidia/segformer-b5-finetuned-ade-512-512") 
+#         super(SegmenterB5, self).__init__(model_name="nvidia/segformer-b5-finetuned-ade-512-512")

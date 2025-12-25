@@ -3,10 +3,11 @@ import torch.nn as nn
 framework = "pytorch"
 model_type = ""
 main_class = "SimpleFCN"
-batch_size = 4
-output_classes = 3
+batch_size = 128
+output_classes = 1
 category = "tabular_regression"
-num_feature_points = 12
+num_feature_points = 17
+
 
 class SimpleFCN(nn.Module):
     def __init__(self):

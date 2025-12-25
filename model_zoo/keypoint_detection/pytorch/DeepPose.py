@@ -12,6 +12,7 @@ output_classes = 1
 category = "keypoint_detection"
 num_feature_points = 16
 
+
 class DeepPoseModel(nn.Module):
     def __init__(self, num_feature_points: int = num_feature_points, image_shape=64):
         super(DeepPoseModel, self).__init__()
@@ -25,7 +26,9 @@ class DeepPoseModel(nn.Module):
         self.conv5 = nn.Conv2d(512, 1024, kernel_size=3, stride=2, padding=1)
 
         # Adaptive pooling layer to fix the output size
-        self.adaptive_pool = nn.AdaptiveAvgPool2d((1, 1))  # Outputs a fixed 1x1 feature map per channel
+        self.adaptive_pool = nn.AdaptiveAvgPool2d(
+            (1, 1)
+        )  # Outputs a fixed 1x1 feature map per channel
 
         # Flatten size adjusted for adaptive pooling
         self.fc1 = nn.Linear(1024, 1024)
