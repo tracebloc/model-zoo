@@ -26,7 +26,7 @@ class SimpleCNN(nn.Module):
     def forward(self, x):
         x = x.unsqueeze(
             1
-        )  # Add a channel dimension for Conv1D (batch_size, channels, input_size)
+        )  # Add a channell dimension for Conv1D (batch_size, channels, input_size)
         x = self.relu(self.conv1(x))
         x = self.relu(self.conv2(x))
         x = x.view(x.size(0), -1)  # Flatten before feeding into FC layers
