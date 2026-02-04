@@ -5,7 +5,7 @@ model_type = ""
 main_class = "TCNForecaster"
 category = "time_series_forecasting"
 batch_size = 512
-num_feature_points = 9
+num_feature_points = 8
 sequence_length = 60
 forecast_horizon = 1
 
