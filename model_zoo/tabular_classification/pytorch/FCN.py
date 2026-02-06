@@ -3,7 +3,7 @@ import torch.nn as nn
 framework = "pytorch"
 model_type = ""
 main_class = "SimpleFCN"
-batch_size = 4
+batch_size = 512
 output_classes = 5
 category = "tabular_classification"
 num_feature_points = 50

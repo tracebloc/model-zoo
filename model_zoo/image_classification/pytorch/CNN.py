@@ -5,7 +5,7 @@ import torch.nn.functional as F
 framework = "pytorch"
 main_class = "Net"
 image_size = 224
-batch_size = 16
+batch_size = 256
 output_classes = 2
 category = "image_classification"
 

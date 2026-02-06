@@ -4,7 +4,7 @@ from catboost import CatBoostClassifier
 framework = "sklearn"
 model_type = "tree"
 main_method = "MyModel"
-batch_size = 4
+batch_size = 512
 output_classes = 5
 category = "tabular_classification"
 num_feature_points = 50
