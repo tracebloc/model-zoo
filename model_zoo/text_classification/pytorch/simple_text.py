@@ -6,7 +6,7 @@ framework = "pytorch"
 main_class = "SimpleTextClassifier"
 category = "text_classification"
 model_type = ""
-batch_size = 32
+batch_size = 512
 # mandatory for non huggingface model
 sequence_length = 5
 output_classes = 5

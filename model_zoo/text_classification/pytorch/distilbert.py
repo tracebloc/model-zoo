@@ -6,7 +6,7 @@ framework = "pytorch"
 main_class = "MyModel"
 category = "text_classification"
 model_type = ""
-batch_size = 32
+batch_size = 512
 sequence_length = 5
 output_classes = 5
 
