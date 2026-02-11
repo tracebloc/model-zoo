@@ -3,10 +3,10 @@ import torch.nn as nn
 framework = "pytorch"
 model_type = ""
 main_class = "SimpleCNN"
-batch_size = 512
-output_classes = 5
+batch_size = 4096
+output_classes = 12
 category = "tabular_classification"
-num_feature_points = 50
+num_feature_points = 318
 
 class SimpleCNN(nn.Module):
     def __init__(self, input_size=num_feature_points):
