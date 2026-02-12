@@ -4,9 +4,9 @@ framework = "pytorch"
 model_type = ""
 main_class = "SimpleLSTM"
 batch_size = 4096
-output_classes = 12
+output_classes = 3
 category = "tabular_classification"
-num_feature_points = 318
+num_feature_points = 153
 
 class SimpleLSTM(nn.Module):
     def __init__(self, input_size=num_feature_points, hidden_size=128, num_layers=1):
