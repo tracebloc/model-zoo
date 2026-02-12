@@ -5,9 +5,9 @@ framework = "sklearn"
 model_type = "tree"
 main_method = "MyModel"
 batch_size = 512
-output_classes = 2
+output_classes = 3
 category = "tabular_classification"
-num_feature_points = 282
+num_feature_points = 252
 
 def MyModel():
     return CatBoostClassifier(n_estimators=100, random_state=42, verbose=0)
