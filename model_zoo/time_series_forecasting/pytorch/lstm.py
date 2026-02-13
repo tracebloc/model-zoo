@@ -5,7 +5,7 @@ model_type = ""
 main_class = "LSTMForecaster"
 category = "time_series_forecasting"
 batch_size = 512
-num_feature_points = 8
+num_feature_points = 34
 sequence_length = 60
 forecast_horizon = 1
 
