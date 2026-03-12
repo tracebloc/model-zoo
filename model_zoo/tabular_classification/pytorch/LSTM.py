@@ -6,7 +6,7 @@ main_class = "SimpleLSTM"
 batch_size = 4096
 output_classes = 2
 category = "tabular_classification"
-num_feature_points = 182
+num_feature_points = 281
 class SimpleLSTM(nn.Module):
     def __init__(self, input_size=num_feature_points, hidden_size=128, num_layers=1):
         super(SimpleLSTM, self).__init__()
