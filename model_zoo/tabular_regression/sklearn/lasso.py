@@ -6,7 +6,7 @@ main_method = "MyModel"
 batch_size = 512
 output_classes = 1
 category = "tabular_regression"
-num_feature_points = 293
+num_feature_points = 10
 
 
 def MyModel():
