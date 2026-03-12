@@ -6,7 +6,7 @@ main_class = "SimpleCNN"
 batch_size = 512
 output_classes = 1
 category = "tabular_regression"
-num_feature_points = 293
+num_feature_points = 292
 
 
 class SimpleCNN(nn.Module):
