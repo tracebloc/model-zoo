@@ -6,7 +6,7 @@ model_type = ""
 batch_size = 4096
 output_classes = 3
 category = "tabular_classification"
-num_feature_points = 152
+num_feature_points = 202
 
 
 def MyModel(input_shape=(num_feature_points,), n_outputs=1):
