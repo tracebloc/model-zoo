@@ -4,9 +4,9 @@ framework = "pytorch"
 model_type = ""
 main_class = "SimpleCNN"
 batch_size = 4096
-output_classes = 2
+output_classes = 5
+num_feature_points = 50
 category = "tabular_classification"
-num_feature_points = 202
 
 class SimpleCNN(nn.Module):
     def __init__(self, input_size=num_feature_points):

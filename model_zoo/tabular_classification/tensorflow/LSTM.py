@@ -4,9 +4,9 @@ framework = "tensorflow"
 main_method = "MyModel"
 model_type = ""
 batch_size = 4096
-output_classes = 3
+output_classes = 5
+num_feature_points = 50
 category = "tabular_classification"
-num_feature_points = 202
 
 
 def MyModel(input_size=num_feature_points, hidden_size=128, n_outputs=1):
