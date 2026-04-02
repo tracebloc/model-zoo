@@ -6,7 +6,7 @@ main_method = "MyModel"
 batch_size = 512
 output_classes = 1
 category = "tabular_regression"
-num_feature_points = 10
+num_feature_points = 17
 
 def MyModel():
     return LGBMRegressor(n_estimators=100, random_state=42)
