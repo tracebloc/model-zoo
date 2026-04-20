@@ -1,5 +1,6 @@
 import torch.nn as nn
-from catboost import CatBoostClassifier
+from sklearn.ensemble import GradientBoostingClassifier
+
 
 framework = "sklearn"
 model_type = "tree"
@@ -10,5 +11,5 @@ category = "tabular_classification"
 num_feature_points = 50
 
 def MyModel():
-    return CatBoostClassifier(n_estimators=100, random_state=42, verbose=0)
-
+    model = GradientBoostingClassifier(n_estimators=100, random_state=42)
+    return model
