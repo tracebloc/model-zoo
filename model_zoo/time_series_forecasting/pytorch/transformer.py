@@ -1,3 +1,4 @@
+"""Transformer forecaster. Pick when you have long sequences and enough data to justify self-attention."""
 import torch
 import torch.nn as nn
 import math

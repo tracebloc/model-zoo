@@ -1,3 +1,4 @@
+"""Fully Connected Network (MLP) for tabular classification. Default choice when features have no inherent ordering."""
 import torch.nn as nn
 
 framework = "pytorch"

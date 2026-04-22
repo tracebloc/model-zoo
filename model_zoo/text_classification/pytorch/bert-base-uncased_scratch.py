@@ -1,3 +1,4 @@
+"""BERT-base-uncased trained from scratch. Pick only if you have a massive domain-specific corpus and want to avoid English-pretrained biases."""
 from transformers import AutoModelForSequenceClassification
 from transformers import AutoConfig
 

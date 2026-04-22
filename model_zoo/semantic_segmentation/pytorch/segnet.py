@@ -1,3 +1,4 @@
+"""SegNet encoder-decoder. Lightweight; good for resource-constrained settings."""
 import torch
 import torch.nn as nn
 import torch.nn.functional as F

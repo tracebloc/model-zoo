@@ -1,3 +1,4 @@
+"""Stacked-block CNN via TensorFlow Sequential API. Simple baseline with moderate depth."""
 import tensorflow as tf
 from tensorflow.keras import layers, models
 

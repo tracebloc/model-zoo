@@ -1,3 +1,4 @@
+"""ResNet-50 (TensorFlow Functional API, custom). Canonical accuracy/compute trade-off; standard baseline."""
 import tensorflow as tf
 from tensorflow.keras import layers
 from tensorflow.keras.utils import plot_model

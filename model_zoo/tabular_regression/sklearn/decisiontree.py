@@ -1,3 +1,4 @@
+"""Single decision tree regressor. Interpretable but high variance; prefer ensembles (random_forest, xgb, lgbm) for accuracy."""
 from sklearn.tree import DecisionTreeRegressor
 
 framework = "sklearn"

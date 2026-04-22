@@ -1,3 +1,4 @@
+"""ElasticNet regressor. L1 + L2 regularization; pick when you want sparsity with stability."""
 from sklearn.linear_model import ElasticNet
 
 framework = "sklearn"

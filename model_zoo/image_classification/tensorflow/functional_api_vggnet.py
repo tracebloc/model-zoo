@@ -1,3 +1,4 @@
+"""VGG-16 (TensorFlow Functional API, custom). Heavy but canonical baseline."""
 import tensorflow as tf
 from tensorflow.keras import layers, utils
 

@@ -1,3 +1,4 @@
+"""HRNet with heatmap output. Usually the strongest choice in this directory."""
 import torch
 import torch.nn as nn
 

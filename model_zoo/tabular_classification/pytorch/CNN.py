@@ -1,3 +1,4 @@
+"""1D CNN for tabular classification. Pick when feature order is meaningful (e.g. sequential or spatial tabular data)."""
 import torch.nn as nn
 
 framework = "pytorch"

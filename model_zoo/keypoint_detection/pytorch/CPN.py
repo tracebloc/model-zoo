@@ -1,3 +1,4 @@
+"""Cascaded Pyramid Network (direct regression) on a ResNet-50 backbone. Two-stage refinement improves hard-keypoint accuracy."""
 import torch
 import torch.nn as nn
 import torchvision.models as models

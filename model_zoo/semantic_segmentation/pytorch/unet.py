@@ -1,3 +1,4 @@
+"""U-Net. Universal segmentation baseline; works across medical imaging, satellite, and general-purpose tasks."""
 import torch
 import torch.nn as nn
 import torch.nn.functional as F

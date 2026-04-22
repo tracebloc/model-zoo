@@ -1,3 +1,4 @@
+"""Simple 2D CNN (3 conv + 2 FC layers). Lightweight baseline for image classification on small datasets."""
 import torch
 import torch.nn as nn
 import torch.nn.functional as F

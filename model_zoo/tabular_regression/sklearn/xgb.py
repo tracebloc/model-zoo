@@ -1,3 +1,4 @@
+"""XGBoost regressor, 100 trees. Strong tabular baseline; usually wins on small/medium datasets."""
 from xgboost import XGBRegressor
 
 framework = "sklearn"

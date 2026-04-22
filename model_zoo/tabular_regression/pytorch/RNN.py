@@ -1,3 +1,4 @@
+"""Simple RNN for tabular regression. For short sequential data."""
 import torch.nn as nn
 
 framework = "pytorch"

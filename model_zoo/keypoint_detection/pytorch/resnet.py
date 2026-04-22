@@ -1,3 +1,4 @@
+"""SimpleBaseline keypoint detector on a ResNet-50 backbone. Minimal architecture; good starting point."""
 # file: models/simple_baseline.py
 
 import torch

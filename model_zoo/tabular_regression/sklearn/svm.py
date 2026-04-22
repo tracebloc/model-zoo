@@ -1,3 +1,4 @@
+"""Support Vector regressor. Pick for moderate-size datasets where kernel methods help; scales poorly beyond ~10k rows."""
 from sklearn.svm import SVR
 
 framework = "sklearn"

@@ -1,3 +1,4 @@
+"""Simple RNN for tabular classification. Lighter than LSTM; use for short sequences."""
 import torch.nn as nn
 
 framework = "pytorch"

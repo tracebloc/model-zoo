@@ -1,3 +1,4 @@
+"""Stacked Hourglass Network with heatmap output. Usually the better SHG variant."""
 import torch
 import torch.nn as nn
 import torch.nn.functional as F

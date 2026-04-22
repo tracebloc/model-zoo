@@ -1,3 +1,4 @@
+"""Fully Convolutional Network for segmentation. Canonical baseline; simple and well-understood."""
 import torch
 import torch.nn as nn
 import torch.nn.functional as F

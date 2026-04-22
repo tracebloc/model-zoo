@@ -1,3 +1,4 @@
+"""LightGBM regressor, 100 trees. Fast gradient boosting; strong default for tabular data."""
 from lightgbm import LGBMRegressor
 
 framework = "sklearn"

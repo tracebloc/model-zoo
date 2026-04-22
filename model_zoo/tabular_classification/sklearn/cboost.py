@@ -1,3 +1,4 @@
+"""CatBoost classifier, 100 trees. Strong on categorical features with minimal preprocessing."""
 import torch.nn as nn
 from catboost import CatBoostClassifier
 

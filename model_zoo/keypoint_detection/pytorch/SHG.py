@@ -1,3 +1,4 @@
+"""Stacked Hourglass Network (direct regression). Symmetric encoder-decoder stack; classic pose architecture."""
 import torch
 import torch.nn as nn
 

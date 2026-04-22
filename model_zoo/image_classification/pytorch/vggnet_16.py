@@ -1,3 +1,4 @@
+"""VGG-16 via torchvision, ~138M params. Canonical baseline; heavy for modern standards but still a solid comparison point."""
 import torch
 import torchvision
 import torch.nn as nn

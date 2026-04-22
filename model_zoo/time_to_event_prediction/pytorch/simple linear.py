@@ -1,3 +1,4 @@
+"""Linear survival model in PyTorch. Simplest deep-learning baseline; use to compare against lifelines."""
 import torch
 import torch.nn as nn
 

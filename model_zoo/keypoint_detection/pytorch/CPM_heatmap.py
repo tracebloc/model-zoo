@@ -1,3 +1,4 @@
+"""Convolutional Pose Machine, heatmap-based output. Heatmap regression is usually more accurate than direct coordinate regression."""
 import torch.nn as nn
 
 # Configuration

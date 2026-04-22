@@ -1,3 +1,4 @@
+"""Random Forest regressor. Robust, low-tuning baseline; often competitive out of the box."""
 from sklearn.ensemble import RandomForestRegressor
 
 framework = "sklearn"

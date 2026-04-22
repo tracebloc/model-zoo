@@ -1,3 +1,4 @@
+"""Minimal single-block CNN via TensorFlow Sequential API. Pedagogical starting point for building your own model."""
 import tensorflow as tf
 from tensorflow.keras import layers, models
 

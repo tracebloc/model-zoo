@@ -1,3 +1,4 @@
+"""Simple RNN for tabular classification (TensorFlow). Lighter than LSTM."""
 from tensorflow.keras import layers, models
 
 framework = "tensorflow"

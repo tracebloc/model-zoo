@@ -1,3 +1,4 @@
+"""1D CNN for tabular classification (TensorFlow). Pick when feature order is meaningful."""
 from tensorflow.keras import layers, models
 
 framework = "tensorflow"
