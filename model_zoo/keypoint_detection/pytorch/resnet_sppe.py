@@ -19,7 +19,7 @@ class ResNetSPPE(nn.Module):
         self.num_feature_points = num_feature_points
 
         # Load a pre-trained ResNet model (here we use ResNet-50)
-        resnet = models.resnet50(pretrained=True)
+        resnet = models.resnet50(weights="DEFAULT")
 
         # Modify the first convolution layer to accommodate different input channels
         if input_channels != 3:
