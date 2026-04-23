@@ -1,4 +1,5 @@
-from lightgbm import LGBMClassifier
+import torch.nn as nn
+from sklearn.tree import DecisionTreeClassifier
 
 framework = "sklearn"
 model_type = "tree"
@@ -9,5 +10,4 @@ category = "tabular_classification"
 num_feature_points = 50
 
 def MyModel():
-    return LGBMClassifier(n_estimators=100, random_state=42)
-
+    return DecisionTreeClassifier(random_state=42)
