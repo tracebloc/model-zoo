@@ -32,7 +32,7 @@ class CascadedPyramidNetwork(nn.Module):
         super(CascadedPyramidNetwork, self).__init__()
 
         # Load a pretrained ResNet backbone
-        backbone = models.resnet50(pretrained=True)
+        backbone = models.resnet50(weights="DEFAULT")
 
         # Initial layers for feature extraction
         self.conv1 = backbone.conv1
