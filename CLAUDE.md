@@ -18,7 +18,7 @@ model_zoo/
   semantic_segmentation/      pytorch/
   keypoint_detection/         pytorch/
   tabular_classification/     pytorch/, sklearn/, tensorflow/
-  tabular_regression/         pytorch/, sklearn/
+  tabular_regression/         pytorch/, sklearn/, tensorflow/
   time_series_forecasting/    pytorch/
   time_to_event_prediction/   lifelines/, pytorch/, scikit-survival/
 ```
