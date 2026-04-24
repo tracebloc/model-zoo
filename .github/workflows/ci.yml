@@ -15,6 +15,7 @@ jobs:
         with:
           python-version: "3.11"
           cache: pip
+          cache-dependency-path: .github/workflows/ci.yml
       - run: pip install ruff
       - run: ruff check --select=F401,F821,E9 model_zoo/
 
@@ -26,6 +27,7 @@ jobs:
         with:
           python-version: "3.11"
           cache: pip
+          cache-dependency-path: .github/workflows/ci.yml
       - run: pip install pytest torch torchvision transformers timm
       - run: pytest tests/ -v
 
@@ -37,6 +39,7 @@ jobs:
         with:
           python-version: "3.11"
           cache: pip
+          cache-dependency-path: .github/workflows/ci.yml
       - run: pip install pytest tensorflow
       - run: pytest tests/ -v
 
@@ -48,6 +51,7 @@ jobs:
         with:
           python-version: "3.11"
           cache: pip
+          cache-dependency-path: .github/workflows/ci.yml
       - run: pip install pytest scikit-learn xgboost lightgbm catboost
       - run: pytest tests/ -v
 
@@ -59,5 +63,6 @@ jobs:
         with:
           python-version: "3.11"
           cache: pip
+          cache-dependency-path: .github/workflows/ci.yml
       - run: pip install pytest lifelines scikit-survival
       - run: pytest tests/ -v
