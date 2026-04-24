@@ -19,7 +19,7 @@ class SimpleBaseline(nn.Module):
     def __init__(self, num_feature_points=num_feature_points):
         super(SimpleBaseline, self).__init__()
         # Load a pre-trained ResNet backbone
-        backbone = models.resnet50(pretrained=True)
+        backbone = models.resnet50(weights="DEFAULT")
         self.backbone = nn.Sequential(
             *(list(backbone.children())[:-2])
         )  # Remove the classification layers

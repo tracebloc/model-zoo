@@ -20,7 +20,7 @@ class FasterRCNNSPPE(nn.Module):
         self.num_feature_points = num_feature_points
 
         # Load the Faster R-CNN model to get the backbone (ResNet-50)
-        model = fasterrcnn_resnet50_fpn(pretrained=True)
+        model = fasterrcnn_resnet50_fpn(weights="DEFAULT")
         backbone = model.backbone
 
         # Assume the feature extractor provides a feature map, which is what we use here

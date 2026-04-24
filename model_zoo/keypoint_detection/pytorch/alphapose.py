@@ -130,31 +130,6 @@ class Bottleneck(nn.Module):
         if not self.with_dcn or fallback_on_stride:
             self.conv2 = nn.Conv2d(planes, planes, kernel_size=3, stride=stride,
                                    padding=1, bias=False)
-        # else:
-        #     from .dcn import DeformConv, ModulatedDeformConv
-        #     self.deformable_groups = dcn.get('DEFORM_GROUP', 1)
-        #     if not self.with_modulated_dcn:
-        #         conv_op = DeformConv
-        #         offset_channels = 18
-        #     else:
-        #         conv_op = ModulatedDeformConv
-        #         offset_channels = 27
-
-        #     self.conv2_offset = nn.Conv2d(
-        #         planes,
-        #         self.deformable_groups * offset_channels,
-        #         kernel_size=3,
-        #         stride=stride,
-        #         padding=1)
-        #     self.conv2 = conv_op(
-        #         planes,
-        #         planes,
-        #         kernel_size=3,
-        #         stride=stride,
-        #         padding=1,
-        #         deformable_groups=self.deformable_groups,
-        #         bias=False)
-
         self.bn2 = norm_layer(planes, momentum=0.1)
         self.conv3 = nn.Conv2d(planes, planes * 4, kernel_size=1, bias=False)
         self.bn3 = norm_layer(planes * 4, momentum=0.1)
@@ -285,7 +260,7 @@ class MyModel(nn.Module):
         # Imagenet pretrain model
         import torchvision.models as tm   # noqa: F401,F403
         # assert cfg['NUM_LAYERS'] in [18, 34, 50, 101, 152]
-        x = getattr(tm, f"resnet{cfg['NUM_LAYERS']}")(pretrained=True)
+        x = getattr(tm, f"resnet{cfg['NUM_LAYERS']}")(weights="DEFAULT")
 
         model_state = self.preact.state_dict()
         state = {k: v for k, v in x.state_dict().items()
@@ -296,8 +271,6 @@ class MyModel(nn.Module):
         self.deconv_layers = self._make_deconv_layer()
         self.final_layer = nn.Conv2d(
             self.deconv_dim[2], self._preset_cfg['NUM_JOINTS'], kernel_size=1, stride=1, padding=0)
-        print(self._preset_cfg['NUM_JOINTS'])
-        # Define a global average pooling layer
         self.global_avg_pool = nn.AdaptiveAvgPool2d((1, 1))
 
         # Add a fully connected layer to predict keypoints' x, y coordinates and visibility
@@ -331,21 +304,12 @@ class MyModel(nn.Module):
     def _initialize(self):
         for name, m in self.deconv_layers.named_modules():
             if isinstance(m, nn.ConvTranspose2d):
-                # logger.info('=> init {}.weight as normal(0, 0.001)'.format(name))
-                # logger.info('=> init {}.bias as 0'.format(name))
                 nn.init.normal_(m.weight, std=0.001)
-                # if self.deconv_with_bias:
-                #     nn.init.constant_(m.bias, 0)
             elif isinstance(m, nn.BatchNorm2d):
-                # logger.info('=> init {}.weight as 1'.format(name))
-                # logger.info('=> init {}.bias as 0'.format(name))
                 nn.init.constant_(m.weight, 1)
                 nn.init.constant_(m.bias, 0)
         for m in self.final_layer.modules():
             if isinstance(m, nn.Conv2d):
-                # nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
-                # logger.info('=> init {}.weight as normal(0, 0.001)'.format(name))
-                # logger.info('=> init {}.bias as 0'.format(name))
                 nn.init.normal_(m.weight, std=0.001)
                 nn.init.constant_(m.bias, 0)
 
@@ -354,7 +318,6 @@ class MyModel(nn.Module):
         out = self.deconv_layers(out)
         out = self.final_layer(out)
         out = self.global_avg_pool(out)
-        print("Shape before fc layer:", out.shape)
         out = out.view(out.size(0), -1)
         out = self.fc(out)
         out = out.view(-1, self._preset_cfg['NUM_JOINTS'], 3)
