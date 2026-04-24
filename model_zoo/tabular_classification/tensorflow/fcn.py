@@ -1,3 +1,4 @@
+"""Fully Connected Network for tabular classification (TensorFlow). Default MLP baseline."""
 from tensorflow.keras import layers, models
 
 framework = "tensorflow"

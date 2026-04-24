@@ -1,3 +1,4 @@
+"""SqueezeNet via torchvision, ~1.2M params. Extreme parameter efficiency; pick for mobile or edge deployment."""
 import torch
 import torchvision
 import torch.nn as nn

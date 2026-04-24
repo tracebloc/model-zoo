@@ -1,12 +1,14 @@
+"""CatBoost classifier, 100 trees. Strong on categorical features with minimal preprocessing."""
+import torch.nn as nn
 from catboost import CatBoostClassifier
 
 framework = "sklearn"
 model_type = "tree"
 main_method = "MyModel"
-batch_size = 4
+batch_size = 512
 output_classes = 5
-category = "tabular_classification"
 num_feature_points = 50
+category = "tabular_classification"
 
 def MyModel():
     return CatBoostClassifier(n_estimators=100, random_state=42, verbose=0)

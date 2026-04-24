@@ -1,3 +1,4 @@
+"""Faster R-CNN with a ResNet backbone. Two-stage detector; strong accuracy, slower than YOLO variants."""
 import torch
 import torch.nn as nn
 import torchvision

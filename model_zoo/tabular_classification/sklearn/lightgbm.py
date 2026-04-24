@@ -1,12 +1,14 @@
+"""LightGBM classifier, 100 trees. Fast gradient boosting; often near-tied with XGBoost."""
+import torch.nn as nn
 from lightgbm import LGBMClassifier
 
 framework = "sklearn"
 model_type = "tree"
 main_method = "MyModel"
-batch_size = 4
+batch_size = 512
 output_classes = 5
-category = "tabular_classification"
 num_feature_points = 50
+category = "tabular_classification"
 
 def MyModel():
     return LGBMClassifier(n_estimators=100, random_state=42)

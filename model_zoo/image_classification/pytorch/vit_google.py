@@ -1,3 +1,4 @@
+"""ViT-B/16 via HuggingFace ViTForImageClassification, google/vit-base-patch16-224 weights. Pretrained classifier; fine-tune the head for your classes."""
 import torch
 from torch import nn
 from transformers import ViTForImageClassification, ViTConfig

@@ -1,3 +1,4 @@
+"""Single-Person Pose Estimator on a Faster R-CNN ResNet-50 backbone. Reuses a strong detection backbone for keypoints."""
 import torch
 import torch.nn as nn
 from torchvision.models.detection import fasterrcnn_resnet50_fpn

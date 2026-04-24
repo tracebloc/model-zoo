@@ -1,3 +1,4 @@
+"""Weibull Accelerated Failure Time model (lifelines). Most common parametric survival baseline."""
 from lifelines import WeibullAFTFitter
 
 framework = "lifelines"

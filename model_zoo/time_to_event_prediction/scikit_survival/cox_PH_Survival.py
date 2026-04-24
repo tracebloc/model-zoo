@@ -1,3 +1,4 @@
+"""Cox Proportional Hazards model (scikit-survival). Classical semi-parametric survival baseline; interpretable coefficients."""
 from sksurv.linear_model import CoxPHSurvivalAnalysis
 
 framework = "scikit_survival"

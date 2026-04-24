@@ -1,3 +1,4 @@
+"""Small feed-forward survival net. One hidden layer; good starting point for deep survival modeling."""
 import torch
 import torch.nn as nn
 

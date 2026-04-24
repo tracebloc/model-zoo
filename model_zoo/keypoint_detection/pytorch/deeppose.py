@@ -1,3 +1,4 @@
+"""DeepPose (Toshev & Szegedy, 2014). Direct coordinate regression; historical baseline for deep pose estimation."""
 import torch
 import torch.nn as nn
 import torch.nn.functional as F

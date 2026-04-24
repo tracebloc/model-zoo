@@ -1,3 +1,4 @@
+"""HRNet segmentation variant. Maintains high-res features throughout; strong on fine-detail tasks."""
 import torch
 import torch.nn as nn
 import torch.nn.functional as F

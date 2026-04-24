@@ -1,3 +1,4 @@
+"""DenseNet (TensorFlow Functional API, custom). Dense connectivity between layers; parameter-efficient for a given accuracy."""
 import tensorflow as tf
 from tensorflow.keras import layers, utils
 

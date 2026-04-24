@@ -1,3 +1,4 @@
+"""Fully Connected Network (MLP) for tabular regression. Default deep-learning baseline."""
 import torch.nn as nn
 
 framework = "pytorch"

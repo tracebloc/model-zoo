@@ -1,3 +1,4 @@
+"""Wide ResNet-50-2 via torchvision, ~69M params. Wider than ResNet-50; often matches or beats deeper ResNets."""
 import torch
 import torchvision
 import torch.nn as nn

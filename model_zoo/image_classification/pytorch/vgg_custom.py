@@ -1,3 +1,4 @@
+"""Custom 109-line VGG implementation. Pick only if you need VGG built from scratch; prefer vggnet_16.py (torchvision wrapper) for training."""
 import torch
 import torch.nn as nn
 

@@ -1,3 +1,4 @@
+"""MaxViT via torchvision. Hybrid CNN + transformer. Strong accuracy but memory-hungry; needs a good GPU."""
 import torch
 import torchvision
 import torch.nn as nn

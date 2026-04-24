@@ -1,3 +1,4 @@
+"""LSTM for tabular classification (TensorFlow). Pick when rows represent sequences."""
 from tensorflow.keras import layers, models
 
 framework = "tensorflow"

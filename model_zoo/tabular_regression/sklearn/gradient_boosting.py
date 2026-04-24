@@ -1,3 +1,4 @@
+"""Gradient Boosting regressor (sklearn). Reliable classical boosting; usually bested by xgb / lgbm / catboost on large data."""
 from sklearn.ensemble import GradientBoostingRegressor
 
 framework = "sklearn"

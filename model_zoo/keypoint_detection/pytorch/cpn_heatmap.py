@@ -1,3 +1,4 @@
+"""Cascaded Pyramid Network, heatmap-based output. Usually the stronger CPN variant."""
 import torch
 import torch.nn as nn
 import torchvision.models as models

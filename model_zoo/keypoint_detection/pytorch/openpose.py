@@ -1,3 +1,4 @@
+"""OpenPose-style multi-stage CNN for keypoint detection. Well-known architecture; moderate accuracy, interpretable outputs."""
 import torch
 import torch.nn as nn
 

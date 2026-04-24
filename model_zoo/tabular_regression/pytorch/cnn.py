@@ -1,3 +1,4 @@
+"""1D CNN for tabular regression. Pick when feature order carries information."""
 import torch.nn as nn
 
 framework = "pytorch"

@@ -1,3 +1,4 @@
+"""Multilayer normalized survival net. Deep model with normalization; good default for moderately sized datasets."""
 import torch
 import torch.nn as nn
 

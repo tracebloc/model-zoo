@@ -1,3 +1,4 @@
+"""ViT-B/16 via torchvision, ~86M params. Standard Vision Transformer; needs a large dataset or strong pretraining."""
 import torch
 import torchvision
 import torch.nn as nn

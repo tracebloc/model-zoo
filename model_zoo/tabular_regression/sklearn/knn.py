@@ -1,3 +1,4 @@
+"""K-Nearest Neighbors regressor. Simple, non-parametric; pick for small datasets with meaningful distance metrics."""
 from sklearn.neighbors import KNeighborsRegressor
 
 framework = "sklearn"

@@ -1,3 +1,4 @@
+"""High-Resolution Network (direct regression). Maintains high-res representations throughout; state-of-the-art keypoint accuracy."""
 import torch
 import torch.nn as nn
 

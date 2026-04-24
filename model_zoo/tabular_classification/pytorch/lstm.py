@@ -1,3 +1,4 @@
+"""LSTM for tabular classification. Pick when rows represent sequences or time-ordered features."""
 import torch.nn as nn
 
 framework = "pytorch"

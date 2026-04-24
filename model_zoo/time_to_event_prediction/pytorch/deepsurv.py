@@ -1,3 +1,4 @@
+"""DeepSurv: neural Cox proportional hazards model. Pick when you need non-linear hazard modeling."""
 import torch
 import torch.nn as nn
 

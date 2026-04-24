@@ -1,3 +1,4 @@
+"""Convolutional Pose Machine (direct regression). Classic pose-estimation architecture; simple and well-understood."""
 import torch.nn as nn
 
 # Configuration

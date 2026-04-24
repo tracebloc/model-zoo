@@ -1,3 +1,4 @@
+"""Single-Person Pose Estimator on a ResNet-50 backbone. Simpler than FasterRCNNSPPE; good default when you don't need detection."""
 import torch
 import torch.nn as nn
 import torchvision.models as models

@@ -1,3 +1,4 @@
+"""RoBERTa-base via HuggingFace, pretrained. Often outperforms BERT-base on downstream tasks; same compute cost."""
 from transformers import AutoModelForSequenceClassification
 from transformers import AutoConfig
 

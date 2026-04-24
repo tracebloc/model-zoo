@@ -1,3 +1,4 @@
+"""Differentiable Spatial-to-Numerical Transform. End-to-end coordinate regression with heatmap inductive bias."""
 import torch
 import torch.nn as nn
 import torch.nn.functional as F

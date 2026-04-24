@@ -1,3 +1,4 @@
+"""AlphaPose-style SimpleBaseline with deconv head on ResNet backbone. Configurable NUM_LAYERS; default uses ResNet-50."""
 import torch.nn as nn
 import torch.nn.functional as F
 

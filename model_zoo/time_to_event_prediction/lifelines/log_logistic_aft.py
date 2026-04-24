@@ -1,3 +1,4 @@
+"""Log-Logistic Accelerated Failure Time model (lifelines). Parametric survival model; non-monotonic hazard."""
 from lifelines import LogLogisticAFTFitter
 
 framework = "lifelines"
