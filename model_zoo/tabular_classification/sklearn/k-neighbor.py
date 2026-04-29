@@ -1,4 +1,3 @@
-import torch.nn as nn
 from sklearn.neighbors import KNeighborsClassifier
 
 framework = "sklearn"

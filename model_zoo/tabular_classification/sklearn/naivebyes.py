@@ -1,4 +1,3 @@
-import torch.nn as nn
 from sklearn.naive_bayes import GaussianNB
 
 framework = "sklearn"

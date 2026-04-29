@@ -1,4 +1,3 @@
-import torch.nn as nn
 from sklearn.svm import SVC
 
 framework = "sklearn"

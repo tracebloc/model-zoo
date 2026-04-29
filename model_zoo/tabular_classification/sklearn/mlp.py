@@ -1,4 +1,3 @@
-import torch.nn as nn
 from sklearn.neural_network import MLPClassifier
 
 framework = "sklearn"
