@@ -1,4 +1,3 @@
-import torch.nn as nn
 from sklearn.ensemble import RandomForestClassifier
 
 framework = "sklearn"
