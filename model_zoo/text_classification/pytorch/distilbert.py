@@ -1,3 +1,4 @@
+"""DistilBERT via HuggingFace, pretrained. ~60% the size of BERT-base, ~97% of its accuracy; strong default for inference-speed-sensitive setups."""
 from transformers import AutoModelForSequenceClassification
 from transformers import AutoConfig
 

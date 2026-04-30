@@ -1,3 +1,4 @@
+"""Ordinary linear regression. Simplest baseline; always run this first to establish a floor."""
 from sklearn.linear_model import LinearRegression
 
 framework = "sklearn"

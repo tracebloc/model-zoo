@@ -1,0 +1,22 @@
+"""SqueezeNet via torchvision, ~1.2M params. Extreme parameter efficiency; pick for mobile or edge deployment."""
+import torch
+import torchvision
+import torch.nn as nn
+
+framework = "pytorch"
+main_class = "MyModel"
+image_size = 224
+batch_size = 256
+output_classes = 2
+category = "image_classification"
+
+
+class MyModel(nn.Module):
+    def __init__(self):
+        super(MyModel, self).__init__()
+        self.model = torchvision.models.squeezenet1_0(
+            pretrained=False, progress=True, num_classes=output_classes
+        )
+
+    def forward(self, x):
+        return self.model(x)

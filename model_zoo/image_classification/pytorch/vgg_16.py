@@ -1,0 +1,22 @@
+"""VGG-16 via torchvision, ~138M params. Canonical baseline; heavy for modern standards but still a solid comparison point."""
+import torch
+import torchvision
+import torch.nn as nn
+
+framework = "pytorch"
+main_class = "MyModel"
+image_size = 224
+batch_size = 16
+output_classes = 2
+category = "image_classification"
+
+
+class MyModel(nn.Module):
+    def __init__(self):
+        super(MyModel, self).__init__()
+        self.model = torchvision.models.vgg16(
+            pretrained=False, progress=True, num_classes=output_classes
+        )
+
+    def forward(self, x):
+        return self.model(x)
