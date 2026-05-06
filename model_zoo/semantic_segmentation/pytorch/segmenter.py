@@ -12,14 +12,20 @@ batch_size = 8
 output_classes = 2
 category = "semantic_segmentation"
 
+# Pin a specific commit on HF Hub: the backend security check rejects
+# from_pretrained() calls without revision pinning. See
+# https://huggingface.co/nvidia/segformer-b0-finetuned-ade-512-512/commits/main
+SEGFORMER_REVISION = "489d5cd81a0b59fab9b7ea758d3548ebe99677da"
+
 
 class Segmenter(nn.Module):
     def __init__(self, model_name="nvidia/segformer-b0-finetuned-ade-512-512"):
         super(Segmenter, self).__init__()
-        
+
         # Load Segformer model from Hugging Face
         self.model = SegformerForSemanticSegmentation.from_pretrained(
             model_name,
+            revision=SEGFORMER_REVISION,
             num_labels=output_classes,
             ignore_mismatched_sizes=True
         )

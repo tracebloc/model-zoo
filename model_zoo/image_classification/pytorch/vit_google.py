@@ -11,16 +11,26 @@ batch_size = 16
 category = "image_classification"
 output_classes = 2
 
+# Pin a specific commit on HF Hub: the backend security check rejects
+# from_pretrained() calls without revision pinning. See
+# https://huggingface.co/google/vit-base-patch16-224/commits/main
+VIT_REVISION = "3f49326eb077187dfe1c2a2bb15fbd74e6ab91e3"
+
 
 class VisionTransformer(nn.Module):
     def __init__(self):
         super().__init__()
         # Initialize the model with a specified number of output labels for classification
         config = ViTConfig.from_pretrained(
-            "google/vit-base-patch16-224", num_labels=output_classes
+            "google/vit-base-patch16-224",
+            revision=VIT_REVISION,
+            num_labels=output_classes,
         )
         self.vit = ViTForImageClassification.from_pretrained(
-            "google/vit-base-patch16-224", config=config, ignore_mismatched_sizes=True
+            "google/vit-base-patch16-224",
+            revision=VIT_REVISION,
+            config=config,
+            ignore_mismatched_sizes=True,
         )
 
     def forward(self, pixel_values):
