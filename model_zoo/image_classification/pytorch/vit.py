@@ -10,8 +10,7 @@ batch_size = 16
 category = "image_classification"
 output_classes = 2
 
-# Pin a specific commit on HF Hub: the backend security check rejects
-# from_pretrained() calls without revision pinning. See
+# model version
 # https://huggingface.co/google/vit-base-patch16-224/commits/main
 VIT_REVISION = "3f49326eb077187dfe1c2a2bb15fbd74e6ab91e3"
 

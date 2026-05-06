@@ -3,10 +3,6 @@ from transformers import AutoModelForSequenceClassification
 from transformers import AutoConfig
 
 model_id = "roberta-base"
-# Pin a specific commit on HF Hub: the backend security check rejects
-# from_pretrained() calls without revision pinning. See
-# https://huggingface.co/roberta-base/commits/main
-model_revision = "e2da8e2f811d1448a5b465c236feacd80ffbac7b"
 tokenizer_id = "roberta-base"
 hf_token = ""
 framework = "pytorch"
@@ -16,6 +12,10 @@ model_type = ""
 batch_size = 512
 sequence_length = 128
 output_classes = 5
+
+# model version
+# https://huggingface.co/roberta-base/commits/main
+model_revision = "e2da8e2f811d1448a5b465c236feacd80ffbac7b"
 
 
 def MyModel(num_classes=output_classes):
