@@ -61,7 +61,7 @@ class HRModule(nn.Module):
         # Create branches
         self.branches = nn.ModuleList()
         for i in range(num_branches):
-            branch = nn.Sequential(*[blocks[i](num_channels[i], num_channels[i]) for _ in range(1)])
+            branch = nn.Sequential(*[blocks(num_channels[i], num_channels[i]) for _ in range(1)])
             self.branches.append(branch)
         
         # Create fusion layers
@@ -99,7 +99,7 @@ class HRModule(nn.Module):
             for j in range(self.num_branches):
                 if i != j:
                     if self.fuse_layers[i][j] is not None:
-                        fused += self.fuse_layers[i][j](branch_outputs[j])
+                        fused = fused + self.fuse_layers[i][j](branch_outputs[j])
             fused_outputs.append(self.relu(fused))
         
         return fused_outputs
@@ -108,10 +108,12 @@ class HRModule(nn.Module):
 class HRNet(nn.Module):
     """HRNet for semantic segmentation"""
     
-    def __init__(self, n_channels=3, n_classes=output_classes):
+    def __init__(self, n_channels=3, n_classes=output_classes, input_size=image_size, batch_size=batch_size):
         super(HRNet, self).__init__()
         self.n_channels = n_channels
         self.n_classes = n_classes
+        self.input_size = input_size
+        self.batch_size = batch_size
         
         # Initial convolution
         self.conv1 = nn.Conv2d(n_channels, 64, 3, stride=2, padding=1, bias=False)
@@ -124,7 +126,7 @@ class HRNet(nn.Module):
         self.layer1 = self._make_layer(BasicBlock, 64, 64, 4)
         
         # Stage 2: Two branches
-        self.transition1 = self._make_transition_layer([256], [32, 64])
+        self.transition1 = self._make_transition_layer([64], [32, 64])
         self.stage2 = self._make_stage(2, [32, 64], 4)
         
         # Stage 3: Three branches
