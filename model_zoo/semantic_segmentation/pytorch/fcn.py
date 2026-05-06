@@ -104,7 +104,7 @@ class FCN(nn.Module):
 class FCNResNet(nn.Module):
     """FCN with ResNet backbone - alternative implementation"""
     
-    def __init__(self, n_channels=input_channels, n_classes=output_classes):
+    def __init__(self, n_channels=3, n_classes=output_classes):
         super(FCNResNet, self).__init__()
         self.n_channels = n_channels
         self.n_classes = n_classes
