@@ -259,8 +259,17 @@ class MyModel(nn.Module):
 
         # Imagenet pretrain model
         import torchvision.models as tm   # noqa: F401,F403
-        # assert cfg['NUM_LAYERS'] in [18, 34, 50, 101, 152]
-        x = getattr(tm, f"resnet{cfg['NUM_LAYERS']}")(weights="DEFAULT")
+        resnet_factories = {
+            18: tm.resnet18,
+            34: tm.resnet34,
+            50: tm.resnet50,
+            101: tm.resnet101,
+            152: tm.resnet152,
+        }
+        num_layers = cfg['NUM_LAYERS']
+        if num_layers not in resnet_factories:
+            raise ValueError(f"Unsupported NUM_LAYERS: {num_layers}")
+        x = resnet_factories[num_layers](weights="DEFAULT")
 
         model_state = self.preact.state_dict()
         state = {k: v for k, v in x.state_dict().items()
