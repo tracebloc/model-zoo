@@ -1,5 +1,4 @@
 """LeNet-5 via TensorFlow Sequential API. Historical baseline for small images; trains fast."""
-import tensorflow as tf
 from tensorflow.keras import layers, models
 
 framework = "tensorflow"
