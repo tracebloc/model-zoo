@@ -1,3 +1,4 @@
+"""Vanilla RNN forecaster. Lightest baseline; vanishing gradients make it weak for long sequences."""
 import torch.nn as nn
 
 framework = "pytorch"

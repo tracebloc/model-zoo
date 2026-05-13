@@ -41,7 +41,11 @@ Full walkthrough → [Open the training notebook in Colab](https://colab.researc
 
 Not limited to this zoo. Any model that follows the [model structure requirements](https://docs.tracebloc.io/join-use-case/model-optimization) works — PyTorch, TensorFlow, or custom containers.
 
-**Weight file convention:** if your model is `mymodel.py`, name the weights `mymodel_weights.pkl` and place them in the same directory.
+## Pretrained weights
+
+Models in this zoo do not ship pretrained weights. Each model loads weights through its underlying library at runtime — torchvision's `weights="DEFAULT"`, HuggingFace's `from_pretrained()`, or training from scratch.
+
+If you're uploading **your own** model and want to bundle pretrained weights with it, name the weights file `mymodel_weights.pkl` and place it in the same directory as `mymodel.py`. The platform will pick it up automatically.
 
 ## Links
 

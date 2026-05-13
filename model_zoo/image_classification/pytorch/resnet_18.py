@@ -1,4 +1,4 @@
-import torch
+"""ResNet-18 via torchvision, ~11M params. Fastest ResNet; good baseline for quick iteration or CPU-constrained runs."""
 import torchvision
 import torch.nn as nn
 

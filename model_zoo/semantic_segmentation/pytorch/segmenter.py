@@ -1,7 +1,6 @@
-import torch
+"""Segmenter: pure-transformer segmentation model. Pick when you have a lot of data and GPU time."""
 import torch.nn as nn
-import torch.nn.functional as F
-from transformers import SegformerForSemanticSegmentation, SegformerConfig
+from transformers import SegformerForSemanticSegmentation
 
 # Configuration
 framework = "pytorch"

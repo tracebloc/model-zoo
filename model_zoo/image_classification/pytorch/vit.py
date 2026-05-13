@@ -1,4 +1,4 @@
-import torch
+"""ViT-B/16 backbone from HuggingFace transformers + custom classification head. Pick when you want to swap the head or extract features."""
 from torch import nn
 from transformers import ViTModel, ViTConfig
 

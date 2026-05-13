@@ -1,3 +1,4 @@
+"""Ridge regressor. L2-regularized linear model; stable when features are correlated."""
 from sklearn.linear_model import Ridge
 
 framework = "sklearn"

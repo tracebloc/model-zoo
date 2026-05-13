@@ -1,3 +1,4 @@
+"""MLP regressor (sklearn). Small feed-forward net; pick when you want sklearn tooling around a neural model."""
 from sklearn.neural_network import MLPRegressor
 
 framework = "sklearn"

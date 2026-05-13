@@ -1,3 +1,4 @@
+"""DistilBERT trained from scratch. Rarely the right choice; usually prefer the pretrained distilbert.py."""
 from transformers import AutoModelForSequenceClassification
 from transformers import AutoConfig
 

@@ -1,0 +1,14 @@
+"""Single decision tree regressor. Interpretable but high variance; prefer ensembles (random_forest, xgb, lgbm) for accuracy."""
+from sklearn.tree import DecisionTreeRegressor
+
+framework = "sklearn"
+model_type = "tree"
+main_method = "MyModel"
+batch_size = 512
+output_classes = 1
+category = "tabular_regression"
+num_feature_points = 17
+
+
+def MyModel():
+    return DecisionTreeRegressor(random_state=42)

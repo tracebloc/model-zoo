@@ -1,0 +1,12 @@
+from sklearn.tree import DecisionTreeClassifier
+
+framework = "sklearn"
+model_type = "tree"
+main_method = "MyModel"
+batch_size = 4
+output_classes = 5
+category = "tabular_classification"
+num_feature_points = 50
+
+def MyModel():
+    return DecisionTreeClassifier(random_state=42)

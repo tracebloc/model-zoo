@@ -1,4 +1,4 @@
-import torch
+"""Multilayer normalized survival net. Deep model with normalization; good default for moderately sized datasets."""
 import torch.nn as nn
 
 framework = "pytorch"

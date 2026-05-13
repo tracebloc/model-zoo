@@ -1,3 +1,4 @@
+"""Bidirectional LSTM forecaster. Reads each sequence in both directions; good when future context matters during training."""
 import torch.nn as nn
 
 framework = "pytorch"

@@ -1,4 +1,4 @@
-import torch
+"""Swin Transformer via torchvision. Shifted-window attention; high accuracy and more GPU-friendly than pure ViT at similar capacity."""
 import torchvision
 import torch.nn as nn
 

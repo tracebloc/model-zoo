@@ -1,3 +1,4 @@
+"""GRU forecaster. Lighter than LSTM; often trains faster with similar accuracy on short sequences."""
 import torch.nn as nn
 
 framework = "pytorch"

@@ -1,3 +1,4 @@
+"""Temporal Convolutional Network. Dilated causal convs; often beats RNNs on long-horizon forecasting."""
 import torch.nn as nn
 
 framework = "pytorch"

@@ -1,3 +1,4 @@
+"""Log-Normal Accelerated Failure Time model (lifelines). Parametric survival model; pick when log(time) is approximately normal."""
 from lifelines import LogNormalAFTFitter
 
 framework = "lifelines"

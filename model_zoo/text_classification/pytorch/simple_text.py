@@ -1,3 +1,4 @@
+"""Minimal embedding + dense-layer text classifier. Pick for quick prototyping on small labeled text corpora."""
 import torch
 import torch.nn as nn
 import torch.nn.functional as F

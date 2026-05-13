@@ -1,3 +1,4 @@
+"""YOLOv8 pose-estimation variant. Detection + keypoints in a single forward pass; fast."""
 import torch
 import torch.nn as nn
 import torch.nn.functional as F

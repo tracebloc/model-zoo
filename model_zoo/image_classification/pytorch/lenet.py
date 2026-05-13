@@ -1,4 +1,4 @@
-import torch
+"""LeNet-5 (LeCun, 1998). Historical baseline; tiny and trains fast. Pick only for very small datasets or teaching."""
 import torch.nn as nn
 
 framework = "pytorch"

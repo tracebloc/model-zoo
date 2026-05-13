@@ -1,3 +1,4 @@
+"""Lasso regressor. L1 regularization; produces sparse solutions, good for feature selection."""
 from sklearn.linear_model import Lasso
 
 framework = "sklearn"

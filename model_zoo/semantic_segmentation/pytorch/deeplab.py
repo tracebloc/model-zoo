@@ -1,4 +1,4 @@
-import torch
+"""DeepLab semantic segmentation. Atrous convolutions for multi-scale context; strong accuracy on natural images."""
 import torch.nn as nn
 from torchvision.models.segmentation import deeplabv3_resnet50, deeplabv3_resnet101
 

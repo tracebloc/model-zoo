@@ -1,3 +1,4 @@
+"""LSTM forecaster, 2-layer, hidden=64. Good general-purpose sequence model; start here before transformers."""
 import torch.nn as nn
 
 framework = "pytorch"
