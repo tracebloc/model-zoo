@@ -1,5 +1,4 @@
 """LightGBM classifier, 100 trees. Fast gradient boosting; often near-tied with XGBoost."""
-import torch.nn as nn
 from lightgbm import LGBMClassifier
 
 framework = "sklearn"
