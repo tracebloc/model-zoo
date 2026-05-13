@@ -36,7 +36,7 @@ Every model file defines:
 
 - All lowercase `snake_case`. No PascalCase, no hyphens, no spaces — filenames must be importable as Python modules.
 - Drop framework-implementation prefixes (no `sequential_api_`, `functional_api_`).
-- Use canonical library names for sklearn-family models: `xgboost.py`, `lightgbm.py`, `catboost.py` (not `xgb`, `lgbm`, `cboost`).
+- Use canonical library names for sklearn-family models, but suffix with the task so the filename does not shadow the package it imports from: `xgboost_classifier.py` / `xgboost_regressor.py`, `lightgbm_classifier.py` / `lightgbm_regressor.py`, `catboost_classifier.py` (not `xgb`, `lgbm`, `cboost`, and not bare `xgboost.py` — that shadows `import xgboost`).
 - Include the variant when there is more than one in the zoo: `resnet_18.py`, `resnet_50.py`, `densenet_121.py`.
 - Drop redundant "net" suffixes where they aren't canonical: `vgg_16.py`, not `vggnet_16.py`.
 

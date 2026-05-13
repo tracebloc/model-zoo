@@ -4,7 +4,7 @@ Classify structured, tabular records into discrete categories.
 
 ## Start here
 
-**New to tabular classification?** Use [`sklearn/xgboost.py`](sklearn/xgboost.py). On small and medium tabular datasets, gradient-boosted trees typically beat deep models — start here before trying PyTorch or TensorFlow variants.
+**New to tabular classification?** Use [`sklearn/xgboost_classifier.py`](sklearn/xgboost_classifier.py). On small and medium tabular datasets, gradient-boosted trees typically beat deep models — start here before trying PyTorch or TensorFlow variants.
 
 ## Models
 
@@ -12,9 +12,9 @@ Classify structured, tabular records into discrete categories.
 
 | Model | When to pick |
 |---|---|
-| [`xgboost.py`](sklearn/xgboost.py) | Strong default; usually wins on small/medium data |
-| [`lightgbm.py`](sklearn/lightgbm.py) | Faster training than XGBoost, often near-tied accuracy |
-| [`catboost.py`](sklearn/catboost.py) | Best handling of categorical features with minimal preprocessing |
+| [`xgboost_classifier.py`](sklearn/xgboost_classifier.py) | Strong default; usually wins on small/medium data |
+| [`lightgbm_classifier.py`](sklearn/lightgbm_classifier.py) | Faster training than XGBoost, often near-tied accuracy |
+| [`catboost_classifier.py`](sklearn/catboost_classifier.py) | Best handling of categorical features with minimal preprocessing |
 
 ### PyTorch (pick when features have sequential/spatial structure)
 
