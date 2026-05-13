@@ -1,4 +1,3 @@
-import torch
 import torch.nn as nn
 
 framework = "pytorch"
@@ -10,7 +9,6 @@ output_classes = 3
 category = "object_detection"
 
 
-import torch
 import torch.nn as nn
 
 class ConvBNAct(nn.Module):
