@@ -1,6 +1,6 @@
 """AlexNet (2012) via TensorFlow Sequential API. Historical baseline; pick for teaching or comparison, not modern accuracy."""
 import tensorflow as tf
-from tensorflow.keras import layers, utils
+from tensorflow.keras import layers
 
 framework = "tensorflow"
 main_method = "MyModel"

@@ -1,6 +1,6 @@
 """Xception (TensorFlow Functional API, custom). Depthwise separable convolutions throughout; Inception's successor."""
 import tensorflow as tf
-from tensorflow.keras import layers, utils
+from tensorflow.keras import layers
 
 framework = "tensorflow"
 main_method = "MyModel"
