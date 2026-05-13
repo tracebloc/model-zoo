@@ -1,6 +1,4 @@
 """Faster R-CNN with a ResNet backbone. Two-stage detector; strong accuracy, slower than YOLO variants."""
-import torch
-import torch.nn as nn
 import torchvision
 from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
 from torchvision.models.detection import FasterRCNN_ResNet50_FPN_Weights

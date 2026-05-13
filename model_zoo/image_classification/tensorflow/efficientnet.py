@@ -1,7 +1,6 @@
 """EfficientNet (TensorFlow Functional API, custom). Compound-scaled architecture balancing depth, width, and resolution."""
 from tensorflow import keras
 from tensorflow.keras import layers
-from tensorflow.keras.utils import plot_model
 import math
 
 framework = "tensorflow"
