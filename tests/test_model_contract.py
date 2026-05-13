@@ -26,6 +26,8 @@ FRAMEWORK_IMPORT_NAME = {
 }
 KNOWN_FRAMEWORKS = set(FRAMEWORK_IMPORT_NAME)
 
+OPTIONAL_THIRD_PARTY = {"xgboost", "lightgbm", "catboost"}
+
 KNOWN_CATEGORIES = {
     "image_classification",
     "object_detection",
@@ -58,6 +60,21 @@ def _is_installed(framework: str) -> bool:
     return True
 
 
+def _missing_optional_deps(path: pathlib.Path) -> list[str]:
+    try:
+        text = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return []
+    found = set(re.findall(r"^\s*(?:from|import)\s+(\w+)", text, re.MULTILINE))
+    missing = []
+    for mod in sorted(found & OPTIONAL_THIRD_PARTY):
+        try:
+            importlib.import_module(mod)
+        except ImportError:
+            missing.append(mod)
+    return missing
+
+
 def _model_files() -> list[pathlib.Path]:
     return sorted(MODEL_ROOT.rglob("*.py"))
 
@@ -74,6 +91,10 @@ def test_model_contract(path: pathlib.Path) -> None:
 
     if not _is_installed(framework):
         pytest.skip(f"{framework} not installed in this CI job")
+
+    missing = _missing_optional_deps(path)
+    if missing:
+        pytest.skip(f"optional dep(s) not installed in this CI job: {', '.join(missing)}")
 
     module_name = re.sub(r"\W", "_", path.stem)
     spec = importlib.util.spec_from_file_location(module_name, path)
