@@ -12,4 +12,8 @@ output_classes = 2
 
 
 def MyModel(num_classes=output_classes):
-    return AutoModel.from_pretrained("autogluon/mitra-classifier", trust_remote_code=True)
+    return AutoModel.from_pretrained(
+        "autogluon/mitra-classifier",
+        trust_remote_code=True,
+        num_classes=num_classes,
+    )
