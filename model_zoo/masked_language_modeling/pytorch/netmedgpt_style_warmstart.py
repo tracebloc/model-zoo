@@ -2,7 +2,7 @@
 from transformers import AutoConfig, AutoModelForMaskedLM
 
 framework = "pytorch"
-main_class = "NetMedGPTWarmStart"
+main_method = "NetMedGPTWarmStart"
 category = "masked_language_modeling"
 model_type = ""
 batch_size = 16
