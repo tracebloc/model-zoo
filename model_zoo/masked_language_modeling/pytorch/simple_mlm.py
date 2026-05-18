@@ -1,7 +1,6 @@
 """Minimal transformer encoder for MLM, ~30M params. Smoke-test model for quick iteration and pipeline validation."""
 import torch
 import torch.nn as nn
-import math
 
 framework = "pytorch"
 main_class = "SimpleMaskedLM"
