@@ -1,7 +1,6 @@
-"""EuroBERT-210M (2025). Multilingual encoder covering 15 European languages, 8192 context; closes the multilingual gap left by the BERT/RoBERTa lineup. Loads via trust_remote_code."""
+"""EuroBERT-210M (2025). Multilingual encoder covering 15 European languages, 8192 context; closes the multilingual gap left by the BERT/RoBERTa lineup. Loads via trust_remote_code — the repo id is hard-coded as a string literal so the model-upload security gate (TBT001) recognises it against its vetted-repos allowlist."""
 from transformers import AutoModelForSequenceClassification
 
-model_id = "EuroBERT/EuroBERT-210m"
 framework = "pytorch"
 main_method = "MyModel"
 license = "Apache-2.0"
@@ -14,7 +13,7 @@ output_classes = 5
 
 def MyModel(num_classes=output_classes):
     return AutoModelForSequenceClassification.from_pretrained(
-        model_id,
+        "EuroBERT/EuroBERT-210m",
         num_labels=num_classes,
         trust_remote_code=True,
         ignore_mismatched_sizes=True,

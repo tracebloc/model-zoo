@@ -1,7 +1,6 @@
-"""Mitra (Amazon, NeurIPS 2025). Tabular foundation model — pretrained on synthetic priors; competitive with TabPFN v2 / CatBoost. Loaded via trust_remote_code so the HF repo supplies the architecture."""
+"""Mitra (Amazon, NeurIPS 2025). Tabular foundation model — pretrained on synthetic priors; competitive with TabPFN v2 / CatBoost. Repo id is hard-coded as a string literal so the model-upload security gate (TBT001) recognises it against its vetted-repos allowlist."""
 from transformers import AutoModel
 
-model_id = "autogluon/mitra-classifier"
 framework = "pytorch"
 main_method = "MyModel"
 license = "Apache-2.0"
@@ -13,4 +12,4 @@ output_classes = 2
 
 
 def MyModel(num_classes=output_classes):
-    return AutoModel.from_pretrained(model_id, trust_remote_code=True)
+    return AutoModel.from_pretrained("autogluon/mitra-classifier", trust_remote_code=True)
