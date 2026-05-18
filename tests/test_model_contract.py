@@ -36,6 +36,7 @@ KNOWN_CATEGORIES = {
     "tabular_regression",
     "time_series_forecasting",
     "time_to_event_prediction",
+    "masked_language_modeling",
 }
 
 
