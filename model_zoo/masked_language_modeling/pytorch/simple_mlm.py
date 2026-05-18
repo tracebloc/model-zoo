@@ -42,6 +42,7 @@ class SimpleMaskedLM(nn.Module):
             batch_first=True,
         )
         self.encoder = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
+        self.encoder.enable_nested_tensor = False
         self.lm_head = nn.Linear(hidden_size, vocab_size)
 
         self._init_weights()
