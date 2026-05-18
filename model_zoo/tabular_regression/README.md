@@ -4,7 +4,7 @@ Predict continuous target values from structured, tabular features.
 
 ## Start here
 
-**New to tabular regression?** Use [`sklearn/xgboost.py`](sklearn/xgboost.py). Gradient-boosted trees typically dominate on tabular data — start here before trying deep models.
+**New to tabular regression?** Use [`sklearn/xgboost_regressor.py`](sklearn/xgboost_regressor.py). Gradient-boosted trees typically dominate on tabular data — start here before trying deep models.
 
 For a fast, zero-tuning baseline, use [`sklearn/random_forest.py`](sklearn/random_forest.py) or [`sklearn/linear_regression.py`](sklearn/linear_regression.py).
 
@@ -14,8 +14,8 @@ For a fast, zero-tuning baseline, use [`sklearn/random_forest.py`](sklearn/rando
 
 | Model | When to pick |
 |---|---|
-| [`xgboost.py`](sklearn/xgboost.py) | Strongest default |
-| [`lightgbm.py`](sklearn/lightgbm.py) | Fast training; near-XGBoost accuracy |
+| [`xgboost_regressor.py`](sklearn/xgboost_regressor.py) | Strongest default |
+| [`lightgbm_regressor.py`](sklearn/lightgbm_regressor.py) | Fast training; near-XGBoost accuracy |
 | [`random_forest.py`](sklearn/random_forest.py) | Robust out-of-the-box baseline |
 | [`gradient_boosting.py`](sklearn/gradient_boosting.py) | Classical sklearn boosting |
 | [`decision_tree.py`](sklearn/decision_tree.py) | Interpretable single tree; high variance |

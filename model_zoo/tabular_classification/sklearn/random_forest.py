@@ -1,8 +1,7 @@
-import torch.nn as nn
-from sklearn.neighbors import KNeighborsClassifier
+from sklearn.ensemble import RandomForestClassifier
 
 framework = "sklearn"
-model_type = "clustering"
+model_type = "tree"
 main_method = "MyModel"
 batch_size = 4
 output_classes = 5
@@ -10,4 +9,4 @@ category = "tabular_classification"
 num_feature_points = 50
 
 def MyModel():
-    return KNeighborsClassifier(n_neighbors=5)
+    return RandomForestClassifier(n_estimators=100, random_state=42)

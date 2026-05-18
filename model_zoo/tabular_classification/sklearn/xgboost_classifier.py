@@ -1,5 +1,4 @@
 """XGBoost classifier, 100 trees. Strong tabular baseline; usually beats deep models on small/medium datasets."""
-import torch.nn as nn
 from xgboost import XGBClassifier
 
 framework = "sklearn"
