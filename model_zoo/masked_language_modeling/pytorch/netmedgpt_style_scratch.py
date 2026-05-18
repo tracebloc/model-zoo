@@ -48,12 +48,15 @@ class NetMedGPTScratch(nn.Module):
             norm_first=False,
         )
         self.encoder = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
-        self.lm_head = nn.Sequential(
+        self.lm_transform = nn.Sequential(
             nn.Linear(hidden_size, hidden_size),
             nn.GELU(),
             nn.LayerNorm(hidden_size, eps=1e-12),
-            nn.Linear(hidden_size, vocab_size),
         )
+        self.lm_decoder = nn.Linear(hidden_size, vocab_size, bias=False)
+        # Weight tying: LM decoder shares weights with word embeddings (BERT-style)
+        self.lm_decoder.weight = self.word_embeddings.weight
+        self.lm_bias = nn.Parameter(torch.zeros(vocab_size))
 
         self._init_weights()
 
@@ -65,6 +68,14 @@ class NetMedGPTScratch(nn.Module):
                     module.bias.data.zero_()
             elif isinstance(module, nn.Embedding):
                 module.weight.data.normal_(mean=0.0, std=0.02)
+            elif isinstance(module, nn.MultiheadAttention):
+                # Q/K/V projections stored as raw Parameters, not nn.Linear
+                if module.in_proj_weight is not None:
+                    module.in_proj_weight.data.normal_(mean=0.0, std=0.02)
+                if module.out_proj.weight is not None:
+                    module.out_proj.weight.data.normal_(mean=0.0, std=0.02)
+                if module.out_proj.bias is not None:
+                    module.out_proj.bias.data.zero_()
 
     def forward(self, input_ids, attention_mask=None, **kwargs):
         seq_len = input_ids.size(1)
@@ -80,5 +91,6 @@ class NetMedGPTScratch(nn.Module):
             src_key_padding_mask = None
 
         x = self.encoder(x, src_key_padding_mask=src_key_padding_mask)
-        logits = self.lm_head(x)
+        x = self.lm_transform(x)
+        logits = self.lm_decoder(x) + self.lm_bias
         return logits
