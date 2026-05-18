@@ -108,13 +108,11 @@ class HRModule(nn.Module):
 class HRNet(nn.Module):
     """HRNet for semantic segmentation"""
     
-    def __init__(self, n_channels=3, n_classes=output_classes, input_size=image_size, batch_size=batch_size):
+    def __init__(self, n_channels=3, n_classes=output_classes):
         super(HRNet, self).__init__()
         self.n_channels = n_channels
         self.n_classes = n_classes
-        self.input_size = input_size
-        self.batch_size = batch_size
-        
+
         # Initial convolution
         self.conv1 = nn.Conv2d(n_channels, 64, 3, stride=2, padding=1, bias=False)
         self.bn1 = nn.BatchNorm2d(64)

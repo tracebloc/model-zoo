@@ -14,4 +14,4 @@ forecast_horizon = 64
 
 
 def MyModel():
-    return AutoModelForSeq2SeqLM.from_pretrained(model_id)
+    return AutoModelForSeq2SeqLM.from_pretrained(model_id, trust_remote_code=True)
