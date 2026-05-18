@@ -14,4 +14,8 @@ _PRETRAINED_ID = "IDEA-Research/grounding-dino-tiny"
 
 
 def MyModel(num_classes=output_classes):
+    # Grounding DINO is open-vocabulary: classes are passed as text queries at
+    # inference time, not as a fixed integer head size. num_classes is accepted
+    # for SDK signature uniformity but intentionally not wired into the model.
+    del num_classes
     return AutoModelForZeroShotObjectDetection.from_pretrained(_PRETRAINED_ID)
