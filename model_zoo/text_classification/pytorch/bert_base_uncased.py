@@ -1,6 +1,5 @@
 """BERT-base-uncased via HuggingFace, pretrained. Standard text classification baseline; fine-tune the head for your labels."""
 from transformers import AutoModelForSequenceClassification
-from transformers import AutoConfig
 
 model_id = 'bert-base-uncased'
 framework = "pytorch"

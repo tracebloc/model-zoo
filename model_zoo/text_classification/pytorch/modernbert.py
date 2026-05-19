@@ -1,18 +1,18 @@
-"""DistilBERT via HuggingFace, pretrained. ~60% the size of BERT-base, ~97% of its accuracy; strong default for inference-speed-sensitive setups."""
+"""ModernBERT (Answer.AI / LightOn, Dec 2024). Drop-in BERT replacement — 8192-token context, ~3x training speed, strong on classification + retrieval."""
 from transformers import AutoModelForSequenceClassification
 
-model_id = "distilbert-base-uncased-finetuned-sst-2-english"
+model_id = "answerdotai/ModernBERT-base"
 framework = "pytorch"
-main_class = "MyModel"
+main_method = "MyModel"
+license = "Apache-2.0"
 category = "text_classification"
 model_type = ""
-batch_size = 512
-sequence_length = 5
+batch_size = 64
+sequence_length = 512
 output_classes = 5
 
 
 def MyModel(num_classes=output_classes):
-
     return AutoModelForSequenceClassification.from_pretrained(
         model_id, num_labels=num_classes, ignore_mismatched_sizes=True
     )

@@ -1,8 +1,6 @@
 import torch
 import torch.nn as nn
 import math
-import torchvision
-from torch.nn.functional import cross_entropy, one_hot
 
 framework = "pytorch"
 model_type = "yolo"
