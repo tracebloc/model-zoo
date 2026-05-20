@@ -30,11 +30,29 @@ class _ALiBiMultiheadAttention(nn.Module):
         self.out_proj = nn.Linear(hidden_size, hidden_size)
         self.dropout = nn.Dropout(dropout)
 
-        # ALiBi slopes — geometric sequence per head
-        slopes = torch.tensor([
-            2 ** (-(8 * (i + 1)) / num_heads) for i in range(num_heads)
-        ])
-        self.register_buffer("slopes", slopes)
+        # ALiBi slopes — standard implementation (Press et al., 2021).
+        # When num_heads is a power of two, slopes are a single geometric
+        # sequence with ratio 2^(-8/n). When it is not (e.g. 12), use the
+        # closest power-of-two sequence and interleave a second sequence
+        # for the remaining heads.
+        self.register_buffer("slopes", self._get_alibi_slopes(num_heads))
+
+    @staticmethod
+    def _get_alibi_slopes(num_heads):
+        def _get_slopes_power_of_2(n):
+            start = 2 ** (-(2 ** -(math.log2(n) - 3)))
+            ratio = start
+            return [start * (ratio ** i) for i in range(n)]
+
+        if math.log2(num_heads).is_integer():
+            slopes = _get_slopes_power_of_2(num_heads)
+        else:
+            closest_power = 2 ** math.floor(math.log2(num_heads))
+            base = _get_slopes_power_of_2(closest_power)
+            extra = _get_slopes_power_of_2(2 * closest_power)
+            extra = extra[0::2][: num_heads - closest_power]
+            slopes = base + extra
+        return torch.tensor(slopes)
 
     def forward(self, x, key_padding_mask=None):
         B, S, _ = x.shape
