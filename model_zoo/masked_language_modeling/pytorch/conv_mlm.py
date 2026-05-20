@@ -8,7 +8,7 @@ category = "masked_language_modeling"
 model_type = ""
 batch_size = 64
 sequence_length = 128
-vocab_size = 30000
+vocab_size = 30522
 
 
 class ConvMLM(nn.Module):

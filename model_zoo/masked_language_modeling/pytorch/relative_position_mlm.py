@@ -9,7 +9,7 @@ category = "masked_language_modeling"
 model_type = ""
 batch_size = 16
 sequence_length = 128
-vocab_size = 30000
+vocab_size = 30522
 
 
 class _ALiBiMultiheadAttention(nn.Module):

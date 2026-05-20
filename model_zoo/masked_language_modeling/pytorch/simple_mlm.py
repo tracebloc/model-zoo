@@ -8,7 +8,7 @@ category = "masked_language_modeling"
 model_type = ""
 batch_size = 32
 sequence_length = 64
-vocab_size = 30000
+vocab_size = 30522
 
 
 class SimpleMaskedLM(nn.Module):
