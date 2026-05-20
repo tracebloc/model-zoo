@@ -35,6 +35,7 @@ class NetMedGPTScratch(nn.Module):
         super().__init__()
         self.word_embeddings = nn.Embedding(vocab_size, hidden_size)
         self.position_embeddings = nn.Embedding(max_position_embeddings, hidden_size)
+        self.max_position_embeddings = max_position_embeddings
         self.layer_norm = nn.LayerNorm(hidden_size, eps=1e-12)
         self.dropout = nn.Dropout(dropout)
 
@@ -81,6 +82,7 @@ class NetMedGPTScratch(nn.Module):
     def forward(self, input_ids, attention_mask=None, **kwargs):
         seq_len = input_ids.size(1)
         position_ids = torch.arange(seq_len, device=input_ids.device).unsqueeze(0)
+        position_ids = position_ids.clamp(max=self.max_position_embeddings - 1)
 
         x = self.word_embeddings(input_ids) + self.position_embeddings(position_ids)
         x = self.layer_norm(x)
