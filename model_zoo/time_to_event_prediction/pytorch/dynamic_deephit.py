@@ -1,5 +1,4 @@
 """Dynamic-DeepHit (TBME 2020, now standard in clinical ML). DeepHit extended with an RNN over longitudinal covariates — handles repeated measures and competing risks. Use when subjects have time-varying features rather than a single baseline vector."""
-import torch
 import torch.nn as nn
 
 framework = "pytorch"

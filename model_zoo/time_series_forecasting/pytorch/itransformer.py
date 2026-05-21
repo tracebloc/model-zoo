@@ -1,5 +1,4 @@
 """iTransformer (ICLR 2024). Inverts the transformer: treats each variate as a token and attention runs across variates, not time steps. Consistently top-3 on long-horizon multivariate benchmarks; now the standard reference baseline."""
-import torch
 import torch.nn as nn
 
 framework = "pytorch"

@@ -1,5 +1,4 @@
 """TimeMixer (ICLR 2024). Multi-scale mixing of seasonal + trend decompositions via MLPs; consistently strong on long-horizon multivariate without attention. Trains from scratch — federated-safe (no foundation backbone, LayerNorm only)."""
-import torch
 import torch.nn as nn
 
 framework = "pytorch"

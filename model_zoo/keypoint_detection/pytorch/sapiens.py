@@ -1,5 +1,4 @@
 """Sapiens (Meta, ECCV 2024). Human-centric foundation model — pose, depth, normals, segmentation in one family. Pose head fine-tuned LoRA-only so federated averaging only syncs the adapter + final regressor."""
-import torch
 import torch.nn as nn
 from peft import LoraConfig, get_peft_model
 from transformers import AutoModel

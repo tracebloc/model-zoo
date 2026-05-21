@@ -1,5 +1,4 @@
 """SAM 2 (Meta, Aug 2024). Segment-anything foundation model — image + video, promptable. Used here as a frozen encoder with a trainable linear segmentation head so federated averaging only sees the head."""
-import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from transformers import Sam2Model

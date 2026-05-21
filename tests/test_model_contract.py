@@ -33,6 +33,7 @@ OPTIONAL_THIRD_PARTY = {
     "interpret",
     "pytorch_forecasting",
     "pycox",
+    "peft",
 }
 
 KNOWN_CATEGORIES = {
