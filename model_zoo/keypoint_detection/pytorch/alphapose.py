@@ -15,7 +15,7 @@ num_feature_points = 16
 
 config = {
         'PRESET': {
-            'NUM_JOINTS': 16
+            'NUM_JOINTS': num_feature_points
         },
         'NUM_DECONV_FILTERS': [256, 128, 64],
         'NUM_LAYERS': 50
@@ -282,9 +282,8 @@ class MyModel(nn.Module):
             self.deconv_dim[2], self._preset_cfg['NUM_JOINTS'], kernel_size=1, stride=1, padding=0)
         self.global_avg_pool = nn.AdaptiveAvgPool2d((1, 1))
 
-        # Add a fully connected layer to predict keypoints' x, y coordinates and visibility
-        num_features = self.deconv_dim[2]
-        self.fc = nn.Linear(16, self._preset_cfg['NUM_JOINTS'] * 3)
+        # Lazily initialized in forward() once the flattened feature size is known.
+        self.fc = None
 
     def _make_deconv_layer(self):
         deconv_layers = []
@@ -328,6 +327,8 @@ class MyModel(nn.Module):
         out = self.final_layer(out)
         out = self.global_avg_pool(out)
         out = out.view(out.size(0), -1)
+        if self.fc is None:
+            self.fc = nn.Linear(out.size(1), self._preset_cfg['NUM_JOINTS'] * 3).to(out.device)
         out = self.fc(out)
         out = out.view(-1, self._preset_cfg['NUM_JOINTS'], 3)
         return out

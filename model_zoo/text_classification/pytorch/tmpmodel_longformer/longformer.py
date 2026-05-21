@@ -1,15 +1,15 @@
-"""ELECTRA (Stanford / Google, ICLR 2020). Replaced-token-detection pretraining — same compute, consistently better downstream accuracy than BERT/RoBERTa at small scale. Strong baseline when training-data budget is tight. Fine-tuned LoRA-only so federated averaging only syncs the small adapter tensors."""
+"""Longformer (AllenAI, 2020). Sparse local + global attention — supports 4096-token context with linear-in-length compute. The reference choice for long-document classification (legal, medical, financial filings). Fine-tuned LoRA-only so federated averaging only syncs the small adapter tensors."""
 from peft import LoraConfig, TaskType, get_peft_model
 from transformers import AutoModelForSequenceClassification
 
-model_id = "google/electra-base-discriminator"
+model_id = "allenai/longformer-base-4096"
 framework = "pytorch"
 main_method = "MyModel"
 license = "Apache-2.0"
 category = "text_classification"
 model_type = ""
-batch_size = 16
-sequence_length = 512
+batch_size = 2
+sequence_length = 4096
 output_classes = 5
 
 
@@ -23,7 +23,14 @@ def MyModel(num_classes=output_classes):
         lora_alpha=16,
         lora_dropout=0.1,
         bias="none",
-        target_modules=["query", "key", "value"],
+        target_modules=[
+            "query",
+            "key",
+            "value",
+            "query_global",
+            "key_global",
+            "value_global",
+        ],
         modules_to_save=["classifier"],
     )
     return get_peft_model(base, lora_config)
