@@ -34,6 +34,8 @@ OPTIONAL_THIRD_PARTY = {
     "pytorch_forecasting",
     "pycox",
     "peft",
+    "tabpfn",
+    "ultralytics",
 }
 
 KNOWN_CATEGORIES = {
