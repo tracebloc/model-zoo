@@ -27,7 +27,10 @@ class MyModel(nn.Module):
 
     def forward(self, x):
         out = self.backbone(pixel_values=x)
-        tokens = out.last_hidden_state[:, 1:, :]  # drop CLS
+        # DINOv3 prepends 1 CLS + N register tokens before the patch tokens;
+        # skip both so the remaining sequence is exactly the H'×W' patch grid.
+        n_special = 1 + getattr(self.backbone.config, "num_register_tokens", 0)
+        tokens = out.last_hidden_state[:, n_special:, :]
         b, n, c = tokens.shape
         h = w = int(n**0.5)
         feat = tokens.transpose(1, 2).reshape(b, c, h, w)

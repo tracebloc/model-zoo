@@ -1,4 +1,4 @@
-"""Sapiens (Meta, ECCV 2024). Human-centric foundation model — pose, depth, normals, segmentation in one family. Pose head fine-tuned LoRA-only so federated averaging only syncs the adapter + final regressor."""
+"""Sapiens (Meta, ECCV 2024). Human-centric foundation model — pose, depth, normals, segmentation in one family. The official `facebook/sapiens-pose-*` Hub repos ship as TorchScript artifacts (not loadable via AutoModel), so this template loads the MAE-pretrained ViT backbone `facebook/sapiens-pretrain-0.3b` and attaches a fresh pose head. Fine-tuned LoRA-only so federated averaging only syncs the adapter + final regressor."""
 import torch.nn as nn
 from peft import LoraConfig, get_peft_model
 from transformers import AutoModel
@@ -13,13 +13,14 @@ output_classes = 1
 category = "keypoint_detection"
 num_feature_points = 17
 
-_BACKBONE_ID = "facebook/sapiens-pose-0.3b-torchscript"
+_BACKBONE_ID = "facebook/sapiens-pretrain-0.3b"
 
 
 class _SapiensWrapper(nn.Module):
     def __init__(self, backbone, num_feature_points):
         super().__init__()
         self.backbone = backbone
+        # PEFT-wrapped backbones expose the underlying config via `.config`
         hidden = backbone.config.hidden_size
         self.head = nn.Linear(hidden, num_feature_points * 3)
         self.num_feature_points = num_feature_points
