@@ -40,6 +40,7 @@ class TinyMLM(nn.Module):
             nhead=num_heads,
             dim_feedforward=intermediate_size,
             dropout=dropout,
+            activation="gelu",
             batch_first=True,
         )
         self.encoder = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
