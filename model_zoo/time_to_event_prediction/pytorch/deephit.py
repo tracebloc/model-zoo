@@ -18,11 +18,11 @@ def MyModel(num_feature_points=num_feature_points, num_durations=_NUM_DURATIONS)
     net = nn.Sequential(
         nn.Linear(num_feature_points, 64),
         nn.ReLU(),
-        nn.BatchNorm1d(64),
+        nn.LayerNorm(64),
         nn.Dropout(0.1),
         nn.Linear(64, 64),
         nn.ReLU(),
-        nn.BatchNorm1d(64),
+        nn.LayerNorm(64),
         nn.Dropout(0.1),
         nn.Linear(64, num_durations),
     )
