@@ -41,6 +41,9 @@ def MyModel(num_feature_points=num_feature_points):
         num_labels=num_feature_points,
         image_size=[image_size, image_size],
     )
+    # VitPoseSimpleDecoder reads config.num_labels for its heatmap-output
+    # channel count; set it explicitly so the SDK override always lands.
+    config.num_labels = num_feature_points
     if getattr(config, "backbone_config", None) is not None:
         config.backbone_config.image_size = [image_size, image_size]
     model = VitPoseForPoseEstimation.from_pretrained(
