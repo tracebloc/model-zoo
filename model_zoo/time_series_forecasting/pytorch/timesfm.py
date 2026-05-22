@@ -1,4 +1,6 @@
-"""TimesFM 2.0 (Google, 2024-2025). Decoder-only time-series foundation model; Chronos's main competitor and the leading zero-shot forecaster on GIFT-Eval as of 2025. LoRA-only fine-tune so federated averaging only syncs the adapter."""
+"""TimesFM 2.0 (Google, 2024-2025). Decoder-only time-series foundation model; Chronos's main competitor and the leading zero-shot forecaster on GIFT-Eval as of 2025. LoRA-only fine-tune so federated averaging only syncs the adapter. A thin wrapper exposes the zoo's (B, L, N) → (B, H, N) tensor contract by flattening multivariate input to per-channel univariate calls."""
+import torch
+import torch.nn as nn
 from peft import LoraConfig, get_peft_model
 from transformers import AutoModel
 
@@ -15,10 +17,39 @@ forecast_horizon = 128
 _PRETRAINED_ID = "google/timesfm-2.0-500m-pytorch"
 
 
-def MyModel():
+class _TimesFMWrapper(nn.Module):
+    """Adapts univariate TimesFM to the zoo's multivariate tensor contract.
+
+    Forward accepts `past_values` of shape (B, L, N) and returns predictions
+    of shape (B, H, N). Each of the N channels is forecast independently —
+    TimesFM is a univariate model, so multivariate input is processed
+    channel-by-channel and the outputs are restacked.
+    """
+
+    def __init__(self, base, forecast_horizon):
+        super().__init__()
+        self.base = base
+        self.h = forecast_horizon
+
+    def forward(self, past_values, *args, **kwargs):
+        b, L, n = past_values.shape
+        # (B, L, N) → (B*N, L)
+        flat = past_values.permute(0, 2, 1).reshape(b * n, L)
+        if hasattr(self.base, "forecast"):
+            pred = self.base.forecast(flat, horizon=self.h)
+        else:
+            out = self.base(flat)
+            pred = out.last_hidden_state if hasattr(out, "last_hidden_state") else out
+            pred = pred[..., -self.h:] if pred.ndim == 2 else pred.mean(-1)[..., -self.h:]
+        pred = torch.as_tensor(pred).reshape(b, n, self.h).permute(0, 2, 1)
+        return pred
+
+
+def MyModel(forecast_horizon=forecast_horizon):
     base = AutoModel.from_pretrained(_PRETRAINED_ID, trust_remote_code=True)
     lora_config = LoraConfig(
         r=8, lora_alpha=16, lora_dropout=0.1, bias="none",
         target_modules=["q_proj", "k_proj", "v_proj", "o_proj"],
     )
-    return get_peft_model(base, lora_config)
+    base = get_peft_model(base, lora_config)
+    return _TimesFMWrapper(base, forecast_horizon)
