@@ -27,3 +27,11 @@ class WideMiniMLM(BertForMaskedLM):
             max_position_embeddings=512,
         )
         super().__init__(config)
+
+    def forward(self, input_ids, attention_mask=None, **kwargs):
+        outputs = super().forward(
+            input_ids=input_ids,
+            attention_mask=attention_mask,
+            **kwargs,
+        )
+        return outputs.logits

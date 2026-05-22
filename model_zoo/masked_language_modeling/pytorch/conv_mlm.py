@@ -77,16 +77,20 @@ class ConvMLM(nn.Module):
 
         # Conv1d expects (batch, channels, seq_len)
         x = x.transpose(1, 2)
+        # Zero out padding before convolutions so padding tokens
+        # cannot influence non-padding positions via dilated kernels.
+        if attention_mask is not None:
+            mask_1d = attention_mask.unsqueeze(1).float()  # (batch, 1, seq_len)
+            x = x * mask_1d
         for conv_block in self.conv_layers:
             residual = x
             x = conv_block(x)
             # Trim to match residual length if padding produced extra
             x = x[:, :, :residual.size(2)]
+            if attention_mask is not None:
+                x = x * mask_1d
             x = x + residual
         x = x.transpose(1, 2)
-
-        if attention_mask is not None:
-            x = x * attention_mask.unsqueeze(-1).float()
 
         logits = self.lm_head(x)
         return logits
