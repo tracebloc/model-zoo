@@ -1,4 +1,4 @@
-"""ViTPose (NeurIPS 2022). First transformer pose model in the zoo — ViT backbone + simple decoder; 81+ AP COCO whole-body at Huge scale, fine-tunes well at Base."""
+"""ViTPose++ (NeurIPS 2023). MoE-style task-shared / task-specific experts on top of ViTPose; current top of the COCO whole-body leaderboard at Huge scale. Base variant is the practical fine-tune default."""
 import torch
 import torch.nn as nn
 from transformers import VitPoseForPoseEstimation, VitPoseConfig
@@ -13,10 +13,10 @@ output_classes = 1
 category = "keypoint_detection"
 num_feature_points = 17
 
-_PRETRAINED_ID = "usyd-community/vitpose-base-simple"
+_PRETRAINED_ID = "usyd-community/vitpose-plus-base"
 
 
-class _VitPoseWrapper(nn.Module):
+class _Wrapper(nn.Module):
     def __init__(self, model):
         super().__init__()
         self.model = model
@@ -37,8 +37,7 @@ class _VitPoseWrapper(nn.Module):
 
 def MyModel(num_feature_points=num_feature_points):
     config = VitPoseConfig.from_pretrained(
-        _PRETRAINED_ID,
-        num_labels=num_feature_points,
+        _PRETRAINED_ID, num_labels=num_feature_points,
         image_size=[image_size, image_size],
     )
     # VitPoseSimpleDecoder reads config.num_labels for its heatmap-output
@@ -49,4 +48,4 @@ def MyModel(num_feature_points=num_feature_points):
     model = VitPoseForPoseEstimation.from_pretrained(
         _PRETRAINED_ID, config=config, ignore_mismatched_sizes=True
     )
-    return _VitPoseWrapper(model)
+    return _Wrapper(model)

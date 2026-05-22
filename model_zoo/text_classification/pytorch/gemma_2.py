@@ -1,15 +1,15 @@
-"""ModernBERT (Answer.AI / LightOn, Dec 2024). Drop-in BERT replacement — 8192-token context, ~3x training speed, strong on classification + retrieval. Fine-tuned LoRA-only so federated averaging only syncs the small adapter tensors."""
+"""Gemma-2 2B (Google, 2024) as a decoder-LLM classifier. Decoder-LLM-as-classifier is the dominant 2024-2025 pattern for hard classification tasks. LoRA-only fine-tune so federated averaging only syncs the adapter + classification head."""
 from peft import LoraConfig, TaskType, get_peft_model
 from transformers import AutoModelForSequenceClassification
 
-model_id = "answerdotai/ModernBERT-base"
+model_id = "google/gemma-2-2b"
 framework = "pytorch"
 main_method = "MyModel"
-license = "Apache-2.0"
+license = "Gemma"
 category = "text_classification"
 model_type = ""
-batch_size = 16
-sequence_length = 512
+batch_size = 4
+sequence_length = 1024
 output_classes = 5
 
 
@@ -19,11 +19,8 @@ def MyModel(num_classes=output_classes):
     )
     lora_config = LoraConfig(
         task_type=TaskType.SEQ_CLS,
-        r=8,
-        lora_alpha=16,
-        lora_dropout=0.1,
-        bias="none",
-        target_modules=["Wqkv"],
-        modules_to_save=["classifier", "head"],
+        r=16, lora_alpha=32, lora_dropout=0.05, bias="none",
+        target_modules=["q_proj", "k_proj", "v_proj", "o_proj"],
+        modules_to_save=["score"],
     )
     return get_peft_model(base, lora_config)
