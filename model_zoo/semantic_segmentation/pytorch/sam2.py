@@ -25,6 +25,8 @@ class MyModel(nn.Module):
         self._out_size = image_size
 
     def forward(self, x):
-        feats = self.backbone(x).last_hidden_state  # (B, C, H', W')
+        # HF SAM2 vision_encoder returns last_hidden_state in channels-last
+        # layout (B, H', W', C); Conv2d expects channels-first.
+        feats = self.backbone(x).last_hidden_state.permute(0, 3, 1, 2).contiguous()
         logits = self.head(feats)
         return F.interpolate(logits, size=self._out_size, mode="bilinear", align_corners=False)
