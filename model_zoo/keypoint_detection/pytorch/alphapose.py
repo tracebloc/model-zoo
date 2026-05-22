@@ -249,8 +249,11 @@ class ResNet(nn.Module):
 
 @SPPE.register_module
 class MyModel(nn.Module):
-    def __init__(self, norm_layer=nn.BatchNorm2d, cfg=config):
+    def __init__(self, num_feature_points=num_feature_points,
+                 norm_layer=nn.BatchNorm2d, cfg=config):
         super(MyModel, self).__init__()
+        # Allow the SDK to override joint count via the standard task-metadata kwarg.
+        cfg = {**cfg, 'PRESET': {**cfg['PRESET'], 'NUM_JOINTS': num_feature_points}}
         self._preset_cfg = cfg['PRESET']
         self.deconv_dim = cfg['NUM_DECONV_FILTERS']
         self._norm_layer = norm_layer
