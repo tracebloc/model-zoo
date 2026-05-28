@@ -26,8 +26,8 @@ output_classes = 5
 
 def MyModel(num_classes=output_classes):
     base = AutoModelForSequenceClassification.from_pretrained(
-        base=AutoModelForSequenceClassification.from_pretrained(model_id, num_labels=num_classes,
-                                                                ignore_mismatched_sizes=True)    )
+        model_id, num_labels=num_classes, ignore_mismatched_sizes=True
+    )
     lora_config = LoraConfig(
         task_type=TaskType.SEQ_CLS,
         r=16, lora_alpha=32, lora_dropout=0.05, bias="none",
