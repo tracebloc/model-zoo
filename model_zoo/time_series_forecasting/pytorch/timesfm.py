@@ -35,12 +35,19 @@ class _TimesFMWrapper(nn.Module):
         b, L, n = past_values.shape
         # (B, L, N) → (B*N, L)
         flat = past_values.permute(0, 2, 1).reshape(b * n, L)
-        if hasattr(self.base, "forecast"):
-            pred = self.base.forecast(flat, horizon=self.h)
-        else:
-            out = self.base(flat)
-            pred = out.last_hidden_state if hasattr(out, "last_hidden_state") else out
-            pred = pred[..., -self.h:] if pred.ndim == 2 else pred.mean(-1)[..., -self.h:]
+        # PEFT wraps the base model; unwrap to reach TimesFM's `forecast`.
+        inner = self.base
+        for attr in ("base_model", "model"):
+            if hasattr(inner, "forecast"):
+                break
+            if hasattr(inner, attr):
+                inner = getattr(inner, attr)
+        if not hasattr(inner, "forecast"):
+            raise AttributeError(
+                "Wrapped TimesFM model does not expose a `forecast` method; "
+                "the zoo's wrapper relies on TimesFM's native forecast API."
+            )
+        pred = inner.forecast(flat, horizon=self.h)
         pred = torch.as_tensor(pred).reshape(b, n, self.h).permute(0, 2, 1)
         return pred
 

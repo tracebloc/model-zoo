@@ -285,10 +285,11 @@ class MyModel(nn.Module):
             self.deconv_dim[2], self._preset_cfg['NUM_JOINTS'], kernel_size=1, stride=1, padding=0)
         self.global_avg_pool = nn.AdaptiveAvgPool2d((1, 1))
 
-        # LazyLinear materializes its weight on the first forward pass once the
-        # flattened feature size is known, but is registered as a proper submodule
-        # immediately — required for state_dict() / federated averaging.
-        self.fc = nn.LazyLinear(self._preset_cfg['NUM_JOINTS'] * 3)
+        # After final_layer + global_avg_pool, the flattened feature size is
+        # NUM_JOINTS. Use a regular Linear so weights exist in state_dict()
+        # before the first forward pass (required for federated averaging).
+        num_joints = self._preset_cfg['NUM_JOINTS']
+        self.fc = nn.Linear(num_joints, num_joints * 3)
 
     def _make_deconv_layer(self):
         deconv_layers = []
