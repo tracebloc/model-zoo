@@ -1,4 +1,4 @@
-"""Phi-3-mini (Microsoft, 2024). 3.8B-param decoder LLM repurposed as a classifier — competitive with Llama-3-8B on reasoning benchmarks at half the size, and ungated on HuggingFace. LoRA-only fine-tune so federated averaging only syncs the adapter + classification head.
+"""Phi-3-mini (Microsoft, 2024). 3.8B-param decoder LLM repurposed as a classifier — competitive with Llama-3-8B on reasoning benchmarks at half the size, and ungated on HuggingFace. Select LoRA-only fine-tuning in the training plan so federated averaging only syncs the adapter + classification head.
 
 Requirements:
 - HuggingFace token NOT strictly required (model is ungated), but a
@@ -12,9 +12,9 @@ Requirements:
   forward+backward on synthetic data takes 5-15 minutes on a laptop
   even at ``batch_size=2, sequence_length=1024``. Bump
   ``sequence_length`` down to 256 if the self-check looks stuck.
-- Trainable params (LoRA r=16 + score head): ~15M. Base ~3.8B frozen.
+- Params: ~3.8B (full base). Choose LoRA in the training plan to train
+  only a ~15M adapter + score head.
 """
-from peft import LoraConfig, TaskType, get_peft_model
 from transformers import AutoModelForSequenceClassification
 
 model_id = "microsoft/Phi-3-mini-4k-instruct"
@@ -30,16 +30,9 @@ output_classes = 5
 
 
 def MyModel(num_classes=output_classes):
-    base = AutoModelForSequenceClassification.from_pretrained(
+    return AutoModelForSequenceClassification.from_pretrained(
         model_id,
         num_labels=num_classes,
         trust_remote_code=True,
         ignore_mismatched_sizes=True,
     )
-    lora_config = LoraConfig(
-        task_type=TaskType.SEQ_CLS,
-        r=16, lora_alpha=32, lora_dropout=0.05, bias="none",
-        target_modules=["qkv_proj", "o_proj"],
-        modules_to_save=["score"],
-    )
-    return get_peft_model(base, lora_config)
