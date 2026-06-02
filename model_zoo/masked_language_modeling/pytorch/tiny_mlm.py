@@ -1,30 +1,30 @@
-"""Minimal transformer encoder for MLM, ~30M params. Smoke-test model for quick iteration and pipeline validation."""
+"""Ultra-light 2-layer transformer for MLM, ~5M params. Fastest smoke-test model for pipeline validation."""
 import torch
 import torch.nn as nn
 
 framework = "pytorch"
-main_class = "SimpleMaskedLM"
+main_class = "TinyMLM"
 category = "masked_language_modeling"
 model_type = ""
-batch_size = 32
+batch_size = 64
 sequence_length = 64
 vocab_size = 30522
 
 
-class SimpleMaskedLM(nn.Module):
-    """Lightweight 4-layer transformer encoder for masked language modeling.
+class TinyMLM(nn.Module):
+    """2-layer, 128-dim transformer encoder for masked language modeling.
 
-    ~30M parameters with default settings. Intended for smoke testing the
-    MLM training pipeline — not for production quality predictions.
+    ~5M parameters. Trains in seconds on CPU — use for verifying the
+    end-to-end MLM pipeline before committing GPU time.
     """
 
     def __init__(
         self,
         vocab_size=vocab_size,
-        hidden_size=256,
-        num_layers=4,
-        num_heads=4,
-        intermediate_size=512,
+        hidden_size=128,
+        num_layers=2,
+        num_heads=2,
+        intermediate_size=256,
         max_position_embeddings=512,
         dropout=0.1,
     ):
@@ -68,7 +68,6 @@ class SimpleMaskedLM(nn.Module):
         x = self.dropout(x)
 
         if attention_mask is not None:
-            # TransformerEncoder expects mask where True = ignore
             src_key_padding_mask = attention_mask == 0
         else:
             src_key_padding_mask = None

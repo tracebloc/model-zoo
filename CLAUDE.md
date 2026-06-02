@@ -31,6 +31,15 @@ Every model file defines:
 - `main_class` OR `main_method`: the symbol the SDK loads (class for `nn.Module` subclasses, function for factory-style models)
 - `category`: must match the task directory name
 - `batch_size`, `output_classes`, plus task-specific fields (`image_size`, `num_feature_points`, `sequence_length`, `forecast_horizon`, etc.)
+- `license` (recommended for new files): SPDX-style string such as `"Apache-2.0"`, `"MIT"`, `"AGPL-3.0"`, or `"non-commercial"`. Lets downstream tooling filter models by license — important since some pretrained weights ship under restrictive terms.
+
+## Federated averaging conventions
+
+The averaging service averages model parameters per-tensor across clients. New pretrained models should be authored with this in mind:
+
+- **BatchNorm running stats** (`running_mean` / `running_var`) average poorly across non-IID clients. Either freeze BN layers (`eval()` + `requires_grad=False`) or replace with `GroupNorm` / `LayerNorm`.
+- **EMA buffers** (some detectors, Mamba SSMs) are not trained parameters — strip them or document the workaround.
+- **Foundation models** (Mitra, Chronos, ModernBERT-large, etc.) should be fine-tuned **LoRA-only** via `peft`. Freeze the base model and only the small adapter tensors get averaged. This is the only tractable path for >100M-param backbones over federated clients.
 
 ## File naming convention
 

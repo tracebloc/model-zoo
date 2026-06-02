@@ -26,7 +26,18 @@ FRAMEWORK_IMPORT_NAME = {
 }
 KNOWN_FRAMEWORKS = set(FRAMEWORK_IMPORT_NAME)
 
-OPTIONAL_THIRD_PARTY = {"xgboost", "lightgbm", "catboost"}
+OPTIONAL_THIRD_PARTY = {
+    "xgboost",
+    "lightgbm",
+    "catboost",
+    "interpret",
+    "pytorch_forecasting",
+    "pycox",
+    "peft",
+    "tabpfn",
+    "timm",
+    "ultralytics",
+}
 
 KNOWN_CATEGORIES = {
     "image_classification",

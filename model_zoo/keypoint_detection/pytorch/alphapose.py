@@ -15,7 +15,7 @@ num_feature_points = 16
 
 config = {
         'PRESET': {
-            'NUM_JOINTS': 16
+            'NUM_JOINTS': num_feature_points
         },
         'NUM_DECONV_FILTERS': [256, 128, 64],
         'NUM_LAYERS': 50
@@ -249,8 +249,11 @@ class ResNet(nn.Module):
 
 @SPPE.register_module
 class MyModel(nn.Module):
-    def __init__(self, norm_layer=nn.BatchNorm2d, cfg=config):
+    def __init__(self, num_feature_points=num_feature_points,
+                 norm_layer=nn.BatchNorm2d, cfg=config):
         super(MyModel, self).__init__()
+        # Allow the SDK to override joint count via the standard task-metadata kwarg.
+        cfg = {**cfg, 'PRESET': {**cfg['PRESET'], 'NUM_JOINTS': num_feature_points}}
         self._preset_cfg = cfg['PRESET']
         self.deconv_dim = cfg['NUM_DECONV_FILTERS']
         self._norm_layer = norm_layer
@@ -282,9 +285,11 @@ class MyModel(nn.Module):
             self.deconv_dim[2], self._preset_cfg['NUM_JOINTS'], kernel_size=1, stride=1, padding=0)
         self.global_avg_pool = nn.AdaptiveAvgPool2d((1, 1))
 
-        # Add a fully connected layer to predict keypoints' x, y coordinates and visibility
-        num_features = self.deconv_dim[2]
-        self.fc = nn.Linear(16, self._preset_cfg['NUM_JOINTS'] * 3)
+        # After final_layer + global_avg_pool, the flattened feature size is
+        # NUM_JOINTS. Use a regular Linear so weights exist in state_dict()
+        # before the first forward pass (required for federated averaging).
+        num_joints = self._preset_cfg['NUM_JOINTS']
+        self.fc = nn.Linear(num_joints, num_joints * 3)
 
     def _make_deconv_layer(self):
         deconv_layers = []
