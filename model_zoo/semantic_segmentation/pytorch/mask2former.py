@@ -58,11 +58,22 @@ class Mask2Former(nn.Module):
         class_logits = outputs.class_queries_logits          # [B, Q, C+1]
 
         # Drop the "no object" class and collapse queries into per-class
-        # pixel logits.
+        # pixel probabilities.
         class_probs = class_logits.softmax(dim=-1)[..., :-1]  # [B, Q, C]
         mask_probs = mask_logits.sigmoid()                    # [B, Q, H', W']
 
-        seg_logits = torch.einsum("bqc,bqhw->bchw", class_probs, mask_probs)
+        # Inference-style collapse — this is HF's
+        # ``post_process_semantic_segmentation`` recipe and produces a
+        # probability map in [0, 1]. Feeding that straight into the
+        # platform's CrossEntropyLoss would double-normalize (CE internally
+        # applies log_softmax), corrupting gradients. We return log(p)
+        # so CE = -log_softmax(log(p))[y] is the NLL of p renormalized
+        # across classes — a faithful per-pixel CE on the collapsed
+        # Mask2Former distribution. argmax at inference is unchanged
+        # because log is monotone. clamp(min=eps) guards against log(0)
+        # for pixels with no query weight in any class.
+        seg_probs = torch.einsum("bqc,bqhw->bchw", class_probs, mask_probs)
+        seg_logits = seg_probs.clamp(min=1e-8).log()
 
         # Upsample to the input spatial size so the per-pixel CE loss against
         # [B, H, W] targets lines up.
