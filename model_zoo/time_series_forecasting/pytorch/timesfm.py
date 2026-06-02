@@ -1,8 +1,7 @@
 """TimesFM 2.0 (Google, 2024-2025). Decoder-only time-series foundation model; Chronos's main competitor and the leading zero-shot forecaster on GIFT-Eval as of 2025. LoRA-only fine-tune so federated averaging only syncs the adapter. A thin wrapper exposes the zoo's (B, L, N) → (B, H, N) tensor contract by flattening multivariate input to per-channel univariate calls."""
-import torch
 import torch.nn as nn
 from peft import LoraConfig, get_peft_model
-from transformers import AutoModel
+from transformers import TimesFmModelForPrediction
 
 framework = "pytorch"
 model_type = ""
@@ -35,44 +34,24 @@ class _TimesFMWrapper(nn.Module):
         b, L, n = past_values.shape
         # (B, L, N) → (B*N, L)
         flat = past_values.permute(0, 2, 1).reshape(b * n, L)
-
-        # Training path: use the module's standard differentiable `__call__`
-        # (which goes through PEFT → base.forward) so LoRA adapters receive
-        # gradients during federated fine-tuning. `forecast` is wrapped in
-        # `torch.no_grad()` internally on the official TimesFM impl, so
-        # using it for training would silently skip autograd.
-        if self.training:
-            out = self.base(flat)
-            pred = out.predictions if hasattr(out, "predictions") else (
-                out.last_hidden_state if hasattr(out, "last_hidden_state") else out
-            )
-            # Take the last `h` steps along the time axis.
-            if pred.ndim == 3:
-                pred = pred[..., -self.h:, 0] if pred.shape[-1] == 1 else pred.mean(-1)[..., -self.h:]
-            elif pred.ndim == 2:
-                pred = pred[..., -self.h:]
-            pred = pred.reshape(b, n, self.h).permute(0, 2, 1)
-            return pred
-
-        # Inference path: use TimesFM's optimized `forecast` (no_grad).
-        inner = self.base
-        for attr in ("base_model", "model"):
-            if hasattr(inner, "forecast"):
-                break
-            if hasattr(inner, attr):
-                inner = getattr(inner, attr)
-        if not hasattr(inner, "forecast"):
-            raise AttributeError(
-                "Wrapped TimesFM model does not expose a `forecast` method; "
-                "the zoo's wrapper relies on TimesFM's native forecast API."
-            )
-        pred = inner.forecast(flat, horizon=self.h)
-        pred = torch.as_tensor(pred).reshape(b, n, self.h).permute(0, 2, 1)
+        # Standard differentiable forward through PEFT → TimesFmModelForPrediction.
+        # `TimesFmOutputForPrediction.mean_predictions` has shape (B*N, H), so
+        # LoRA adapters receive gradients in both training and inference.
+        out = self.base(past_values=flat)
+        pred = out.mean_predictions  # (B*N, H)
+        # If the model emitted more horizon than requested, trim to self.h.
+        if pred.shape[-1] != self.h:
+            pred = pred[..., : self.h]
+        pred = pred.reshape(b, n, self.h).permute(0, 2, 1)
         return pred
 
 
 def MyModel(forecast_horizon=forecast_horizon):
-    base = AutoModel.from_pretrained(_PRETRAINED_ID, trust_remote_code=True)
+    # `TimesFmModelForPrediction` exposes a standard differentiable forward
+    # returning `mean_predictions`. The base `TimesFmModel` only returns
+    # `last_hidden_state`, which would be hidden representations rather than
+    # forecast values — silently corrupting fine-tuning gradients.
+    base = TimesFmModelForPrediction.from_pretrained(_PRETRAINED_ID)
     lora_config = LoraConfig(
         r=8, lora_alpha=16, lora_dropout=0.1, bias="none",
         target_modules=["q_proj", "k_proj", "v_proj", "o_proj"],
