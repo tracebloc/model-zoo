@@ -14,7 +14,7 @@ category = "keypoint_detection"
 num_feature_points = 16
 
 class MyModel(nn.Module):
-    def __init__(self, num_feature_points=16):
+    def __init__(self, num_feature_points=num_feature_points):
         super(MyModel, self).__init__()
         self.num_feature_points = num_feature_points
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
