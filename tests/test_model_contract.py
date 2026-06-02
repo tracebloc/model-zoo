@@ -35,6 +35,7 @@ OPTIONAL_THIRD_PARTY = {
     "pycox",
     "peft",
     "tabpfn",
+    "timm",
     "ultralytics",
 }
 

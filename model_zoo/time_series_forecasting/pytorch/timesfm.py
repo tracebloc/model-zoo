@@ -35,7 +35,26 @@ class _TimesFMWrapper(nn.Module):
         b, L, n = past_values.shape
         # (B, L, N) → (B*N, L)
         flat = past_values.permute(0, 2, 1).reshape(b * n, L)
-        # PEFT wraps the base model; unwrap to reach TimesFM's `forecast`.
+
+        # Training path: use the module's standard differentiable `__call__`
+        # (which goes through PEFT → base.forward) so LoRA adapters receive
+        # gradients during federated fine-tuning. `forecast` is wrapped in
+        # `torch.no_grad()` internally on the official TimesFM impl, so
+        # using it for training would silently skip autograd.
+        if self.training:
+            out = self.base(flat)
+            pred = out.predictions if hasattr(out, "predictions") else (
+                out.last_hidden_state if hasattr(out, "last_hidden_state") else out
+            )
+            # Take the last `h` steps along the time axis.
+            if pred.ndim == 3:
+                pred = pred[..., -self.h:, 0] if pred.shape[-1] == 1 else pred.mean(-1)[..., -self.h:]
+            elif pred.ndim == 2:
+                pred = pred[..., -self.h:]
+            pred = pred.reshape(b, n, self.h).permute(0, 2, 1)
+            return pred
+
+        # Inference path: use TimesFM's optimized `forecast` (no_grad).
         inner = self.base
         for attr in ("base_model", "model"):
             if hasattr(inner, "forecast"):

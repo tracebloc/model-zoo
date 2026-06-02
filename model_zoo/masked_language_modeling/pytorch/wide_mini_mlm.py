@@ -17,7 +17,7 @@ class WideMiniMLM(BertForMaskedLM):
     LoRA target modules (query, key, value) without fallback scanning.
     """
 
-    def __init__(self):
+    def __init__(self, vocab_size=vocab_size):
         config = BertConfig(
             hidden_size=512,
             num_hidden_layers=4,

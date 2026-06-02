@@ -12,7 +12,9 @@ sequence_length = 96
 forecast_horizon = 24
 
 
-def MyModel():
+def MyModel(num_feature_points=num_feature_points,
+            sequence_length=sequence_length,
+            forecast_horizon=forecast_horizon):
     config = PatchTSTConfig(
         num_input_channels=num_feature_points,
         context_length=sequence_length,
