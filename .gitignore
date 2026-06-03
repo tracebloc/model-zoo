@@ -3,6 +3,18 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+# tracebloc-py-package upload artifacts — the SDK extracts each uploaded
+# model into a ``tmpmodel_<name>/`` sibling directory and (usually) cleans
+# it up on success; failed uploads leave the dir behind. Ignoring them
+# project-wide keeps stale extractions from being picked up by recursive
+# model walkers (e.g. local experiment runners) and from accidentally
+# being committed.
+tmpmodel_*/
+
+# Local experiment driver scripts often carry hard-coded credentials
+# during dev. Keep them out of the repo.
+experiments/
+
 #pycharm
 *.idea/
 
