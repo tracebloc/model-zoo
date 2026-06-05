@@ -4,9 +4,10 @@ Requirements:
 - HuggingFace token NOT required (ungated), but recommended to avoid
   Hub rate-limits. If you set one, read it from env — never commit a
   token to this file.
-- ``trust_remote_code=True`` is required — gte-modernbert ships custom
-  modeling code. First load downloads the remote code; on slow networks
-  this step alone can take a minute.
+- No ``trust_remote_code`` needed — gte-modernbert's config declares
+  ``model_type="modernbert"``, which transformers (>=4.48) loads with
+  the **native** ``ModernBertForSequenceClassification`` class. Avoiding
+  remote code is required to pass the platform's model-security check.
 - Resources: ~600MB download, ~2GB RAM for load. ~8GB system RAM is
   enough for the local SDK self-check. At ``sequence_length=512,
   batch_size=4`` expect ~1 minute on CPU; if it looks stuck on a
@@ -29,5 +30,5 @@ output_classes = 5
 
 def MyModel(num_classes=output_classes):
     return AutoModelForSequenceClassification.from_pretrained(
-        model_id, num_labels=num_classes, trust_remote_code=True, ignore_mismatched_sizes=True
+        model_id, num_labels=num_classes, ignore_mismatched_sizes=True
     )

@@ -5,8 +5,10 @@ Requirements:
   token avoids HF Hub rate-limits on cold pulls. If you set one, read
   it from env — DO NOT commit a token to this file; uploaded files
   leak any secret embedded in them.
-- ``trust_remote_code=True`` is required — Phi-3 ships custom modeling
-  code that HF downloads on first load.
+- No ``trust_remote_code`` needed — Phi-3's config declares
+  ``model_type="phi3"``, which transformers loads with the native
+  ``Phi3ForSequenceClassification`` class. Avoiding remote code is
+  required to pass the platform's model-security check.
 - Resources: ~8GB download (fp32), ~16GB RAM for load. ~32GB system
   RAM strongly recommended for the local SDK self-check; the CPU
   forward+backward on synthetic data takes 5-15 minutes on a laptop
@@ -33,6 +35,5 @@ def MyModel(num_classes=output_classes):
     return AutoModelForSequenceClassification.from_pretrained(
         model_id,
         num_labels=num_classes,
-        trust_remote_code=True,
         ignore_mismatched_sizes=True,
     )

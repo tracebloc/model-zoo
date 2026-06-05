@@ -16,7 +16,10 @@ _BACKBONE_ID = "apple/aimv2-large-patch14-224"
 class MyModel(nn.Module):
     def __init__(self, num_classes=output_classes):
         super().__init__()
-        self.backbone = AutoModel.from_pretrained(_BACKBONE_ID, trust_remote_code=True)
+        # Native Aimv2VisionModel (config model_type="aimv2_vision_model") —
+        # no trust_remote_code, so it passes the platform security check
+        # and avoids the custom-code path's all_tied_weights_keys bug.
+        self.backbone = AutoModel.from_pretrained(_BACKBONE_ID)
         for p in self.backbone.parameters():
             p.requires_grad = False
         hidden = self.backbone.config.hidden_size
