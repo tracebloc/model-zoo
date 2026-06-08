@@ -115,7 +115,8 @@ class StabilityFeatureSelector(ClassifierMixin, BaseEstimator):
         fold_aurocs = []
         n_folds = 0
 
-        if eff_splits >= 2:
+        # Stratified CV needs >=2 classes overall AND enough samples per class.
+        if eff_splits >= 2 and self.classes_.size >= 2:
             splitter = RepeatedStratifiedKFold(
                 n_splits=eff_splits,
                 n_repeats=self.n_repeats,
@@ -133,8 +134,14 @@ class StabilityFeatureSelector(ClassifierMixin, BaseEstimator):
                 y_val = y[val_idx]
                 if np.unique(y_val).size >= 2 and hasattr(pipe, "predict_proba"):
                     try:
-                        proba = pipe.predict_proba(X[val_idx])[:, 1]
-                        fold_aurocs.append(float(roc_auc_score(y_val, proba)))
+                        proba = pipe.predict_proba(X[val_idx])
+                        if proba.shape[1] == 2:
+                            score = roc_auc_score(y_val, proba[:, 1])
+                        else:
+                            score = roc_auc_score(
+                                y_val, proba, multi_class="ovr", labels=self.classes_
+                            )
+                        fold_aurocs.append(float(score))
                     except Exception:
                         pass
 
