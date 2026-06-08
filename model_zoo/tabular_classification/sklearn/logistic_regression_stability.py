@@ -75,10 +75,15 @@ class StabilityFeatureSelector(ClassifierMixin, BaseEstimator):
     def _selection_signal(self, fitted_estimator, n_features):
         """Return (selected_mask, signed_effect) for one fitted leaf estimator."""
         if hasattr(fitted_estimator, "coef_"):
-            coef = np.ravel(fitted_estimator.coef_)
-            if coef.shape[0] != n_features:
-                coef = np.resize(coef, n_features)
-            return np.abs(coef) > 1e-8, coef
+            coef = np.atleast_2d(np.asarray(fitted_estimator.coef_, dtype=float))
+            # Binary logreg has shape (1, n_features); multiclass has (n_classes, n_features).
+            # Use the per-feature coefficient with the largest magnitude so both
+            # the selected mask and the signed effect stay meaningful across classes.
+            if coef.shape[1] != n_features:
+                return np.zeros(n_features, dtype=bool), np.zeros(n_features)
+            argmax_class = np.argmax(np.abs(coef), axis=0)
+            signed = coef[argmax_class, np.arange(n_features)]
+            return np.abs(signed) > 1e-8, signed
         if hasattr(fitted_estimator, "feature_importances_"):
             imp = np.asarray(fitted_estimator.feature_importances_, dtype=float)
             threshold = (
@@ -110,7 +115,8 @@ class StabilityFeatureSelector(ClassifierMixin, BaseEstimator):
         fold_aurocs = []
         n_folds = 0
 
-        if eff_splits >= 2:
+        # Stratified CV needs >=2 classes overall AND enough samples per class.
+        if eff_splits >= 2 and self.classes_.size >= 2:
             splitter = RepeatedStratifiedKFold(
                 n_splits=eff_splits,
                 n_repeats=self.n_repeats,
@@ -128,8 +134,14 @@ class StabilityFeatureSelector(ClassifierMixin, BaseEstimator):
                 y_val = y[val_idx]
                 if np.unique(y_val).size >= 2 and hasattr(pipe, "predict_proba"):
                     try:
-                        proba = pipe.predict_proba(X[val_idx])[:, 1]
-                        fold_aurocs.append(float(roc_auc_score(y_val, proba)))
+                        proba = pipe.predict_proba(X[val_idx])
+                        if proba.shape[1] == 2:
+                            score = roc_auc_score(y_val, proba[:, 1])
+                        else:
+                            score = roc_auc_score(
+                                y_val, proba, multi_class="ovr", labels=self.classes_
+                            )
+                        fold_aurocs.append(float(score))
                     except Exception:
                         pass
 
