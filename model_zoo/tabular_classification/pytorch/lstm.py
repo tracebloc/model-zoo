@@ -21,7 +21,9 @@ class SimpleLSTM(nn.Module):
 
     def forward(self, x):
         x = torch.nan_to_num(x)
-        x, _ = self.lstm(x)  # LSTM returns the output and hidden states
+        x = x.unsqueeze(1)  # (B, F) -> (B, 1, F): treat each row as a length-1 sequence
+        out, _ = self.lstm(x)  # (B, 1, hidden)
+        x = out[:, -1, :]  # (B, hidden): last timestep -> 2D for the (B, output_classes) head
         x = self.relu(self.fc1(x))
         x = self.fc2(x)
         return x
