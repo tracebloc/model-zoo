@@ -1,6 +1,9 @@
 from sklearn.ensemble import GradientBoostingClassifier
 
 
+from sklearn.pipeline import Pipeline
+from sklearn.impute import SimpleImputer
+
 framework = "sklearn"
 model_type = "tree"
 main_method = "MyModel"
@@ -11,4 +14,4 @@ num_feature_points = 50
 
 def MyModel():
     model = GradientBoostingClassifier(n_estimators=100, random_state=42)
-    return model
+    return Pipeline([("imputer", SimpleImputer(strategy="median")), ("clf", model)])

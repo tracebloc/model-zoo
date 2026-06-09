@@ -1,5 +1,8 @@
 from sklearn.svm import SVC
 
+from sklearn.pipeline import Pipeline
+from sklearn.impute import SimpleImputer
+
 framework = "sklearn"
 model_type = "svm"
 main_method = "MyModel"
@@ -9,4 +12,4 @@ category = "tabular_classification"
 num_feature_points = 50
 
 def MyModel():
-    return SVC(kernel='linear')
+    return Pipeline([("imputer", SimpleImputer(strategy="median")), ("clf", SVC(kernel='linear'))])

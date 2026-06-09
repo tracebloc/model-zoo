@@ -1,4 +1,5 @@
 """Fully Connected Network (MLP) for tabular classification. Default choice when features have no inherent ordering."""
+import torch
 import torch.nn as nn
 
 framework = "pytorch"
@@ -14,12 +15,13 @@ class SimpleFCN(nn.Module):
         super(SimpleFCN, self).__init__()
         self.fc1 = nn.Linear(num_feature_points, 128)
         self.fc2 = nn.Linear(128, 64)
-        self.fc3 = nn.Linear(64, 1)
+        self.fc3 = nn.Linear(64, output_classes)
         self.relu = nn.ReLU()
         self.sigmoid = nn.Sigmoid()
 
     def forward(self, x):
+        x = torch.nan_to_num(x)
         x = self.relu(self.fc1(x))
         x = self.relu(self.fc2(x))
-        x = self.sigmoid(self.fc3(x))
+        x = self.fc3(x)
         return x

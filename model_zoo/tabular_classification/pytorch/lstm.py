@@ -1,4 +1,5 @@
 """LSTM for tabular classification. Pick when rows represent sequences or time-ordered features."""
+import torch
 import torch.nn as nn
 
 framework = "pytorch"
@@ -14,13 +15,14 @@ class SimpleLSTM(nn.Module):
         super(SimpleLSTM, self).__init__()
         self.lstm = nn.LSTM(input_size=input_size, hidden_size=hidden_size, num_layers=num_layers, batch_first=True)
         self.fc1 = nn.Linear(hidden_size, 64)
-        self.fc2 = nn.Linear(64, 1)
+        self.fc2 = nn.Linear(64, output_classes)
         self.relu = nn.ReLU()
         self.sigmoid = nn.Sigmoid()
 
     def forward(self, x):
+        x = torch.nan_to_num(x)
         x, _ = self.lstm(x)  # LSTM returns the output and hidden states
         x = self.relu(self.fc1(x))
-        x = self.sigmoid(self.fc2(x))
+        x = self.fc2(x)
         return x
 

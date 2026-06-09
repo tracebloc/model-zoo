@@ -1,5 +1,8 @@
 from sklearn.ensemble import RandomForestClassifier
 
+from sklearn.pipeline import Pipeline
+from sklearn.impute import SimpleImputer
+
 framework = "sklearn"
 model_type = "tree"
 main_method = "MyModel"
@@ -9,4 +12,4 @@ category = "tabular_classification"
 num_feature_points = 50
 
 def MyModel():
-    return RandomForestClassifier(n_estimators=100, random_state=42)
+    return Pipeline([("imputer", SimpleImputer(strategy="median")), ("clf", RandomForestClassifier(n_estimators=100, random_state=42))])

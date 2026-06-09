@@ -3,6 +3,9 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.svm import SVC
 from sklearn.ensemble import GradientBoostingClassifier
 
+from sklearn.pipeline import Pipeline
+from sklearn.impute import SimpleImputer
+
 framework = "sklearn"
 model_type = "ensemble"
 main_method = "MyModel"
@@ -19,4 +22,4 @@ def MyModel():
         estimators=[('gbm', gbm), ('svm', svm)],
         final_estimator=LogisticRegression(random_state=42)
     )
-    return stacked_model
+    return Pipeline([("imputer", SimpleImputer(strategy="median")), ("clf", stacked_model)])
