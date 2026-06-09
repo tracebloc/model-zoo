@@ -1,4 +1,5 @@
 """Simple RNN for tabular classification. Lighter than LSTM; use for short sequences."""
+import torch
 import torch.nn as nn
 
 framework = "pytorch"
@@ -14,13 +15,15 @@ class SimpleRNN(nn.Module):
         super(SimpleRNN, self).__init__()
         self.rnn = nn.RNN(input_size=input_size, hidden_size=hidden_size, num_layers=num_layers, batch_first=True)
         self.fc1 = nn.Linear(hidden_size, 64)
-        self.fc2 = nn.Linear(64, 1)
+        self.fc2 = nn.Linear(64, output_classes)
         self.relu = nn.ReLU()
         self.sigmoid = nn.Sigmoid()
 
     def forward(self, x):
-        # Assuming input shape is (batch_size, sequence_length, input_size)
-        x, _ = self.rnn(x)  # RNN returns the output and hidden states
+        x = torch.nan_to_num(x)
+        x = x.unsqueeze(1)  # (B, F) -> (B, 1, F): treat each row as a length-1 sequence
+        out, _ = self.rnn(x)  # (B, 1, hidden)
+        x = out[:, -1, :]  # (B, hidden): last timestep -> 2D for the (B, output_classes) head
         x = self.relu(self.fc1(x))
-        x = self.sigmoid(self.fc2(x))
+        x = self.fc2(x)
         return x

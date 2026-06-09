@@ -1,4 +1,5 @@
 """Simple RNN for tabular classification (TensorFlow). Lighter than LSTM."""
+import tensorflow as tf
 from tensorflow.keras import layers, models
 
 framework = "tensorflow"
@@ -9,10 +10,12 @@ output_classes = 5
 num_feature_points = 50
 category = "tabular_classification"
 
-def MyModel(input_size=num_feature_points, hidden_size=128, n_outputs=1):
+
+def MyModel(input_size=num_feature_points, hidden_size=128, n_outputs=output_classes):
     inputs = layers.Input(shape=(input_size,))
-    x = layers.Reshape((1, input_size))(inputs)
+    x = layers.Lambda(lambda t: tf.where(tf.math.is_nan(t), tf.zeros_like(t), t))(inputs)
+    x = layers.Reshape((1, input_size))(x)
     x = layers.SimpleRNN(hidden_size)(x)
     x = layers.Dense(64, activation="relu")(x)
-    outputs = layers.Dense(n_outputs, activation="sigmoid")(x)
+    outputs = layers.Dense(n_outputs, activation="softmax")(x)
     return models.Model(inputs, outputs)

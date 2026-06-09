@@ -40,6 +40,7 @@ class MyModel(nn.Module):
         self.head = nn.Linear(d_token, num_classes)
 
     def forward(self, x):
+        x = torch.nan_to_num(x)
         tokens = self.tokenizer(x)
         h = self.encoder(tokens)
         return self.head(self.norm(h[:, 0]))
