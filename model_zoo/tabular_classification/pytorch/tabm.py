@@ -40,6 +40,7 @@ class MyModel(nn.Module):
         self.act = nn.GELU()
 
     def forward(self, x):
+        x = torch.nan_to_num(x)
         b = x.shape[0]
         x = x.unsqueeze(1).expand(b, self.k, -1)  # (B, K, F)
         x = self.act(self.norm1(self.l1(x)))
