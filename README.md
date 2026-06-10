@@ -13,6 +13,7 @@ Every model in this repo is compatible with tracebloc's secure training environm
 | Image classification | PyTorch, TensorFlow | `model_zoo/image_classification/` | Categorize images into labels |
 | Object detection | PyTorch | `model_zoo/object_detection/pytorch/` | Locate and classify objects in images |
 | Text classification | PyTorch | `model_zoo/text_classification/pytorch/` | Classify documents, reviews, tickets |
+| Token classification | PyTorch | `model_zoo/token_classification/pytorch/` | Tag tokens: NER, POS, slot filling |
 | Semantic segmentation | PyTorch | `model_zoo/semantic_segmentation/pytorch/` | Pixel-level image labeling |
 | Keypoint detection | PyTorch | `model_zoo/keypoint_detection/pytorch/` | Detect landmarks on objects or bodies |
 | Tabular classification | — | `model_zoo/tabular_classification/` | Classify structured/tabular data |
