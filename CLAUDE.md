@@ -15,6 +15,7 @@ model_zoo/
   image_classification/       pytorch/, tensorflow/
   object_detection/           pytorch/
   text_classification/        pytorch/
+  token_classification/       pytorch/
   semantic_segmentation/      pytorch/
   keypoint_detection/         pytorch/
   tabular_classification/     pytorch/, sklearn/, tensorflow/
