@@ -31,7 +31,7 @@ class SimpleTokenTagger(nn.Module):
     def __init__(
         self,
         vocab_size=_VOCAB_SIZE,
-        num_labels=output_classes,
+        num_classes=output_classes,
         hidden_size=192,
         num_layers=2,
         num_heads=4,
@@ -56,7 +56,7 @@ class SimpleTokenTagger(nn.Module):
         )
         self.encoder = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
         self.encoder.enable_nested_tensor = False
-        self.classifier = nn.Linear(hidden_size, num_labels)
+        self.classifier = nn.Linear(hidden_size, num_classes)
 
         self._init_weights()
 
@@ -85,5 +85,5 @@ class SimpleTokenTagger(nn.Module):
             src_key_padding_mask = None
 
         x = self.encoder(x, src_key_padding_mask=src_key_padding_mask)
-        # Per-token logits: (batch, seq_len, num_labels)
+        # Per-token logits: (batch, seq_len, num_classes)
         return self.classifier(x)
