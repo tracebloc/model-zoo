@@ -2,6 +2,9 @@
 from transformers import AutoModelForTokenClassification
 
 model_id = "google/electra-base-discriminator"
+# HF tokenizer distributed to every client as the federation's single
+# source of truth (#805). Mandatory for HuggingFace NLP models.
+tokenizer_id = "google/electra-base-discriminator"
 framework = "pytorch"
 main_class = "MyModel"
 category = "token_classification"

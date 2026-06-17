@@ -3,6 +3,9 @@ from transformers import AutoModelForSequenceClassification
 from transformers import AutoConfig
 
 model_id = "bert-base-uncased"
+# HF tokenizer distributed to every client as the federation's single
+# source of truth (#805). Mandatory for HuggingFace NLP models.
+tokenizer_id = "bert-base-uncased"
 framework = "pytorch"
 main_class = "MyModel"
 category = "text_classification"
