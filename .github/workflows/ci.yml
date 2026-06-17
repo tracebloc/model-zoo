@@ -6,8 +6,13 @@ on:
   push:
     branches: [master, develop]
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   ruff:
+    timeout-minutes: 10
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -20,6 +25,7 @@ jobs:
       - run: ruff check --select=F401,F821,E9 model_zoo/
 
   test-pytorch:
+    timeout-minutes: 30
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -32,6 +38,7 @@ jobs:
       - run: pytest tests/ -v
 
   test-tensorflow:
+    timeout-minutes: 30
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -44,6 +51,7 @@ jobs:
       - run: pytest tests/ -v
 
   test-sklearn:
+    timeout-minutes: 30
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -56,6 +64,7 @@ jobs:
       - run: pytest tests/ -v
 
   test-survival:
+    timeout-minutes: 30
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
