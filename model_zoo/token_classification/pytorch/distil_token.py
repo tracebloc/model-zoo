@@ -2,6 +2,9 @@
 from transformers import AutoModelForTokenClassification
 
 model_id = "distilbert-base-uncased"
+# HF tokenizer distributed to every client as the federation's single
+# source of truth (#805). Mandatory for HuggingFace NLP models.
+tokenizer_id = "distilbert-base-uncased"
 framework = "pytorch"
 main_class = "MyModel"
 category = "token_classification"

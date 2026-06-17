@@ -2,6 +2,9 @@
 from transformers import AutoModelForTokenClassification
 
 model_id = "microsoft/deberta-v3-base"
+# HF tokenizer distributed to every client as the federation's single
+# source of truth (#805). Mandatory for HuggingFace NLP models.
+tokenizer_id = "microsoft/deberta-v3-base"
 framework = "pytorch"
 main_class = "MyModel"
 category = "token_classification"

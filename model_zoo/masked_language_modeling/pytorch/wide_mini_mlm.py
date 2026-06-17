@@ -8,6 +8,10 @@ model_type = ""
 batch_size = 32
 sequence_length = 128
 vocab_size = 30522
+# Subclasses BertForMaskedLM, so it exposes ``.config`` and the SDK treats
+# it as a HuggingFace model: a tokenizer_id is mandatory (#805). The
+# BertConfig above uses the bert-base-uncased vocab (30522).
+tokenizer_id = "bert-base-uncased"
 
 
 class WideMiniMLM(BertForMaskedLM):

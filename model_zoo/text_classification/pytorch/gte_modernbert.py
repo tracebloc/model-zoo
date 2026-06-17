@@ -18,6 +18,9 @@ Requirements:
 from transformers import AutoModelForSequenceClassification
 
 model_id = "Alibaba-NLP/gte-modernbert-base"
+# HF tokenizer distributed to every client as the federation's single
+# source of truth (#805). Mandatory for HuggingFace NLP models.
+tokenizer_id = "Alibaba-NLP/gte-modernbert-base"
 framework = "pytorch"
 main_method = "MyModel"
 license = "Apache-2.0"

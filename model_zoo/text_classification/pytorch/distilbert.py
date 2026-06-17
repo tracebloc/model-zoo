@@ -2,6 +2,9 @@
 from transformers import AutoModelForSequenceClassification
 
 model_id = "distilbert-base-uncased-finetuned-sst-2-english"
+# HF tokenizer distributed to every client as the federation's single
+# source of truth (#805). Mandatory for HuggingFace NLP models.
+tokenizer_id = "distilbert-base-uncased-finetuned-sst-2-english"
 framework = "pytorch"
 main_class = "MyModel"
 category = "text_classification"

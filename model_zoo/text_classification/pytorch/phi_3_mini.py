@@ -20,6 +20,9 @@ Requirements:
 from transformers import AutoModelForSequenceClassification
 
 model_id = "microsoft/Phi-3-mini-4k-instruct"
+# HF tokenizer distributed to every client as the federation's single
+# source of truth (#805). Mandatory for HuggingFace NLP models.
+tokenizer_id = "microsoft/Phi-3-mini-4k-instruct"
 framework = "pytorch"
 main_method = "MyModel"
 license = "MIT"
