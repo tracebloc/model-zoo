@@ -50,6 +50,7 @@ KNOWN_CATEGORIES = {
     "time_series_forecasting",
     "time_to_event_prediction",
     "masked_language_modeling",
+    "causal_language_modeling",
     "token_classification",
 }
 
