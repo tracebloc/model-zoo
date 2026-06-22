@@ -2,6 +2,9 @@
 from transformers import AutoModelForSequenceClassification
 
 model_id = "answerdotai/ModernBERT-base"
+# HF tokenizer distributed to every client as the federation's single
+# source of truth (#805). Mandatory for HuggingFace NLP models.
+tokenizer_id = "answerdotai/ModernBERT-base"
 framework = "pytorch"
 main_method = "MyModel"
 license = "Apache-2.0"

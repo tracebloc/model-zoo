@@ -15,6 +15,7 @@ model_zoo/
   image_classification/       pytorch/, tensorflow/
   object_detection/           pytorch/
   text_classification/        pytorch/
+  token_classification/       pytorch/
   semantic_segmentation/      pytorch/
   keypoint_detection/         pytorch/
   tabular_classification/     pytorch/, sklearn/, tensorflow/
@@ -52,6 +53,15 @@ The averaging service averages model parameters per-tensor across clients. New p
 ## Weight file convention
 
 If a user wants to ship pretrained weights alongside `mymodel.py`, name them `mymodel_weights.pkl` and place them in the same directory. The zoo itself does not bundle weight files.
+
+## Tokenizer convention (NLP models)
+
+Every NLP model (`text_classification`, `token_classification`, `masked_language_modeling`) must declare a tokenizer — it is the federation's single source of truth, distributed to every client (issue #805). The rule depends on whether the model is a HuggingFace model (exposes `.config`) or a plain `nn.Module`:
+
+- **HuggingFace models** (factory returns an `AutoModelFor…`, or the class subclasses an HF model like `BertForMaskedLM`) declare a module-level `tokenizer_id` — the HF repo id of the matching tokenizer, normally equal to `model_id`. Do **not** ship a `tokenizer.json` for these; the client loads the tokenizer from the Hub.
+- **Custom (non-HF) models** (a bare `nn.Module`, including thin wrappers that hold an HF model in an attribute — those do *not* expose `.config`) must ship a `tokenizer.json` (a HuggingFace `tokenizers` file). It must contain the required special tokens (`[PAD]`/`[CLS]`/`[SEP]`/`[UNK]` for classification; `[MASK]`/`[PAD]` for MLM) and its max token id must fit the model's embedding table.
+
+The SDK auto-detects a `tokenizer.json` sitting next to the model file and ships it — which means it is also picked up by **any other model in the same directory**, overriding that model's `tokenizer_id`. So a bare `tokenizer.json` is only safe in a directory where it is correct for every model (e.g. `masked_language_modeling/pytorch/`, which is all bert-vocab). When a non-HF model shares a directory with HF models that use different tokenizers, give it a distinct, non-auto-detected name (`<model>_tokenizer.json`, e.g. `simple_text_tokenizer.json`) and upload it explicitly: `user.upload_model("simple_text", tokenizer="simple_text_tokenizer.json")`.
 
 ## How to add a new model
 
