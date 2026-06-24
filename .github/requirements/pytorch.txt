@@ -1,0 +1,5 @@
+pytest
+torch
+torchvision
+transformers
+timm
