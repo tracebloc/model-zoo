@@ -34,7 +34,7 @@ The tokenizer is the federation's single source of truth, distributed to every c
   user.upload_model("model_zoo/seq2seq/pytorch/t5_small.py")
   ```
 
-- **`simple_seq2seq.py` (custom)** uses [`pytorch/seq2seq_tokenizer.json`](pytorch/seq2seq_tokenizer.json) — a WordPiece tokenizer over the standard 30522-token bert-base-uncased vocabulary with the encoder-style `[CLS]…[SEP]` auto-wrapping removed. `[PAD]` (id 0) is the pad token, `[CLS]` (id 101) serves as the decoder start token, and `[SEP]` (id 102) as the end-of-sequence token. Its max token id (30521) fits the model's embedding table.
+- **`simple_seq2seq.py` (custom)** uses [`pytorch/seq2seq_tokenizer.json`](pytorch/seq2seq_tokenizer.json) — a WordPiece tokenizer over the standard 30522-token bert-base-uncased vocabulary with the encoder-style `[CLS]…[SEP]` auto-wrapping removed. `[PAD]` (id 0) is the pad token; the training container teacher-forces the decoder by right-shifting the target and prepending the pad token as the decoder-start token (the T5 convention, `decoder_start_token_id == pad_token_id`, used whenever the tokenizer exposes no `bos`). `[PAD]` is the only special token seq2seq requires. Its max token id (30521) fits the model's embedding table.
 
   This file is deliberately **not** named `tokenizer.json`: the SDK auto-detects a sibling `tokenizer.json` and ships it for *every* model in the directory, which would override `t5_small.py`'s `tokenizer_id` and silently feed it a BERT tokenizer. Because of the non-default name it is not auto-detected, so pass it explicitly:
 
