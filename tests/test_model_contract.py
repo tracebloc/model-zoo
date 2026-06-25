@@ -52,6 +52,7 @@ KNOWN_CATEGORIES = {
     "masked_language_modeling",
     "causal_language_modeling",
     "token_classification",
+    "seq2seq",
 }
 
 
