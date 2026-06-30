@@ -53,6 +53,7 @@ KNOWN_CATEGORIES = {
     "causal_language_modeling",
     "token_classification",
     "seq2seq",
+    "embeddings",
 }
 
 
