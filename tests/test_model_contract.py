@@ -54,6 +54,7 @@ KNOWN_CATEGORIES = {
     "token_classification",
     "seq2seq",
     "embeddings",
+    "sentence_pair_classification",
 }
 
 
