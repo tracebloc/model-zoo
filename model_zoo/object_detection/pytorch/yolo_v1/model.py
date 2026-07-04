@@ -10,58 +10,6 @@ output_classes = 3
 category = "object_detection"
 
 
-class CNNBlock(nn.Module):
-    def __init__(self, in_channels, out_channels, **kwargs):
-        super(CNNBlock, self).__init__()
-        self.conv = nn.Conv2d(in_channels, out_channels, bias=False, **kwargs)
-        self.batchnorm = nn.BatchNorm2d(out_channels)
-        self.leakyrelu = nn.LeakyReLU(0.1)
-
-    def forward(self, x):
-        return self.leakyrelu(self.batchnorm(self.conv(x)))
-
-
-architecture_config = [
-    # Tuple: (kernel_size, number of filters, strides, padding)
-    (7, 64, 2, 3),
-    # "M" = Max Pool Layer
-    "M",
-    (3, 192, 1, 1),
-    "M",
-    (1, 128, 1, 0),
-    (3, 256, 1, 1),
-    (1, 256, 1, 0),
-    (3, 512, 1, 1),
-    "M",
-    # List: [(tuple), (tuple), how many times to repeat]
-    [(1, 256, 1, 0), (3, 512, 1, 1), 4],
-    (1, 512, 1, 0),
-    (3, 1024, 1, 1),
-    "M",
-    [(1, 512, 1, 0), (3, 1024, 1, 1), 2],
-    (3, 1024, 1, 1),
-    (3, 1024, 2, 1),
-    (3, 1024, 1, 1),
-    (3, 1024, 1, 1),
-    # Doesnt include fc layers
-]
-
-
-def _create_fcs(split_size=7, num_boxes=2, num_classes=output_classes):
-    S, B, C = split_size, num_boxes, num_classes
-    return nn.Sequential(
-        nn.Flatten(),
-        nn.Linear(1024 * S * S, 496),
-        nn.Dropout(0.0),
-        nn.LeakyReLU(0.1),
-        nn.Linear(496, S * S * (C + B * 5)),
-    )  # Original paper uses nn.Linear(1024 * S * S, 4096) not 496. Also
-    # the last layer will be reshaped to (S, S, 20) where C+B*5 = 20
-
-
-# predictions.reshape(-1, self.S, self.S, self.C + self.B * 5)
-
-
 class MyModel(nn.Module):
     def __init__(self, num_classes=output_classes):
         super(MyModel, self).__init__()
