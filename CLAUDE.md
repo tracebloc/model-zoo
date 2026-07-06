@@ -12,16 +12,21 @@ The `start-training` notebook clones this repo at runtime and hardcodes one exam
 
 ```
 model_zoo/
-  image_classification/       pytorch/, tensorflow/
-  object_detection/           pytorch/
-  text_classification/        pytorch/
-  token_classification/       pytorch/
-  semantic_segmentation/      pytorch/
-  keypoint_detection/         pytorch/
-  tabular_classification/     pytorch/, sklearn/, tensorflow/
-  tabular_regression/         pytorch/, sklearn/, tensorflow/
-  time_series_forecasting/    pytorch/
-  time_to_event_prediction/   lifelines/, pytorch/, scikit-survival/
+  causal_language_modeling/       pytorch/
+  embeddings/                     pytorch/
+  image_classification/           pytorch/, tensorflow/
+  keypoint_detection/             pytorch/
+  masked_language_modeling/       pytorch/
+  object_detection/               pytorch/
+  semantic_segmentation/          pytorch/
+  sentence_pair_classification/   pytorch/
+  seq2seq/                        pytorch/
+  tabular_classification/         pytorch/, sklearn/, tensorflow/
+  tabular_regression/             pytorch/, sklearn/, tensorflow/
+  text_classification/            pytorch/
+  time_series_forecasting/        pytorch/
+  time_to_event_prediction/       lifelines/, pytorch/, scikit_survival/
+  token_classification/           pytorch/
 ```
 
 ## Module-level metadata contract

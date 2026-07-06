@@ -31,12 +31,8 @@ OPTIONAL_THIRD_PARTY = {
     "lightgbm",
     "catboost",
     "interpret",
-    "pytorch_forecasting",
-    "pycox",
     "peft",
-    "tabpfn",
     "timm",
-    "ultralytics",
 }
 
 KNOWN_CATEGORIES = {
@@ -52,6 +48,9 @@ KNOWN_CATEGORIES = {
     "masked_language_modeling",
     "causal_language_modeling",
     "token_classification",
+    "seq2seq",
+    "embeddings",
+    "sentence_pair_classification",
 }
 
 

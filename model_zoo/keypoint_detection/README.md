@@ -42,9 +42,7 @@ For a lighter/faster baseline, use [`pytorch/resnet_sppe.py`](pytorch/resnet_spp
 
 | Model | Notes |
 |---|---|
-| [`rcnn.py`](pytorch/rcnn.py) | R-CNN-style keypoint head |
 | [`resnet_50.py`](pytorch/resnet_50.py) | SimpleBaseline on ResNet-50 |
-| [`yolo_v8.py`](pytorch/yolo_v8.py) | YOLOv8 pose-estimation variant; single-pass detection + keypoints |
 
 ## Dataset expectations
 

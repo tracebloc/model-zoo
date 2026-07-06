@@ -63,18 +63,14 @@ class Custom_loss(nn.Module):
         super(Custom_loss, self).__init__()
         self.S = 7  # Grid size
         self.B = 2  # Number of bounding boxes per cell
-        self.C = 10  # Number of classes (from your model file)
+        self.C = 3  # Number of classes — must match output_classes in model.py
         self.lambda_coord = 5.0
         self.lambda_noobj = 0.5
 
     def forward(self, predictions, targets):
         # Reshape predictions to match expected format
-        print(predictions.shape)
-        try:
-            predictions = predictions.view(-1, self.S, self.S, self.C + self.B * 5)
-        except Exception as e:
-            print(f"issue with loss: \n{e}")
-        
+        predictions = predictions.view(-1, self.S, self.S, self.C + self.B * 5)
+
         # Split predictions into components
         pred_boxes = predictions[..., :self.B*5]  # Box coordinates and confidence
         pred_classes = predictions[..., self.B*5:]  # Class probabilities
