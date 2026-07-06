@@ -34,7 +34,7 @@ jobs:
           python-version: "3.11"
           cache: pip
           cache-dependency-path: .github/workflows/ci.yml
-      - run: pip install pytest torch torchvision transformers timm
+      - run: pip install pytest torch torchvision transformers timm peft
       - run: pytest tests/ -v
 
   test-tensorflow:
@@ -60,7 +60,7 @@ jobs:
           python-version: "3.11"
           cache: pip
           cache-dependency-path: .github/workflows/ci.yml
-      - run: pip install pytest scikit-learn xgboost lightgbm catboost
+      - run: pip install pytest scikit-learn xgboost lightgbm catboost interpret
       - run: pytest tests/ -v
 
   test-survival:

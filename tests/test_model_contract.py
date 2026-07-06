@@ -31,12 +31,8 @@ OPTIONAL_THIRD_PARTY = {
     "lightgbm",
     "catboost",
     "interpret",
-    "pytorch_forecasting",
-    "pycox",
     "peft",
-    "tabpfn",
     "timm",
-    "ultralytics",
 }
 
 KNOWN_CATEGORIES = {
