@@ -24,6 +24,7 @@ model_zoo/
   tabular_classification/         pytorch/, sklearn/, tensorflow/
   tabular_regression/             pytorch/, sklearn/, tensorflow/
   text_classification/            pytorch/
+  time_series_classification/     pytorch/
   time_series_forecasting/        pytorch/
   time_to_event_prediction/       lifelines/, pytorch/, scikit_survival/
   token_classification/           pytorch/
