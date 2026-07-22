@@ -24,6 +24,7 @@ Every model in this repo is compatible with tracebloc's secure training environm
 | Tabular classification | PyTorch, sklearn, TensorFlow | `model_zoo/tabular_classification/` | Classify structured/tabular data |
 | Tabular regression | PyTorch, sklearn, TensorFlow | `model_zoo/tabular_regression/` | Predict continuous values from tables |
 | Time series forecasting | PyTorch | `model_zoo/time_series_forecasting/pytorch/` | Forecast future values from sequences |
+| Time series classification | PyTorch | `model_zoo/time_series_classification/pytorch/` | Assign one label to each whole sequence |
 | Time-to-event prediction | lifelines, PyTorch, scikit-survival | `model_zoo/time_to_event_prediction/` | Predict when an event will occur |
 
 ## Quick start

@@ -19,6 +19,7 @@ For deep-learning approaches, try [`pytorch/deepsurv.py`](pytorch/deepsurv.py) â
 
 | Model | When to pick |
 |---|---|
+| [`cox_ph.py`](lifelines/cox_ph.py) | Semi-parametric Cox model; interpretable hazard ratios |
 | [`weibull_aft.py`](lifelines/weibull_aft.py) | Most common parametric baseline |
 | [`log_normal_aft.py`](lifelines/log_normal_aft.py) | When `log(time)` is approximately normal |
 | [`log_logistic_aft.py`](lifelines/log_logistic_aft.py) | Non-monotonic hazards |
@@ -28,6 +29,8 @@ For deep-learning approaches, try [`pytorch/deepsurv.py`](pytorch/deepsurv.py) â
 | Model | When to pick |
 |---|---|
 | [`cox_ph.py`](scikit_survival/cox_ph.py) | Classical semi-parametric Cox model; interpretable coefficients |
+| [`random_survival_forest.py`](scikit_survival/random_survival_forest.py) | Non-linear, robust; a bag of independent survival trees |
+| [`gradient_boosted_survival.py`](scikit_survival/gradient_boosted_survival.py) | Gradient-boosted survival; strong tabular accuracy |
 
 ### PyTorch (neural survival)
 
