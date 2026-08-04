@@ -27,3 +27,8 @@ jobs:
       # gitleaks + house-rules run by default, and they are the actual gap this
       # caller closes: this repo had no credential scan and no house-rules check
       # at all. See backend#1420.
+    # Passed for consistency across every caller in the fleet. The reusable uses NO
+    # secrets (gitleaks runs from a version+SHA-pinned binary, not the licensed
+    # action), so this is a no-op -- it also clears Cursor Bugbot's recurring false
+    # positive. Fleet-wide decision, backend#1420.
+    secrets: inherit
