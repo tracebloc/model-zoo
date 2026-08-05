@@ -83,6 +83,10 @@ user = User()
 user.uploadModel("model_zoo/image_classification/pytorch/resnet_18.py")
 ```
 
-## Default branch
+## Branches
 
-`master`. Not `main`, not `develop`.
+Work lands on `develop` (the default branch); the release train promotes
+`develop -> staging -> main`. `master` no longer exists — it was renamed to
+`main` under backend#1428 Change 2. This section previously declared `master`
+the default, which misled a reviewer into flagging correct CI triggers as
+wrong (model-zoo#120).
