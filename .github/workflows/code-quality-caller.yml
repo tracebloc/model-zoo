@@ -1,0 +1,34 @@
+name: Code quality
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, ready_for_review]
+
+# Supersede the previous run when a branch is pushed again.
+concurrency:
+  group: code-quality-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    uses: tracebloc/.github/.github/workflows/code-quality.yml@main
+    with:
+      # `python: false` deliberately, despite 203 .py files in the tree. This repo
+      # already runs its OWN `ruff` check and requires it on `develop`, so enabling
+      # the shared one adds a second, differently-scoped ruff pass rather than
+      # coverage. Flip to true if the standardised diff-scoped run should replace
+      # the local one -- that is a decision about which ruff config wins, not a gap.
+      python: false
+      # No .sh files anywhere in the tree (measured 2026-08-04).
+      shell: false
+      # gitleaks + house-rules run by default, and they are the actual gap this
+      # caller closes: this repo had no credential scan and no house-rules check
+      # at all. See backend#1420.
+    # Passed for consistency across every caller in the fleet. The reusable uses NO
+    # secrets (gitleaks runs from a version+SHA-pinned binary, not the licensed
+    # action), so this is a no-op -- it also clears Cursor Bugbot's recurring false
+    # positive. Fleet-wide decision, backend#1420.
+    secrets: inherit
