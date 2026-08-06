@@ -19,6 +19,13 @@
 PYTHON ?= python3
 PYTEST ?= $(PYTHON) -m pytest
 
+# Lint tools are invoked through $(PYTHON) -m, not as bare commands on
+# PATH. `setup` pip-installs them into $(PYTHON)'s environment at a
+# pinned version; a bare `ruff` would resolve to whatever happens to be
+# first on PATH — a homebrew build, another venv — and the pin the
+# comment promises would silently not be the thing that ran. (Bugbot,
+# tracebloc/data-ingestors#461.)
+
 # ci.yml fans the same `pytest tests/` out across four framework
 # environments. Locally you install one; FRAMEWORK picks which
 # .github/requirements/<name>.txt `make setup` installs.
@@ -70,7 +77,7 @@ setup:
 # the three families here are the ones that mean "this file is broken".
 .PHONY: lint
 lint:
-	ruff check --select=F401,F821,E9 model_zoo/
+	$(PYTHON) -m ruff check --select=F401,F821,E9 model_zoo/
 
 # test: ci.yml's `pytest tests/` (one framework env at a time locally).
 .PHONY: test
