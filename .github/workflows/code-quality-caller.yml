@@ -24,6 +24,13 @@ jobs:
       python: false
       # No .sh files anywhere in the tree (measured 2026-08-04).
       shell: false
+      # Armed 2026-08-06 (backend#1492). Measured zero pin violations on every
+      # develop branch first, so this makes a green check stay green rather than
+      # importing a backlog. Soft-fail let #1449 add a second unpinned call site
+      # of an action while #1446 was open to pin it. Independent of soft-fail
+      # above: this repo's other jobs keep whatever posture they have.
+      action-pins: true
+      action-pins-soft-fail: false
       # gitleaks + house-rules run by default, and they are the actual gap this
       # caller closes: this repo had no credential scan and no house-rules check
       # at all. See backend#1420.
