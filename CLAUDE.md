@@ -73,7 +73,9 @@ The SDK auto-detects a `tokenizer.json` sitting next to the model file and ships
 
 1. Create a `.py` file under `model_zoo/<task>/<framework>/` following the naming convention above.
 2. Define the metadata contract (`framework`, `main_class`/`main_method`, `category`, etc.).
-3. Full model structure requirements: https://docs.tracebloc.io/join-use-case/model-optimization
+3. The entry point must construct with no arguments — `tests/test_model_contract.py::test_model_instantiates` calls it. Give every `__init__`/factory parameter a default.
+4. Architecture names passed to `timm.create_model` / `torchvision.models` are lookups into a third-party registry, not checked by any linter. Confirm the exact string resolves in the pinned library version before committing (`timm.list_models("*name*")`, `timm.list_pretrained("*name*")`) — a plausible-looking name that does not exist raises only at construction time (backend#1859).
+5. Full model structure requirements: https://docs.tracebloc.io/join-use-case/model-optimization
 
 ## Uploading a model via the SDK
 
