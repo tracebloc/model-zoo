@@ -102,21 +102,41 @@ def _missing_optional_deps(path: pathlib.Path) -> list[str]:
     return missing
 
 
+# A template "fetches from the hub" — and so cannot be constructed in CI
+# without pulling weights over the network — if it does any of:
+#   - HuggingFace `from_pretrained(...)`                 -> transformers / timm hub
+#   - torchvision `weights="DEFAULT"` (any "UPPER" id)   -> download.pytorch.org
+#   - a torchvision `<Arch>_Weights.<MEMBER>` enum value -> download.pytorch.org
+# The last two also download ImageNet/COCO checkpoints, so matching only
+# `from_pretrained` let them slip through and made CI fetch them anyway.
+# Local builds (`pretrained=False`, `weights=None`, timm `create_model(...,
+# pretrained=False)`) match none of these and stay covered by the test.
+_HUB_FETCH = re.compile(
+    r"from_pretrained"
+    r"|weights\s*=\s*[\"'][A-Z]"
+    r"|_Weights\."
+)
+
+
 def _fetches_from_hub(path: pathlib.Path) -> bool:
     """Does this template pull a model/config from an external hub to build?
 
-    Those templates cannot be constructed in a test: `from_pretrained` needs
-    network, and some of them are multi-gigabyte (gemma_2, phi_3_mini, sam2).
-    They are excluded from the instantiation test rather than making CI
-    download the world. Templates that build their architecture from local
-    library code — the ones a `create_model("name")` typo can break silently —
-    are all still covered.
+    Those templates cannot be constructed in a test without network:
+    `from_pretrained` downloads from the HuggingFace hub (some are
+    multi-gigabyte — gemma_2, phi_3_mini, sam2), and torchvision builders asked
+    for pretrained checkpoints — `weights="DEFAULT"` or a `<Arch>_Weights.*`
+    enum — pull ImageNet/COCO weights from download.pytorch.org. They are
+    excluded from the instantiation test rather than making CI download the
+    world. Templates that build their architecture from local library code —
+    the ones a `create_model("name")` typo can break silently, plus torchvision
+    builders called with `pretrained=False`/`weights=None` — are all still
+    covered.
     """
     try:
         text = path.read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError):
         return False
-    return "from_pretrained" in text
+    return bool(_HUB_FETCH.search(text))
 
 
 def _model_files() -> list[pathlib.Path]:
