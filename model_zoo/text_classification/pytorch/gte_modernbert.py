@@ -6,8 +6,13 @@ Requirements:
   token to this file.
 - No ``trust_remote_code`` needed — gte-modernbert's config declares
   ``model_type="modernbert"``, which transformers (>=4.48) loads with
-  the **native** ``ModernBertForSequenceClassification`` class. Avoiding
-  remote code is required to pass the platform's model-security check.
+  the **native** ``ModernBertForSequenceClassification`` class.
+- BLOCKED BY THE UPLOAD GATE (#1495): this model currently CANNOT be
+  uploaded to the platform. The backend gate (bandit
+  ``_is_from_pretrained``, enforced by ``CheckModelMixin.is_model_secure``)
+  rejects ANY ``*.from_pretrained(...)`` call regardless of
+  ``trust_remote_code``, so the ``from_pretrained`` call below is rejected
+  outright. Avoiding remote code no longer makes it pass the security check.
 - Resources: ~600MB download, ~2GB RAM for load. ~8GB system RAM is
   enough for the local SDK self-check. At ``sequence_length=512,
   batch_size=4`` expect ~1 minute on CPU; if it looks stuck on a
