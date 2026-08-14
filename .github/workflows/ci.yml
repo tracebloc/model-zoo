@@ -22,7 +22,16 @@ jobs:
           cache: pip
           cache-dependency-path: .github/requirements/lint.txt
       - run: pip install -r .github/requirements/lint.txt
-      - run: ruff check --select=F401,F821,E9 model_zoo/
+      # `make lint` (backend#1606). The RULE SELECTION was the duplicated part:
+      # `--select=F401,F821,E9` was written out here and again in the Makefile,
+      # so widening the set in one place would have left the other checking the
+      # narrower one — and a lint job that silently checks less than the
+      # contributor's pre-push hook is the wrong way round.
+      #
+      # The pin is already single-source and stays that way: lint.txt declares
+      # ruff==0.15.20, this step installs it, and `make setup` installs the same
+      # file (backend#1681).
+      - run: make lint
 
   test-pytorch:
     timeout-minutes: 30

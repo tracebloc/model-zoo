@@ -17,8 +17,15 @@ class MyModel(nn.Module):
     def __init__(self, num_classes=output_classes):
         super().__init__()
         # Native Aimv2VisionModel (config model_type="aimv2_vision_model") —
-        # no trust_remote_code, so it passes the platform security check
-        # and avoids the custom-code path's all_tied_weights_keys bug.
+        # no trust_remote_code, which avoids the custom-code path's
+        # all_tied_weights_keys bug.
+        #
+        # BLOCKED BY THE UPLOAD GATE (#1495): this model currently CANNOT be
+        # uploaded to the platform. The backend gate (bandit
+        # `_is_from_pretrained`, enforced by `CheckModelMixin.is_model_secure`)
+        # rejects ANY `*.from_pretrained(...)` call regardless of
+        # trust_remote_code, so the `AutoModel.from_pretrained` below is
+        # rejected outright — dropping trust_remote_code no longer makes it pass.
         self.backbone = AutoModel.from_pretrained(_BACKBONE_ID)
         for p in self.backbone.parameters():
             p.requires_grad = False
