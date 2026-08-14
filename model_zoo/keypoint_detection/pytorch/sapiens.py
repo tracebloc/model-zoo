@@ -1,6 +1,15 @@
 """Sapiens (Meta, ECCV 2024). Human-centric foundation model — pose, depth,
 normals, segmentation in one family.
 
+BLOCKED BY THE UPLOAD GATE (#1495)
+----------------------------------
+This model currently CANNOT be uploaded to the platform. The backend gate
+(bandit ``_is_from_pretrained``, enforced by ``CheckModelMixin.is_model_secure``)
+rejects ANY ``*.from_pretrained(...)`` call regardless of ``trust_remote_code``,
+so the ``AutoModel.from_pretrained`` call in ``MyModel`` below is rejected
+outright. The backbone-substitution note below concerns which checkpoint would
+load *if* the gate allowed hub fetches — it is not a workaround for the gate.
+
 Backbone-loading note
 ---------------------
 The official ``facebook/sapiens-pose-*`` Hub repos ship as TorchScript
