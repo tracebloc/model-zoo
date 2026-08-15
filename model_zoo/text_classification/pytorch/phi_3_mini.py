@@ -7,8 +7,13 @@ Requirements:
   leak any secret embedded in them.
 - No ``trust_remote_code`` needed — Phi-3's config declares
   ``model_type="phi3"``, which transformers loads with the native
-  ``Phi3ForSequenceClassification`` class. Avoiding remote code is
-  required to pass the platform's model-security check.
+  ``Phi3ForSequenceClassification`` class.
+- BLOCKED BY THE UPLOAD GATE (#1495): this model currently CANNOT be
+  uploaded to the platform. The backend gate (bandit
+  ``_is_from_pretrained``, enforced by ``CheckModelMixin.is_model_secure``)
+  rejects ANY ``*.from_pretrained(...)`` call regardless of
+  ``trust_remote_code``, so the ``from_pretrained`` call below is rejected
+  outright. Avoiding remote code no longer makes it pass the security check.
 - Resources: ~8GB download (fp32), ~16GB RAM for load. ~32GB system
   RAM strongly recommended for the local SDK self-check; the CPU
   forward+backward on synthetic data takes 5-15 minutes on a laptop
