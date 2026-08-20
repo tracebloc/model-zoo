@@ -73,6 +73,16 @@ class _ALiBiMultiheadAttention(nn.Module):
                 key_padding_mask.unsqueeze(1).unsqueeze(2), float("-inf")
             )
 
+        # SDPA's contract for a float mask is "the same type as query, key,
+        # value". The bias is built in fp32 above (the slopes are tiny and the
+        # distances are exact there), so cast once, here. Leaving it fp32 under
+        # autocast or half weights breaks that contract: the old
+        # add-after-matmul path promoted dtypes instead, but the fused kernels
+        # do not -- ROCm's efficient attention warns and refuses a mask whose
+        # dtype is neither bool nor q's, which drops this straight back to the
+        # math backend, i.e. loses the very kernel this change exists to reach.
+        attn_mask = attn_mask.to(q.dtype)
+
         out = F.scaled_dot_product_attention(
             q,
             k,

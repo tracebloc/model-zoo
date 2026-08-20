@@ -101,3 +101,46 @@ def test_relative_position_mlm_full_forward_is_finite_with_padding():
     assert logits.shape == (2, 10, 100)
     assert torch.isfinite(logits[0]).all()
     assert torch.isfinite(logits[1, :6]).all()
+
+
+@pytest.mark.parametrize("half_dtype", [torch.float16, torch.bfloat16])
+@pytest.mark.parametrize("with_padding_mask", [False, True])
+def test_alibi_mask_dtype_follows_the_query(half_dtype, with_padding_mask):
+    """SDPA's contract for a float mask is "the same type as query, key,
+    value". The ALiBi bias is built in fp32, so on half weights it has to be
+    cast before the call — otherwise the fused kernels see a mask they will
+    not take (ROCm's efficient attention warns and refuses outright) and the
+    path silently falls back to math. The old add-after-matmul formulation
+    promoted dtypes for free; SDPA does not. Bugbot, #165.
+    """
+    mod = _load("model_zoo/masked_language_modeling/pytorch/relative_position_mlm.py")
+
+    torch.manual_seed(0)
+    attn = mod._ALiBiMultiheadAttention(hidden_size=64, num_heads=4, dropout=0.1)
+    attn.eval().to(half_dtype)
+
+    B, S = 2, 9
+    x = torch.randn(B, S, 64, dtype=half_dtype)
+    key_padding_mask = None
+    if with_padding_mask:
+        key_padding_mask = torch.zeros(B, S, dtype=torch.bool)
+        key_padding_mask[1, 6:] = True
+
+    seen = {}
+    real_sdpa = mod.F.scaled_dot_product_attention
+
+    def _spy(q, k, v, *args, **kwargs):
+        seen["q"] = q.dtype
+        seen["mask"] = kwargs["attn_mask"].dtype
+        return real_sdpa(q, k, v, *args, **kwargs)
+
+    mod.F.scaled_dot_product_attention = _spy
+    try:
+        with torch.no_grad():
+            out = attn(x, key_padding_mask)
+    finally:
+        mod.F.scaled_dot_product_attention = real_sdpa
+
+    assert seen["mask"] == seen["q"] == half_dtype
+    assert out.dtype == half_dtype
+    assert torch.isfinite(out).all()
