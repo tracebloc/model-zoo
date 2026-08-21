@@ -1,6 +1,7 @@
 """BERT-base with ALiBi-style relative position bias, ~115M params. Better length generalization than absolute positions."""
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import math
 
 framework = "pytorch"
@@ -60,21 +61,36 @@ class _ALiBiMultiheadAttention(nn.Module):
         qkv = qkv.permute(2, 0, 3, 1, 4)
         q, k, v = qkv[0], qkv[1], qkv[2]
 
-        attn = (q @ k.transpose(-2, -1)) * self.scale
-
-        # ALiBi bias: slope * |i - j|
+        # ALiBi bias: slope * |i - j|, folded with the padding mask into one
+        # additive attn_mask for scaled_dot_product_attention. The mask is not
+        # exactly causal, so is_causal stays False.
         positions = torch.arange(S, device=x.device)
         distance = (positions.unsqueeze(0) - positions.unsqueeze(1)).abs().float()
-        alibi = -distance.unsqueeze(0) * self.slopes.unsqueeze(-1).unsqueeze(-1)
-        attn = attn + alibi.unsqueeze(0)
+        attn_mask = (-distance.unsqueeze(0) * self.slopes.unsqueeze(-1).unsqueeze(-1)).unsqueeze(0)
 
         if key_padding_mask is not None:
-            attn = attn.masked_fill(key_padding_mask.unsqueeze(1).unsqueeze(2), float("-inf"))
+            attn_mask = attn_mask.expand(B, -1, -1, -1).masked_fill(
+                key_padding_mask.unsqueeze(1).unsqueeze(2), float("-inf")
+            )
 
-        attn = torch.softmax(attn, dim=-1)
-        attn = self.dropout(attn)
+        # SDPA's contract for a float mask is "the same type as query, key,
+        # value". The bias is built in fp32 above (the slopes are tiny and the
+        # distances are exact there), so cast once, here. Leaving it fp32 under
+        # autocast or half weights breaks that contract: the old
+        # add-after-matmul path promoted dtypes instead, but the fused kernels
+        # do not -- ROCm's efficient attention warns and refuses a mask whose
+        # dtype is neither bool nor q's, which drops this straight back to the
+        # math backend, i.e. loses the very kernel this change exists to reach.
+        attn_mask = attn_mask.to(q.dtype)
 
-        out = (attn @ v).transpose(1, 2).reshape(B, S, -1)
+        out = F.scaled_dot_product_attention(
+            q,
+            k,
+            v,
+            attn_mask=attn_mask,
+            dropout_p=self.dropout.p if self.training else 0.0,
+        )
+        out = out.transpose(1, 2).reshape(B, S, -1)
         return self.out_proj(out)
 
 
