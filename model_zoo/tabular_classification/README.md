@@ -4,7 +4,7 @@ Classify structured, tabular records into discrete categories.
 
 ## Start here
 
-**New to tabular classification?** Use [`sklearn/xgboost_classifier.py`](sklearn/xgboost_classifier.py). On small and medium tabular datasets, gradient-boosted trees typically beat deep models — start here before trying PyTorch or TensorFlow variants.
+**New to tabular classification?** Use [`sklearn/xgboost_classifier.py`](sklearn/xgboost_classifier.py). On small and medium tabular datasets, gradient-boosted trees typically beat deep models — start here before trying PyTorch variants.
 
 ## Models
 
@@ -48,15 +48,11 @@ module-level values to match your dataset before uploading.
 | [`lstm.py`](pytorch/lstm.py) | LSTM; rows as sequences |
 | [`rnn.py`](pytorch/rnn.py) | Simple RNN; short sequences |
 
-### TensorFlow
-
-Same architectures as PyTorch, under [`tensorflow/`](tensorflow/). Pick the framework your team prefers.
-
 ## Dataset expectations
 
 - **Input**: tabular rows with `num_feature_points` numeric features.
 - **Labels**: integer class IDs.
-- **Batch size**: default 4096 (PyTorch/TF), 512 (sklearn).
+- **Batch size**: default 4096 (PyTorch), 512 (sklearn).
 
 ## Reading stability-selection results
 

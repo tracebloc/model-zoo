@@ -32,7 +32,6 @@ MODEL_ROOT = ROOT / "model_zoo"
 
 FRAMEWORK_IMPORT_NAME = {
     "pytorch": "torch",
-    "tensorflow": "tensorflow",
     "sklearn": "sklearn",
     "lifelines": "lifelines",
     "scikit_survival": "sksurv",
