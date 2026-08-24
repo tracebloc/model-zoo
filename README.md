@@ -10,7 +10,7 @@ Every model in this repo is compatible with tracebloc's secure training environm
 
 | Task | Framework | Path | Use when you need to… |
 |---|---|---|---|
-| Image classification | PyTorch, TensorFlow | `model_zoo/image_classification/` | Categorize images into labels |
+| Image classification | PyTorch | `model_zoo/image_classification/pytorch/` | Categorize images into labels |
 | Object detection | PyTorch | `model_zoo/object_detection/pytorch/` | Locate and classify objects in images |
 | Text classification | PyTorch | `model_zoo/text_classification/pytorch/` | Classify documents, reviews, tickets |
 | Token classification | PyTorch | `model_zoo/token_classification/pytorch/` | Tag tokens: NER, POS, slot filling |
@@ -21,8 +21,8 @@ Every model in this repo is compatible with tracebloc's secure training environm
 | Sentence pair classification | PyTorch | `model_zoo/sentence_pair_classification/pytorch/` | Score sentence pairs: NLI, duplicates, relevance |
 | Semantic segmentation | PyTorch | `model_zoo/semantic_segmentation/pytorch/` | Pixel-level image labeling |
 | Keypoint detection | PyTorch | `model_zoo/keypoint_detection/pytorch/` | Detect landmarks on objects or bodies |
-| Tabular classification | PyTorch, sklearn, TensorFlow | `model_zoo/tabular_classification/` | Classify structured/tabular data |
-| Tabular regression | PyTorch, sklearn, TensorFlow | `model_zoo/tabular_regression/` | Predict continuous values from tables |
+| Tabular classification | PyTorch, sklearn | `model_zoo/tabular_classification/` | Classify structured/tabular data |
+| Tabular regression | PyTorch, sklearn | `model_zoo/tabular_regression/` | Predict continuous values from tables |
 | Time series forecasting | PyTorch | `model_zoo/time_series_forecasting/pytorch/` | Forecast future values from sequences |
 | Time series classification | PyTorch | `model_zoo/time_series_classification/pytorch/` | Assign one label to each whole sequence |
 | Time-to-event prediction | lifelines, PyTorch, scikit-survival | `model_zoo/time_to_event_prediction/` | Predict when an event will occur |
@@ -39,14 +39,14 @@ Then upload a model to tracebloc:
 from tracebloc_package import User
 
 user = User()  # log in with your tracebloc email + password
-user.uploadModel("model-zoo/model_zoo/image_classification/tensorflow/densenet.py")
+user.uploadModel("model-zoo/model_zoo/image_classification/pytorch/resnet_18.py")
 ```
 
 Full walkthrough → [Open the training notebook in Colab](https://colab.research.google.com/drive/1N00idtpoaq1lk9OJE6g4bMqd8o-Qex2C?usp=sharing)
 
 ## Bring your own model
 
-Not limited to this zoo. Any model that follows the [model structure requirements](https://docs.tracebloc.io/join-use-case/model-optimization) works — PyTorch, TensorFlow, or custom containers.
+Not limited to this zoo. Any model that follows the [model structure requirements](https://docs.tracebloc.io/join-use-case/model-optimization) works — PyTorch or custom containers.
 
 ## Pretrained weights
 

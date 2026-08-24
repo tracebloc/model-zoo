@@ -14,15 +14,15 @@ The `start-training` notebook clones this repo at runtime and hardcodes one exam
 model_zoo/
   causal_language_modeling/       pytorch/
   embeddings/                     pytorch/
-  image_classification/           pytorch/, tensorflow/
+  image_classification/           pytorch/
   keypoint_detection/             pytorch/
   masked_language_modeling/       pytorch/
   object_detection/               pytorch/
   semantic_segmentation/          pytorch/
   sentence_pair_classification/   pytorch/
   seq2seq/                        pytorch/
-  tabular_classification/         pytorch/, sklearn/, tensorflow/
-  tabular_regression/             pytorch/, sklearn/, tensorflow/
+  tabular_classification/         pytorch/, sklearn/
+  tabular_regression/             pytorch/, sklearn/
   text_classification/            pytorch/
   time_series_classification/     pytorch/
   time_series_forecasting/        pytorch/
@@ -34,7 +34,7 @@ model_zoo/
 
 Every model file defines:
 
-- `framework`: one of `"pytorch"`, `"tensorflow"`, `"sklearn"`, `"lifelines"`, `"scikit_survival"`
+- `framework`: one of `"pytorch"`, `"sklearn"`, `"lifelines"`, `"scikit_survival"`
 - `main_class` OR `main_method`: the symbol the SDK loads (class for `nn.Module` subclasses, function for factory-style models)
 - `category`: must match the task directory name
 - `batch_size`, `output_classes`, plus task-specific fields (`image_size`, `num_feature_points`, `sequence_length`, `forecast_horizon`, etc.)

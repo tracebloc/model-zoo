@@ -25,22 +25,8 @@ Categorize images into predefined labels. All models accept `(B, 3, H, W)` RGB i
 | [`simple_cnn.py`](pytorch/simple_cnn.py) | — | Minimal CNN; pedagogical starting point |
 | [`lenet.py`](pytorch/lenet.py) | — | 1998 historical baseline; teaching only |
 
-### TensorFlow
-
-| Model | When to pick |
-|---|---|
-| [`resnet_50.py`](tensorflow/resnet_50.py) | Standard TF baseline |
-| [`densenet.py`](tensorflow/densenet.py) | Parameter-efficient dense connectivity |
-| [`efficientnet.py`](tensorflow/efficientnet.py) | Compound-scaled architecture |
-| [`vgg_16.py`](tensorflow/vgg_16.py) | Canonical heavy baseline |
-| [`xception.py`](tensorflow/xception.py) | Depthwise separable convs |
-| [`alexnet.py`](tensorflow/alexnet.py) | Historical baseline; teaching only |
-| [`lenet.py`](tensorflow/lenet.py) | Historical baseline; teaching only |
-| [`simple_cnn.py`](tensorflow/simple_cnn.py) | Minimal single-block CNN |
-| [`stacked_cnn.py`](tensorflow/stacked_cnn.py) | Multi-block CNN baseline |
-
 ## Dataset expectations
 
 - **Input**: RGB images. `image_size = 224` by default; override per model.
 - **Labels**: integer class indices. `output_classes` configurable per file.
-- **Batch size**: default 256 (PyTorch), 128 (TensorFlow).
+- **Batch size**: default 256 (PyTorch).
