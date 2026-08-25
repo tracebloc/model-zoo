@@ -27,7 +27,7 @@ PYTEST ?= $(PYTHON) -m pytest
 # comment promises would silently not be the thing that ran. (Bugbot,
 # tracebloc/data-ingestors#461.)
 
-# ci.yml fans the same `pytest tests/` out across four framework
+# ci.yml fans the same `pytest tests/` out across three framework
 # environments. Locally you install one; FRAMEWORK picks which
 # .github/requirements/<name>.txt `make setup` installs.
 FRAMEWORK ?= pytorch
@@ -43,9 +43,9 @@ help:
 	@echo
 	@echo "  individual: lint test"
 	@echo
-	@echo "  CI runs 'pytest tests/' four times, once per framework env:"
-	@echo "  pytorch, tensorflow, sklearn, survival. Locally you have one."
-	@echo "  Pick it with:  make setup FRAMEWORK=tensorflow"
+	@echo "  CI runs 'pytest tests/' three times, once per framework env:"
+	@echo "  pytorch, sklearn, survival. Locally you have one."
+	@echo "  Pick it with:  make setup FRAMEWORK=sklearn"
 
 # ---- check: the pre-push tier ------------------------------------
 #
@@ -56,12 +56,12 @@ help:
 # environment.
 .PHONY: check
 check: lint test
-	@echo "==> check: green (CI additionally runs these under 4 framework envs)"
+	@echo "==> check: green (CI additionally runs these under 3 framework envs)"
 
 .PHONY: check-all
 check-all: lint
 	$(PYTEST) tests/ -v
-	@echo "==> check-all: green (CI additionally runs these under 4 framework envs)"
+	@echo "==> check-all: green (CI additionally runs these under 3 framework envs)"
 
 # setup: install dependencies, then install the git pre-push hook — the
 # later step of backend#1606 — via the install-hooks target below.
