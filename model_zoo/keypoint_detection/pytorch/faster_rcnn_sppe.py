@@ -1,6 +1,28 @@
-"""Single-Person Pose Estimator on a Faster R-CNN ResNet-50 backbone. Reuses a strong detection backbone for keypoints."""
+"""Single-Person Pose Estimator on a Faster R-CNN ResNet-50 backbone. Reuses a strong detection backbone for keypoints.
+
+Offline variant: the architecture is built without any checkpoint download,
+so the template constructs anywhere, network or not. The pretrained backbone
+tensors are delivered from the tracebloc model store as the training seed:
+upload the matched ``faster_rcnn_sppe_weights.pkl`` sitting next to this
+file via ``upload_model(..., weights=True)``, and the platform loads it with
+``load_state_dict(strict=True)`` after the model builds. See
+``tools/prep_offline_weights.py`` for producing and verifying that matched
+weight file.
+
+The ResNet50-FPN backbone is assembled explicitly instead of via
+``fasterrcnn_resnet50_fpn(weights=None)``, for the reasons documented in
+``object_detection/pytorch/faster_rcnn_resnet.py``: with no weights
+requested that builder swaps the backbone norm layers from
+``FrozenBatchNorm2d`` to trainable ``BatchNorm2d`` (which changes the
+state_dict key set) and unfreezes all five backbone stages instead of the
+last three. Building the backbone directly reproduces the checkpoint-path
+backbone exactly — same norm layers, same three trainable stages, same
+state_dict keys and shapes. Verified against torchvision 0.27.
+"""
 import torch.nn as nn
-from torchvision.models.detection import fasterrcnn_resnet50_fpn
+from torchvision.models import resnet50
+from torchvision.models.detection.backbone_utils import _resnet_fpn_extractor
+from torchvision.ops import misc as misc_nn_ops
 
 
 # Configuration
@@ -18,9 +40,18 @@ class FasterRCNNSPPE(nn.Module):
         super(FasterRCNNSPPE, self).__init__()
         self.num_feature_points = num_feature_points
 
-        # Load the Faster R-CNN model to get the backbone (ResNet-50)
-        model = fasterrcnn_resnet50_fpn(weights="DEFAULT")
-        backbone = model.backbone
+        # Build the Faster R-CNN ResNet50-FPN backbone directly, with no
+        # download — checkpoint-path architecture: frozen batch-norm
+        # backbone, FPN with the last 3 stages trainable.
+        resnet = resnet50(weights=None, norm_layer=misc_nn_ops.FrozenBatchNorm2d)
+        backbone = _resnet_fpn_extractor(resnet, trainable_layers=3)
+
+        # The checkpoint path zeroes FrozenBatchNorm2d eps across the whole
+        # detector, backbone included (torchvision's overwrite_eps); match
+        # it so numerics are identical, not just the parameter set.
+        for module in backbone.modules():
+            if isinstance(module, misc_nn_ops.FrozenBatchNorm2d):
+                module.eps = 0.0
 
         # Assume the feature extractor provides a feature map, which is what we use here
         self.feature_extractor = backbone

@@ -1,4 +1,16 @@
-"""AlphaPose-style SimpleBaseline with deconv head on ResNet backbone. Configurable NUM_LAYERS; default uses ResNet-50."""
+"""AlphaPose-style SimpleBaseline with deconv head on ResNet backbone. Configurable NUM_LAYERS; default uses ResNet-50.
+
+Offline variant: no ImageNet checkpoint download at construction, so the
+template constructs anywhere, network or not. The pre-migration file built a
+torchvision ResNet with downloaded weights purely to copy matching tensors
+into ``self.preact``; that copy step is gone — the architecture is unchanged
+(same state_dict keys and shapes) and the pretrained tensors are delivered
+from the tracebloc model store as the training seed instead: upload the
+matched ``alphapose_weights.pkl`` sitting next to this file via
+``upload_model(..., weights=True)``; the platform loads it with
+``load_state_dict(strict=True)`` after the model builds. See
+``tools/prep_offline_weights.py`` for producing and verifying that file.
+"""
 import torch.nn as nn
 import torch.nn.functional as F
 
@@ -258,27 +270,14 @@ class MyModel(nn.Module):
         self.deconv_dim = cfg['NUM_DECONV_FILTERS']
         self._norm_layer = norm_layer
 
-        self.preact = ResNet(f"resnet{cfg['NUM_LAYERS']}")
-
-        # Imagenet pretrain model
-        import torchvision.models as tm   # noqa: F401,F403
-        resnet_factories = {
-            18: tm.resnet18,
-            34: tm.resnet34,
-            50: tm.resnet50,
-            101: tm.resnet101,
-            152: tm.resnet152,
-        }
         num_layers = cfg['NUM_LAYERS']
-        if num_layers not in resnet_factories:
+        if num_layers not in (18, 34, 50, 101, 152):
             raise ValueError(f"Unsupported NUM_LAYERS: {num_layers}")
-        x = resnet_factories[num_layers](weights="DEFAULT")
+        self.preact = ResNet(f"resnet{num_layers}")
 
-        model_state = self.preact.state_dict()
-        state = {k: v for k, v in x.state_dict().items()
-                 if k in self.preact.state_dict() and v.size() == self.preact.state_dict()[k].size()}
-        model_state.update(state)
-        self.preact.load_state_dict(model_state)
+        # No ImageNet download here: the pretrained backbone tensors arrive
+        # from the tracebloc model store as the training seed (strict
+        # load_state_dict after construction).
 
         self.deconv_layers = self._make_deconv_layer()
         self.final_layer = nn.Conv2d(
