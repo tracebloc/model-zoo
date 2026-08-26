@@ -1,5 +1,29 @@
 """OneFormer (CVPR 2023). Single set of weights for semantic / instance / panoptic segmentation; consistently matches or beats Mask2Former with one checkpoint instead of three.
 
+This wrapper exposes the HF `OneFormerForUniversalSegmentation` as a plain
+semantic-segmentation module, matching the contract used by the other models
+in this folder (deeplab.py, mask2former.py, ...): `forward(x)` returns
+`[B, num_classes, H, W]` logits, and the platform trainer applies its
+standard per-pixel CrossEntropyLoss against the `[B, H, W]` mask targets.
+
+Two things the bare HF model would otherwise demand from the caller are
+supplied internally:
+
+* **task inputs** — OneFormer conditions on a tokenized task string
+  ("the task is semantic"); the fixed CLIP-token id sequence for the
+  semantic task is inlined below and registered as a (non-persistent)
+  buffer, so `forward(x)` needs nothing but pixels and no tokenizer file
+  ships with this template.
+* **dense logits** — the raw (mask_queries, class_queries) outputs are
+  collapsed into per-class pixel logits with the same formula HF's
+  `post_process_semantic_segmentation` uses (see mask2former.py):
+
+      seg_logits = einsum("bqc,bqhw->bchw",
+                          softmax(class_logits)[..., :-1],
+                          sigmoid(mask_logits))
+
+  then upsampled to the input resolution.
+
 Offline variant: the architecture is built from the inlined config below
 (Swin-tiny backbone sub-config and task-text-encoder geometry included) —
 no hub model id, no config fetch, no download at build time, so the
@@ -10,16 +34,14 @@ matched ``oneformer_weights.pkl`` sitting next to this file via
 
     user.upload_model("oneformer", weights=True)
 
-No tokenizer file ships with this template: the task-token text encoder is
-only exercised when the caller passes pre-tokenized ``task_inputs`` /
-``text_inputs`` ids to ``forward`` — this template's runtime path (the
-platform trainer calls ``model(x)``) never tokenizes anything itself.
-
 See ``tools/prep_offline_weights.py`` for producing and verifying the
 matched weight file (weights of ``shi-labs/oneformer_ade20k_swin_tiny``;
 the class-prediction head is sized to ``output_classes`` and freshly
 initialized).
 """
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
 from transformers import AutoConfig, OneFormerForUniversalSegmentation
 
 framework = "pytorch"
@@ -29,6 +51,11 @@ image_size = 512
 batch_size = 4
 output_classes = 2
 category = "semantic_segmentation"
+
+# CLIP-token ids for "the task is semantic", padded to task_seq_len (77) —
+# the output of OneFormer's task tokenizer, inlined so forward() needs no
+# tokenizer at runtime. 49406/49407 are the BOS/EOS-pad ids.
+SEMANTIC_TASK_TOKEN_IDS = [49406, 518, 10549, 533, 29119, 1550, 49407] + [49407] * 70
 
 # Architecture config for shi-labs/oneformer_ade20k_swin_tiny
 # (OneFormerForUniversalSegmentation, model_type "oneformer") with its
@@ -114,6 +141,47 @@ CONFIG = {
 }
 
 
+class _OneFormerSemantic(nn.Module):
+    def __init__(self, num_classes: int = output_classes, img_size: int = image_size):
+        super().__init__()
+        self.num_classes = num_classes
+        self.img_size = img_size
+
+        config = AutoConfig.for_model(**CONFIG, num_labels=num_classes)
+        self.model = OneFormerForUniversalSegmentation(config)
+
+        # Fixed semantic-task conditioning tokens; non-persistent so the
+        # constant stays out of the state_dict (the weight dump carries
+        # parameters only) while still following .to(device)/.cuda().
+        self.register_buffer(
+            "task_inputs",
+            torch.tensor(SEMANTIC_TASK_TOKEN_IDS, dtype=torch.long).unsqueeze(0),
+            persistent=False,
+        )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        task_inputs = self.task_inputs.expand(x.shape[0], -1)
+        outputs = self.model(pixel_values=x, task_inputs=task_inputs)
+
+        mask_logits = outputs.masks_queries_logits            # [B, Q, H', W']
+        class_logits = outputs.class_queries_logits           # [B, Q, C+1]
+
+        # Drop the "no object" class and collapse queries into per-class
+        # pixel logits (same math as mask2former.py).
+        class_probs = class_logits.softmax(dim=-1)[..., :-1]  # [B, Q, C]
+        mask_probs = mask_logits.sigmoid()                    # [B, Q, H', W']
+
+        seg_logits = torch.einsum("bqc,bqhw->bchw", class_probs, mask_probs)
+
+        # Upsample to the input spatial size so the per-pixel CE loss against
+        # [B, H, W] targets lines up.
+        return F.interpolate(
+            seg_logits,
+            size=(self.img_size, self.img_size),
+            mode="bilinear",
+            align_corners=False,
+        )
+
+
 def MyModel(num_classes=output_classes):
-    config = AutoConfig.for_model(**CONFIG, num_labels=num_classes)
-    return OneFormerForUniversalSegmentation(config)
+    return _OneFormerSemantic(num_classes=num_classes, img_size=image_size)
