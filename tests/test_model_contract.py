@@ -138,6 +138,19 @@ def _fetches_from_hub(path: pathlib.Path) -> bool:
     return bool(_HUB_FETCH.search(text))
 
 
+# Offline-migrated templates (#156) build from an inlined config with no hub
+# fetch, so they fall out of _HUB_FETCH and become constructible in tests —
+# which is the point. But construction materializes the full fp32 random-init
+# parameter set in RAM, and for multi-billion-parameter templates that
+# exceeds the ~16GB of a standard ubuntu-latest runner (gemma_2: ~2.6B params
+# -> ~10.5GB for the tensors alone, before torch/test overhead). These were
+# already skipped before their migration (they matched _HUB_FETCH), so
+# skipping them here loses no coverage — it merely keeps the OOM out of CI.
+_TOO_LARGE_FOR_CI_RAM = {
+    "gemma_2.py",
+}
+
+
 def _model_files() -> list[pathlib.Path]:
     return sorted(MODEL_ROOT.rglob("*.py"))
 
@@ -202,6 +215,11 @@ def test_model_instantiates(path: pathlib.Path) -> None:
     """
     if _read_framework(path) is not None and _fetches_from_hub(path):
         pytest.skip("builds from an external hub — needs network, see _fetches_from_hub")
+
+    if path.name in _TOO_LARGE_FOR_CI_RAM:
+        pytest.skip(
+            "random-init construction exceeds CI runner RAM, see _TOO_LARGE_FOR_CI_RAM"
+        )
 
     _, module = _load_or_skip(path)
 
