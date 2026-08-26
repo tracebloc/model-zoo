@@ -1,4 +1,15 @@
-"""SimpleBaseline keypoint detector on a ResNet-50 backbone. Minimal architecture; good starting point."""
+"""SimpleBaseline keypoint detector on a ResNet-50 backbone. Minimal architecture; good starting point.
+
+Offline variant: built with ``weights=None`` — no checkpoint download at
+construction, so the template constructs anywhere, network or not. A plain
+classification ResNet builds the identical architecture (same state_dict
+keys and shapes) with or without weights. The pretrained ImageNet tensors
+are delivered from the tracebloc model store as the training seed: upload
+the matched ``resnet_50_weights.pkl`` sitting next to this file via
+``upload_model(..., weights=True)``; the platform loads it with
+``load_state_dict(strict=True)`` after the model builds. See
+``tools/prep_offline_weights.py`` for producing and verifying that file.
+"""
 # file: models/simple_baseline.py
 
 import torch
@@ -18,8 +29,9 @@ num_feature_points = 16
 class SimpleBaseline(nn.Module):
     def __init__(self, num_feature_points=num_feature_points):
         super(SimpleBaseline, self).__init__()
-        # Load a pre-trained ResNet backbone
-        backbone = models.resnet50(weights="DEFAULT")
+        # Build the ResNet-50 backbone with no download; the pretrained
+        # tensors arrive from the tracebloc model store as the training seed.
+        backbone = models.resnet50(weights=None)
         self.backbone = nn.Sequential(
             *(list(backbone.children())[:-2])
         )  # Remove the classification layers

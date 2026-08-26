@@ -1,4 +1,15 @@
-"""Single-Person Pose Estimator on a ResNet-50 backbone. Simpler than FasterRCNNSPPE; good default when you don't need detection."""
+"""Single-Person Pose Estimator on a ResNet-50 backbone. Simpler than FasterRCNNSPPE; good default when you don't need detection.
+
+Offline variant: built with ``weights=None`` — no checkpoint download at
+construction, so the template constructs anywhere, network or not. A plain
+classification ResNet builds the identical architecture (same state_dict
+keys and shapes) with or without weights. The pretrained ImageNet tensors
+are delivered from the tracebloc model store as the training seed: upload
+the matched ``resnet_sppe_weights.pkl`` sitting next to this file via
+``upload_model(..., weights=True)``; the platform loads it with
+``load_state_dict(strict=True)`` after the model builds. See
+``tools/prep_offline_weights.py`` for producing and verifying that file.
+"""
 import torch.nn as nn
 import torchvision.models as models
 
@@ -18,8 +29,9 @@ class ResNetSPPE(nn.Module):
         super(ResNetSPPE, self).__init__()
         self.num_feature_points = num_feature_points
 
-        # Load a pre-trained ResNet model (here we use ResNet-50)
-        resnet = models.resnet50(weights="DEFAULT")
+        # Build the ResNet-50 architecture with no download; the pretrained
+        # tensors arrive from the tracebloc model store as the training seed.
+        resnet = models.resnet50(weights=None)
 
         # Modify the first convolution layer to accommodate different input channels
         if input_channels != 3:
