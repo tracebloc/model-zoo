@@ -146,9 +146,17 @@ def _fetches_from_hub(path: pathlib.Path) -> bool:
 # -> ~10.5GB for the tensors alone, before torch/test overhead). These were
 # already skipped before their migration (they matched _HUB_FETCH), so
 # skipping them here loses no coverage — it merely keeps the OOM out of CI.
+# Keyed on the path relative to MODEL_ROOT (posix), not the basename: 19
+# basenames are duplicated across task directories (e.g. bert_base_uncased.py
+# in both text_classification and sentence_pair_classification), so a
+# basename key would silently skip every file sharing the name.
 _TOO_LARGE_FOR_CI_RAM = {
-    "gemma_2.py",
+    "text_classification/pytorch/gemma_2.py",
 }
+
+
+def _ci_ram_skip_key(path: pathlib.Path) -> str:
+    return path.relative_to(MODEL_ROOT).as_posix()
 
 
 def _model_files() -> list[pathlib.Path]:
@@ -216,7 +224,7 @@ def test_model_instantiates(path: pathlib.Path) -> None:
     if _read_framework(path) is not None and _fetches_from_hub(path):
         pytest.skip("builds from an external hub — needs network, see _fetches_from_hub")
 
-    if path.name in _TOO_LARGE_FOR_CI_RAM:
+    if _ci_ram_skip_key(path) in _TOO_LARGE_FOR_CI_RAM:
         pytest.skip(
             "random-init construction exceeds CI runner RAM, see _TOO_LARGE_FOR_CI_RAM"
         )
@@ -231,3 +239,26 @@ def test_model_instantiates(path: pathlib.Path) -> None:
 
     model = entry()
     assert model is not None, f"{path}: {entry_name}() returned None"
+
+
+def test_ci_ram_skip_entries_exist() -> None:
+    """Every skip entry must name a real file, or it silently skips nothing."""
+    for entry in _TOO_LARGE_FOR_CI_RAM:
+        assert (MODEL_ROOT / entry).is_file(), (
+            f"_TOO_LARGE_FOR_CI_RAM entry {entry!r} does not exist under model_zoo/"
+        )
+
+
+def test_ci_ram_skip_key_is_directory_scoped() -> None:
+    """A skip entry for one directory must not match a same-named file in
+    another. The tree has duplicated basenames (bert_base_uncased.py lives in
+    both text_classification and sentence_pair_classification), which is why
+    the set is keyed on MODEL_ROOT-relative paths, not basenames."""
+    tc = MODEL_ROOT / "text_classification" / "pytorch" / "bert_base_uncased.py"
+    spc = (
+        MODEL_ROOT / "sentence_pair_classification" / "pytorch" / "bert_base_uncased.py"
+    )
+    assert tc.is_file() and spc.is_file(), (
+        "expected duplicated basename fixture missing — update this test"
+    )
+    assert _ci_ram_skip_key(spc) not in {_ci_ram_skip_key(tc)}
