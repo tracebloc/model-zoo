@@ -19,11 +19,25 @@ collapse:
 
 then upsample to the input resolution. This is the same formula HF's
 `image_processor.post_process_semantic_segmentation` uses.
+
+Offline variant: the architecture is built from the inlined config below
+(Swin-tiny backbone sub-config included) — no hub model id, no config fetch,
+no download at build time, so the template constructs anywhere, network or
+not. The pretrained tensors are delivered from the tracebloc model store as
+the training seed: upload the matched ``mask2former_weights.pkl`` sitting
+next to this file via ``weights=True``::
+
+    user.upload_model("mask2former", weights=True)
+
+See ``tools/prep_offline_weights.py`` for producing and verifying the
+matched weight file (weights of ``facebook/mask2former-swin-tiny-ade-semantic``;
+the class-prediction head is sized to ``output_classes`` and freshly
+initialized).
 """
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from transformers import Mask2FormerConfig, Mask2FormerForUniversalSegmentation
+from transformers import AutoConfig, Mask2FormerForUniversalSegmentation
 
 # Module-level metadata contract
 framework = "pytorch"
@@ -34,7 +48,68 @@ batch_size = 4
 output_classes = 2
 category = "semantic_segmentation"
 
-_PRETRAINED_ID = "facebook/mask2former-swin-tiny-ade-semantic"
+# Architecture config for facebook/mask2former-swin-tiny-ade-semantic
+# (Mask2FormerForUniversalSegmentation, model_type "mask2former") with its
+# nested Swin backbone sub-config, inlined so the model builds with no
+# config fetch. The SDK uploads the .py plus its named weight sibling —
+# there is no config.json path — so the config lives here in the template.
+CONFIG = {
+    "model_type": "mask2former",
+    "backbone_config": {
+        "model_type": "swin",
+        "embed_dim": 96,
+        "depths": [2, 2, 6, 2],
+        "num_heads": [3, 6, 12, 24],
+        "num_layers": 4,
+        "window_size": 7,
+        "image_size": 224,
+        "patch_size": 4,
+        "num_channels": 3,
+        "hidden_size": 768,
+        "mlp_ratio": 4.0,
+        "qkv_bias": True,
+        "hidden_act": "gelu",
+        "hidden_dropout_prob": 0.0,
+        "attention_probs_dropout_prob": 0.0,
+        "drop_path_rate": 0.3,
+        "encoder_stride": 32,
+        "use_absolute_embeddings": False,
+        "path_norm": True,
+        "initializer_range": 0.02,
+        "layer_norm_eps": 1e-05,
+        "out_features": ["stage1", "stage2", "stage3", "stage4"],
+        "out_indices": [1, 2, 3, 4],
+        "stage_names": ["stem", "stage1", "stage2", "stage3", "stage4"],
+    },
+    "feature_size": 256,
+    "mask_feature_size": 256,
+    "hidden_dim": 256,
+    "encoder_feedforward_dim": 1024,
+    "activation_function": "relu",
+    "encoder_layers": 6,
+    "decoder_layers": 10,
+    "num_attention_heads": 8,
+    "dropout": 0.0,
+    "dim_feedforward": 2048,
+    "pre_norm": False,
+    "enforce_input_projection": False,
+    "enforce_input_proj": False,
+    "common_stride": 4,
+    "ignore_value": 255,
+    "num_queries": 100,
+    "no_object_weight": 0.1,
+    "class_weight": 2.0,
+    "mask_weight": 5.0,
+    "dice_weight": 5.0,
+    "train_num_points": 12544,
+    "oversample_ratio": 3.0,
+    "importance_sample_ratio": 0.75,
+    "init_std": 0.02,
+    "init_xavier_std": 1.0,
+    "use_auxiliary_loss": True,
+    "output_auxiliary_logits": None,
+    "feature_strides": [4, 8, 16, 32],
+}
 
 
 class Mask2Former(nn.Module):
@@ -43,10 +118,8 @@ class Mask2Former(nn.Module):
         self.num_classes = num_classes
         self.img_size = img_size
 
-        config = Mask2FormerConfig.from_pretrained(_PRETRAINED_ID, num_labels=num_classes)
-        self.model = Mask2FormerForUniversalSegmentation.from_pretrained(
-            _PRETRAINED_ID, config=config, ignore_mismatched_sizes=True
-        )
+        config = AutoConfig.for_model(**CONFIG, num_labels=num_classes)
+        self.model = Mask2FormerForUniversalSegmentation(config)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         # We bypass the HF loss path by only passing pixel_values; this returns

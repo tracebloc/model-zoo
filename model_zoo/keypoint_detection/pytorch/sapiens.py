@@ -1,40 +1,37 @@
 """Sapiens (Meta, ECCV 2024). Human-centric foundation model — pose, depth,
 normals, segmentation in one family.
 
-BLOCKED BY THE UPLOAD GATE (#1495)
-----------------------------------
-This model currently CANNOT be uploaded to the platform. The backend gate
-(bandit ``_is_from_pretrained``, enforced by ``CheckModelMixin.is_model_secure``)
-rejects ANY ``*.from_pretrained(...)`` call regardless of ``trust_remote_code``,
-so the ``AutoModel.from_pretrained`` call in ``MyModel`` below is rejected
-outright. The backbone-substitution note below concerns which checkpoint would
-load *if* the gate allowed hub fetches — it is not a workaround for the gate.
-
-Backbone-loading note
----------------------
+Backbone note
+-------------
 The official ``facebook/sapiens-pose-*`` Hub repos ship as TorchScript
-artifacts (not loadable via ``AutoModel``), and the MAE-pretrained
-``facebook/sapiens-pretrain-0.3b`` repo ships a ``config.json`` that
-lacks a ``model_type`` key — so ``AutoModel.from_pretrained`` rejects
-it during ``model_func_checks`` with:
+artifacts (not loadable as HF transformers models), and the MAE-pretrained
+``facebook/sapiens-pretrain-0.3b`` repo ships a ``config.json`` that lacks a
+``model_type`` key, so it cannot be resolved to an HF architecture either.
+Until Meta publishes an HF-loadable sapiens checkpoint, this template builds
+the upstream ViT-MAE base backbone sapiens is architecturally built on
+(``facebook/vit-mae-base``). The ViT geometry matches; only the
+human-centric pretraining is lost.
 
-    Unrecognized model in facebook/sapiens-pretrain-0.3b. Should have a
-    `model_type` key in its config.json.
+Offline variant: the architecture is built from the inlined config below —
+no hub model id, no config fetch, no download at build time, so the template
+constructs anywhere, network or not. The pretrained backbone tensors are
+delivered from the tracebloc model store as the training seed: upload the
+matched ``sapiens_weights.pkl`` sitting next to this file via
+``weights=True``::
 
-even with ``trust_remote_code=True`` (the repo doesn't ship a custom
-modeling file either). Until Meta publishes an HF-AutoModel-loadable
-sapiens checkpoint, we substitute the upstream ViT-MAE base backbone
-sapiens is architecturally built on (``facebook/vit-mae-base``). The
-ViT geometry matches; only the human-centric pretraining is lost.
-Switch ``_BACKBONE_ID`` back to ``facebook/sapiens-pretrain-0.3b`` once
-that repo's config carries ``model_type: vit_mae``.
+    user.upload_model("sapiens", weights=True)
+
+See ``tools/prep_offline_weights.py`` for producing and verifying the
+matched weight file (weights of ``facebook/vit-mae-base``; the position
+embeddings are sized to the declared 256px input, freshly initialized —
+same as before via the checkpoint's size-mismatch reinit).
 
 Fine-tuned LoRA-only so federated averaging only syncs the adapter +
 the final regressor.
 """
 import torch.nn as nn
 from peft import LoraConfig, get_peft_model
-from transformers import AutoModel
+from transformers import AutoConfig, AutoModel
 
 framework = "pytorch"
 model_type = "transformer"
@@ -46,7 +43,32 @@ output_classes = 1
 category = "keypoint_detection"
 num_feature_points = 17
 
-_BACKBONE_ID = "facebook/vit-mae-base"
+# Architecture config for facebook/vit-mae-base (ViTMAEModel, model_type
+# "vit_mae"), inlined so the model builds with no config fetch. The SDK
+# uploads the .py plus its named weight sibling — there is no config.json
+# path — so the config lives here in the template. ``image_size`` is passed
+# at build time (the checkpoint ships at 224; this family declares 256).
+CONFIG = {
+    "model_type": "vit_mae",
+    "hidden_size": 768,
+    "intermediate_size": 3072,
+    "num_hidden_layers": 12,
+    "num_attention_heads": 12,
+    "num_channels": 3,
+    "patch_size": 16,
+    "hidden_act": "gelu",
+    "hidden_dropout_prob": 0.0,
+    "attention_probs_dropout_prob": 0.0,
+    "initializer_range": 0.02,
+    "layer_norm_eps": 1e-12,
+    "qkv_bias": True,
+    "decoder_hidden_size": 512,
+    "decoder_intermediate_size": 2048,
+    "decoder_num_attention_heads": 16,
+    "decoder_num_hidden_layers": 8,
+    "mask_ratio": 0.75,
+    "norm_pix_loss": False,
+}
 
 
 class _SapiensWrapper(nn.Module):
@@ -68,21 +90,19 @@ class _SapiensWrapper(nn.Module):
 def MyModel(num_feature_points=num_feature_points):
     # ViT-MAE base ships at 224x224 by default; we declare 256 above to
     # match the rest of the keypoint model family. ``image_size`` is a
-    # config-level override (the position embeddings get interpolated to
-    # fit), and ``ignore_mismatched_sizes=True`` is required because the
-    # checkpoint's position-embedding tensor stays at the 224-grid shape
-    # — HF reinitializes those positions rather than raising. The patch
-    # projection and attention weights still load.
-    base = AutoModel.from_pretrained(
-        _BACKBONE_ID, image_size=image_size, ignore_mismatched_sizes=True,
-    )
+    # config-level override — the position-embedding table is sized to the
+    # 256 grid at construction (freshly initialized, exactly as the
+    # pre-migration checkpoint load reinitialized it on size mismatch).
+    # The patch projection and attention weights carry the pretrained seed.
+    config = AutoConfig.for_model(**CONFIG, image_size=image_size)
+    base = AutoModel.from_config(config)
     lora_config = LoraConfig(
         r=8, lora_alpha=16, lora_dropout=0.1, bias="none",
-        # ViT-MAE exposes attention as ``query`` / ``key`` / ``value`` /
-        # ``output.dense`` (not the fused ``qkv`` block used by some ViT
-        # variants), so the LoRA target list has to match that naming
-        # for the adapter wrap to land.
-        target_modules=["query", "value"],
+        # transformers 5.x exposes ViT-MAE attention as ``q_proj`` /
+        # ``k_proj`` / ``v_proj`` / ``o_proj`` (the pre-5.x ``query`` /
+        # ``value`` naming no longer exists), so the LoRA target list has
+        # to match that naming for the adapter wrap to land.
+        target_modules=["q_proj", "v_proj"],
     )
     base = get_peft_model(base, lora_config)
     return _SapiensWrapper(base, num_feature_points)
