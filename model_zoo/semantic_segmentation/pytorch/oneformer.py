@@ -52,10 +52,13 @@ batch_size = 4
 output_classes = 2
 category = "semantic_segmentation"
 
-# CLIP-token ids for "the task is semantic", padded to task_seq_len (77) —
-# the output of OneFormer's task tokenizer, inlined so forward() needs no
-# tokenizer at runtime. 49406/49407 are the BOS/EOS-pad ids.
-SEMANTIC_TASK_TOKEN_IDS = [49406, 518, 10549, 533, 29119, 1550, 49407] + [49407] * 70
+# Task-conditioning ids for "the task is semantic", exactly as
+# OneFormerProcessor._preprocess_text builds them: CLIP-tokenize padded to
+# task_seq_len (77), then multiply input_ids by the attention mask — which
+# ZEROS every pad position. So the checkpoint-faithful sequence is the 7
+# real tokens (49406 BOS, 5 word tokens, 49407 EOS) followed by 70 zeros,
+# inlined so forward() needs no tokenizer at runtime.
+SEMANTIC_TASK_TOKEN_IDS = [49406, 518, 10549, 533, 29119, 1550, 49407] + [0] * 70
 
 # Architecture config for shi-labs/oneformer_ade20k_swin_tiny
 # (OneFormerForUniversalSegmentation, model_type "oneformer") with its
