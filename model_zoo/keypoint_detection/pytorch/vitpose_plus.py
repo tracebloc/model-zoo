@@ -136,10 +136,9 @@ class _Wrapper(nn.Module):
 
 
 def MyModel(num_feature_points=num_feature_points):
+    # The pose decoder reads config.num_labels for its heatmap-output
+    # channel count; passed through for_model so the SDK override lands.
     config = AutoConfig.for_model(**CONFIG, num_labels=num_feature_points)
-    # VitPoseSimpleDecoder reads config.num_labels for its heatmap-output
-    # channel count; set it explicitly so the SDK override always lands.
-    config.num_labels = num_feature_points
     config.image_size = [image_size, image_size]
     if getattr(config, "backbone_config", None) is not None:
         config.backbone_config.image_size = [image_size, image_size]

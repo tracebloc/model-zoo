@@ -18,7 +18,9 @@ from transformers import AutoConfig, AutoModel
 
 framework = "pytorch"
 main_class = "MyModel"
-license = "Apache-2.0"
+# Meta's DINOv3 License (hub license_name "dinov3-license"): restrictive,
+# non-commercial research terms — NOT a permissive license.
+license = "dinov3-license"
 image_size = 224
 batch_size = 8
 output_classes = 2

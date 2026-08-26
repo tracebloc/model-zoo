@@ -111,8 +111,12 @@ CONFIG = {
     "is_training": False,
     "use_auxiliary_loss": True,
     "output_auxiliary_logits": True,
-    "output_attentions": True,
-    "output_hidden_states": True,
+    # The hub config ships output_attentions/output_hidden_states as True;
+    # both are runtime-only output flags with no weight impact, and the
+    # wrapper only reads mask/class logits — keep them off rather than
+    # materializing every Swin hidden state + attention map each forward.
+    "output_attentions": False,
+    "output_hidden_states": False,
     "strides": [4, 8, 16, 32],
     "task_seq_len": 77,
     "max_seq_len": 77,

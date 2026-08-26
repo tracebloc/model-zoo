@@ -89,24 +89,32 @@ class _VitPoseWrapper(nn.Module):
         self.model = model
 
     def forward(self, pixel_values, *args, **kwargs):
+        batch, _, in_h, in_w = pixel_values.shape
         heatmaps = self.model(pixel_values=pixel_values).heatmaps
         b, k, h, w = heatmaps.shape
         flat = heatmaps.view(b, k, -1)
         probs = torch.softmax(flat, dim=-1)
-        ys = torch.linspace(0, 1, h, device=heatmaps.device).view(1, 1, h, 1)
-        xs = torch.linspace(0, 1, w, device=heatmaps.device).view(1, 1, 1, w)
+        # Soft-argmax in *pixel* space (same fix as vitpose_plus.py). The
+        # platform's keypoint targets are pixel coordinates in the input
+        # image; emitting normalized ``[0, 1]`` coords here would scale the
+        # per-pixel MSE loss by ``image_size ** 2`` and explode gradients —
+        # observed as loss ~1e11 with ``val_loss = NaN`` on the first cycle.
+        ys = torch.linspace(0, in_h - 1, h, device=heatmaps.device).view(1, 1, h, 1)
+        xs = torch.linspace(0, in_w - 1, w, device=heatmaps.device).view(1, 1, 1, w)
         probs2d = probs.view(b, k, h, w)
         x_coord = (probs2d * xs).sum(dim=(2, 3))
         y_coord = (probs2d * ys).sum(dim=(2, 3))
-        conf = flat.max(dim=-1).values
+        # Confidence — squashed to ``[0, 1]`` so it can't dominate the loss
+        # against per-keypoint visibility flags. Raw ``flat.max`` is an
+        # unbounded transformer logit (easily 1e2+ at init).
+        conf = torch.sigmoid(flat.max(dim=-1).values)
         return torch.stack([x_coord, y_coord, conf], dim=-1)
 
 
 def MyModel(num_feature_points=num_feature_points):
-    config = AutoConfig.for_model(**CONFIG, num_labels=num_feature_points)
     # VitPoseSimpleDecoder reads config.num_labels for its heatmap-output
-    # channel count; set it explicitly so the SDK override always lands.
-    config.num_labels = num_feature_points
+    # channel count; passed through for_model so the SDK override lands.
+    config = AutoConfig.for_model(**CONFIG, num_labels=num_feature_points)
     config.image_size = [image_size, image_size]
     if getattr(config, "backbone_config", None) is not None:
         config.backbone_config.image_size = [image_size, image_size]

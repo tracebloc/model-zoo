@@ -93,7 +93,6 @@ CONFIG = {
     "dim_feedforward": 2048,
     "pre_norm": False,
     "enforce_input_projection": False,
-    "enforce_input_proj": False,
     "common_stride": 4,
     "ignore_value": 255,
     "num_queries": 100,
