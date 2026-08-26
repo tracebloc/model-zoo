@@ -74,7 +74,11 @@ CONFIG = {
         "drop_path_rate": 0.3,
         "encoder_stride": 32,
         "use_absolute_embeddings": False,
-        "path_norm": True,
+        # The hub config.json carries a stray "path_norm": true — an
+        # upstream typo artifact of Swin's original patch_norm option.
+        # HF's SwinConfig defines neither spelling and no modeling code
+        # reads it (the patch-embedding LayerNorm is unconditional), so
+        # the inert key is dropped here rather than carried verbatim.
         "initializer_range": 0.02,
         "layer_norm_eps": 1e-05,
         "out_features": ["stage1", "stage2", "stage3", "stage4"],
