@@ -122,7 +122,7 @@ def _fetches_from_hub(path: pathlib.Path) -> bool:
 
     Those templates cannot be constructed in a test without network:
     `from_pretrained` downloads from the HuggingFace hub (some are
-    multi-gigabyte — gemma_2, phi_3_mini, sam2), and torchvision builders asked
+    multi-gigabyte — gemma_2, sam2), and torchvision builders asked
     for pretrained checkpoints — `weights="DEFAULT"` or a `<Arch>_Weights.*`
     enum — pull ImageNet/COCO weights from download.pytorch.org. They are
     excluded from the instantiation test rather than making CI download the
