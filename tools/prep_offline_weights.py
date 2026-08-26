@@ -26,6 +26,20 @@ wrapper module (same attribute names, same head replacement, same
 template: check it out from git history, point ``--prep`` at it, point
 ``--ship`` at the rewritten file, and let this tool prove they line up.
 
+Class-count caveat
+------------------
+The dump contains the FULL state_dict — including the task head, sized to
+the template's declared ``output_classes`` (those head tensors are freshly
+initialized, not pretrained; the pretrained value lives in the backbone/
+encoder). The platform's strict seed load requires them to be present and
+shape-matched, so a prepped dump pairs with ONE class count: the one the
+template declared when the tool ran. An experiment that overrides
+``output_classes`` needs a dump prepped at that count — set the value in
+both template copies and re-run this tool (seconds, no re-download once
+cached). Head-tolerant seed loading, which would let one dump serve any
+class count, is a platform-side change tracked with the rest of the
+migration in #156.
+
 How the offline check is enforced
 ---------------------------------
 The two builds have contradictory requirements — the prep build needs
@@ -104,12 +118,24 @@ def _build(path: str, name: str):
 def _offline_env(cache_dir: str) -> dict[str, str]:
     """Environment for the ship-build subprocess: offline flags set before
     the interpreter starts (import-time latches see them), caches pointed at
-    an empty directory (a warm cache cannot mask a lookup)."""
+    an empty directory (a warm cache cannot mask a lookup).
+
+    Every cache variable that can override ``HF_HOME`` is pinned too —
+    ``HF_HUB_CACHE``/``HUGGINGFACE_HUB_CACHE`` (and the legacy
+    ``TRANSFORMERS_CACHE``) take precedence when set in the parent
+    environment, and offline mode happily serves from a warm cache without
+    opening a socket, which would keep the verification green for a template
+    that still performs hub lookups.
+    """
+    empty_hub_cache = os.path.join(cache_dir, "hub")
     return {
         **os.environ,
         "HF_HUB_OFFLINE": "1",
         "TRANSFORMERS_OFFLINE": "1",
         "HF_HOME": cache_dir,
+        "HF_HUB_CACHE": empty_hub_cache,
+        "HUGGINGFACE_HUB_CACHE": empty_hub_cache,
+        "TRANSFORMERS_CACHE": empty_hub_cache,
         "TORCH_HOME": cache_dir,
     }
 

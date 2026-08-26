@@ -80,6 +80,29 @@ def _run_verify_ship(ship: pathlib.Path, state: pathlib.Path, tmp_path: pathlib.
     )
 
 
+def test_offline_env_overrides_parent_cache_variables(tmp_path, monkeypatch):
+    """A warm cache named by the parent env must not leak into the verify
+    subprocess: every cache variable that can override HF_HOME is pinned."""
+    monkeypatch.setenv("HF_HUB_CACHE", "/warm/cache")
+    monkeypatch.setenv("HUGGINGFACE_HUB_CACHE", "/warm/cache")
+    monkeypatch.setenv("TRANSFORMERS_CACHE", "/warm/cache")
+    monkeypatch.setenv("HF_HOME", "/warm")
+    monkeypatch.setenv("TORCH_HOME", "/warm/torch")
+
+    env = _tool_module()._offline_env(str(tmp_path))
+
+    for key in (
+        "HF_HOME",
+        "HF_HUB_CACHE",
+        "HUGGINGFACE_HUB_CACHE",
+        "TRANSFORMERS_CACHE",
+        "TORCH_HOME",
+    ):
+        assert env[key].startswith(str(tmp_path)), key
+    assert env["HF_HUB_OFFLINE"] == "1"
+    assert env["TRANSFORMERS_OFFLINE"] == "1"
+
+
 def test_offline_template_passes(tmp_path):
     ship = tmp_path / "offline_template.py"
     ship.write_text(OFFLINE_TEMPLATE)
