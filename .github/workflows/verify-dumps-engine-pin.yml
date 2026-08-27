@@ -80,7 +80,9 @@ jobs:
           ref: ${{ env.ENGINE_REF }}
           token: ${{ steps.engine-token.outputs.token }}
           path: _engine
-          sparse-checkout: use_cases
+          sparse-checkout: |
+            use_cases/requirements.txt
+            use_cases/requirements_cuda.txt
           sparse-checkout-cone-mode: false
       - name: Assert the mirror matches the engine's pin
         run: |
