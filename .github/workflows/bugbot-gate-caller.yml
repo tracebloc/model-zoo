@@ -134,4 +134,27 @@ permissions:
 # that would.
 jobs:
   bugbot:
+    # SKIP BOT-AUTHORED AND PROMOTION PRs -- backend#2647 (finding raised on the docs
+    # release-train/to-main promotion; Cursor Bugbot Medium; learned rule "bugbot-
+    # gate-caller must skip bot-authored PRs"). Bugbot re-runs only on a push or an
+    # explicit `bugbot run` comment and does not review Dependabot PRs at all, so on
+    # a PR it never touches the callee just polls out its `wait-seconds` and the
+    # advisory `bugbot / review` verdict never arrives -- a red-forever tick with no
+    # route to green. Two measured classes get no verdict:
+    #   - DEPENDABOT PRs are authored by a Bot account (`user.type == 'Bot'`; e.g.
+    #     backend#2110, #1727) -- the learned rule's "bot-authored".
+    #   - RELEASE-TRAIN PROMOTIONS ride `release-train/to-staging` / `to-main` and are
+    #     authored by a HUMAN (LukasWodka -- `user.type` is 'User', so the head_ref,
+    #     not the author, identifies them; docs#145, backend#2628). Their commits
+    #     already passed Bugbot on the source PR; Bugbot does not re-review.
+    # HOTFIX branches (e.g. backend#778/#779, human-authored real code) are DELIBERATELY
+    # NOT skipped -- Bugbot does review them, so suppressing that advice would lose a
+    # real verdict; they are not a class that hangs.
+    # SKIP IS SAFE HERE because `bugbot / review` is ADVISORY, not a required context
+    # (see the header: step 3 is deliberately not taken). A skipped caller job emits
+    # no `bugbot / review` check; an absent ADVISORY check blocks nothing. If step 3
+    # ever arms this context as required, that follow-up must make the skip terminate
+    # in SUCCESS (an absent REQUIRED check parks the PR at "Expected -- waiting for
+    # status" -- the same trap the `paths:`/`ready_for_review` notes above warn of).
+    if: github.event.pull_request.user.type != 'Bot' && !startsWith(github.head_ref, 'release-train/')
     uses: tracebloc/.github/.github/workflows/bugbot-gate.yml@main
