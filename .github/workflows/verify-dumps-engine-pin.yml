@@ -52,15 +52,17 @@ env:
   ENGINE_REF: ${{ github.event.inputs.engine-ref || 'develop' }}
 
 jobs:
-  # 1) The mirror tools/requirements-engine-pin.txt must EQUAL the engine's live
-  #    pin. The engine is the single source of truth; this guard is what makes
-  #    the mirror safe to install from and what turns an engine `transformers`
-  #    bump red until the mirror (and then the dumps) are regenerated.
-  engine-pin-drift-guard:
+  # 1a) Fetch the engine's pin files in an ISOLATED job that runs NO PR-controlled
+  #     code. The contents:read App token for private tracebloc-engine is minted
+  #     and used ONLY here, alongside trusted actions (create-github-app-token,
+  #     checkout, upload-artifact). Because nothing from the PR executes in this
+  #     job, the token — even as it sits in the runner's step-output files — is
+  #     never reachable by PR code. The two pin files are handed to the guard
+  #     job below as an artifact; the token itself never leaves this job.
+  fetch-engine-pin:
     timeout-minutes: 10
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       # tracebloc-engine is a separate private repo; GITHUB_TOKEN cannot read it.
       # Mint an installation token scoped to that one repo, contents:read only
       # (same App as add-to-kanban.yml, least-privilege per backend#2166).
@@ -80,21 +82,50 @@ jobs:
           ref: ${{ env.ENGINE_REF }}
           token: ${{ steps.engine-token.outputs.token }}
           path: _engine
-          # Don't leave the App token in _engine/.git/config: the PR's own
-          # check_engine_pin_drift.py runs next and a same-repo PR could
-          # otherwise read it to fetch private tracebloc-engine beyond these
-          # two files. We only need the token for the checkout itself.
+          # Belt and braces: don't persist the token into _engine/.git/config
+          # either. The real isolation is that no PR code runs in this job.
           persist-credentials: false
           sparse-checkout: |
             use_cases/requirements.txt
             use_cases/requirements_cuda.txt
           sparse-checkout-cone-mode: false
+      - name: Upload the engine pin files
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: engine-pin
+          # Only the two requirements files — never _engine/.git — cross to the
+          # PR-controlled job.
+          path: |
+            _engine/use_cases/requirements.txt
+            _engine/use_cases/requirements_cuda.txt
+          if-no-files-found: error
+          retention-days: 1
+
+  # 1b) The mirror tools/requirements-engine-pin.txt must EQUAL the engine's live
+  #     pin. This job runs the PR-controlled drift checker (check_engine_pin_drift
+  #     imports verify_dumps_against_engine_pin), but holds NO engine token — it
+  #     only receives the two pin files as an artifact from the isolated fetch job
+  #     above. So even PR-modified code here has nothing to reach private
+  #     tracebloc-engine with. This is what makes the mirror safe to install from
+  #     and what turns an engine `transformers` bump red until the mirror (and
+  #     then the dumps) are regenerated.
+  engine-pin-drift-guard:
+    needs: fetch-engine-pin
+    timeout-minutes: 10
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Download the engine pin files
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: engine-pin
+          path: _engine_pin
       - name: Assert the mirror matches the engine's pin
         run: |
           python3 tools/check_engine_pin_drift.py \
             --mirror tools/requirements-engine-pin.txt \
-            --engine _engine/use_cases/requirements.txt \
-            --engine _engine/use_cases/requirements_cuda.txt
+            --engine _engine_pin/requirements.txt \
+            --engine _engine_pin/requirements_cuda.txt
 
   # 2) Rebuild each shipped template under the engine pin and strict-load its
   #    staged dump. Fails closed on any KEY_MISMATCH / BUILD_FAIL / provenance
