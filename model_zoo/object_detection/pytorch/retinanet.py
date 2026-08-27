@@ -1,7 +1,32 @@
-"""RetinaNet (Meta, ICCV 2017). Focal loss + one-stage anchor design — the canonical one-stage detector still widely deployed for production. Pairs with Faster R-CNN as the standard two-stage / one-stage comparison."""
-import torchvision
-from torchvision.models.detection import RetinaNet_ResNet50_FPN_Weights
-from torchvision.models.detection.retinanet import RetinaNetClassificationHead
+"""RetinaNet (Meta, ICCV 2017). Focal loss + one-stage anchor design — the canonical one-stage detector still widely deployed for production. Pairs with Faster R-CNN as the standard two-stage / one-stage comparison.
+
+Offline variant: the architecture is built without any checkpoint download,
+so the template constructs anywhere, network or not. The pretrained
+ResNet50-FPN tensors are delivered from the tracebloc model store as the
+training seed: upload the matched ``retinanet_weights.pkl`` sitting next to
+this file via ``upload_model(..., weights=True)``, and the platform loads it
+with ``load_state_dict(strict=True)`` after ``MyModel()`` builds this
+architecture. See ``tools/prep_offline_weights.py`` for producing and
+verifying that matched weight file.
+
+The backbone is assembled explicitly instead of via the high-level
+``retinanet_resnet50_fpn(weights=None)`` builder, for the reasons documented
+in ``faster_rcnn_resnet.py``: with no weights requested the builder swaps the
+backbone norm layers from ``FrozenBatchNorm2d`` to trainable ``BatchNorm2d``
+(which changes the state_dict key set) and unfreezes all five backbone
+stages instead of the last three. Building the backbone directly reproduces
+the checkpoint-path architecture exactly — same norm layers, same three
+trainable stages, same P6/P7 pyramid, same state_dict keys and shapes.
+Verified against torchvision 0.27.
+"""
+from torchvision.models import resnet50
+from torchvision.models.detection.backbone_utils import _resnet_fpn_extractor
+from torchvision.models.detection.retinanet import (
+    RetinaNet,
+    RetinaNetClassificationHead,
+)
+from torchvision.ops import misc as misc_nn_ops
+from torchvision.ops.feature_pyramid_network import LastLevelP6P7
 
 framework = "pytorch"
 model_type = "retinanet"
@@ -16,14 +41,28 @@ category = "object_detection"
 def MyModel(num_classes=output_classes):
     num_classes = num_classes + 1  # 1 for background
 
-    # torchvision's detection builders raise ValueError when a custom
-    # num_classes is paired with COCO pretrained weights (the weights expect
-    # 91 classes). Load with the pretrained weights' default head, then swap
-    # the classification head for one sized to the caller's num_classes —
-    # mirrors the pattern in faster_rcnn_resnet.py.
-    model = torchvision.models.detection.retinanet_resnet50_fpn(
-        weights=RetinaNet_ResNet50_FPN_Weights.DEFAULT
+    # Reproduce the checkpoint-path architecture exactly, with no download:
+    # frozen batch-norm backbone, FPN over the last 3 stages (P2 skipped,
+    # per the paper) with extra P6/P7 levels, and the stock 91-class COCO
+    # head (replaced below, as before).
+    backbone = resnet50(weights=None, norm_layer=misc_nn_ops.FrozenBatchNorm2d)
+    backbone = _resnet_fpn_extractor(
+        backbone,
+        trainable_layers=3,
+        returned_layers=[2, 3, 4],
+        extra_blocks=LastLevelP6P7(256, 256),
     )
+    model = RetinaNet(backbone, num_classes=91)
+
+    # The checkpoint path (COCO_V1) zeroes FrozenBatchNorm2d eps for this
+    # architecture (torchvision's overwrite_eps); match it so numerics are
+    # identical, not just the parameter set.
+    for module in model.modules():
+        if isinstance(module, misc_nn_ops.FrozenBatchNorm2d):
+            module.eps = 0.0
+
+    # Replace the classification head (identical to the pre-migration build,
+    # so the hosted seed state_dict keys/shapes match this module exactly).
     in_channels = model.backbone.out_channels
     num_anchors = model.head.classification_head.num_anchors
     model.head.classification_head = RetinaNetClassificationHead(
