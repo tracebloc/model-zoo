@@ -86,6 +86,34 @@ KEY_MISMATCH = "KEY_MISMATCH"
 BUILD_FAIL = "BUILD_FAIL"
 MISSING = "MISSING"
 SHA_MISMATCH = "SHA_MISMATCH"
+# Not a failure: the template's random-init fp32 construction exceeds a standard
+# ubuntu-latest runner's RAM, so we skip the BUILD (not the dump's existence/sha)
+# rather than let one oversized template OOM and take the whole sweep — and every
+# dump that WOULD have verified — down with it. Reported loudly, never folded into
+# OK, so the coverage gap is visible.
+SKIPPED_RAM = "SKIPPED_RAM"
+
+# Templates too large to construct in CI RAM. Kept in lockstep with
+# tests/test_model_contract.py:_TOO_LARGE_FOR_CI_RAM (the source of truth for the
+# instantiation suite) — see the verify-tool test that pins them equal. Keyed on
+# the path relative to model_zoo/ (directory-scoped, never a bare basename: 19
+# basenames are duplicated across task dirs, so a basename key would skip the
+# wrong files).
+_TOO_LARGE_FOR_CI_RAM = {
+    "text_classification/pytorch/gemma_2.py",
+}
+
+
+def _ci_ram_skip_key(template: str) -> str | None:
+    """Return the matched _TOO_LARGE_FOR_CI_RAM entry for a manifest template
+    path (which may or may not carry a leading model_zoo/), else None. Matches on
+    the directory-scoped suffix so it is robust to the prefix yet immune to the
+    duplicated-basename trap."""
+    posix = Path(template).as_posix()
+    for entry in _TOO_LARGE_FOR_CI_RAM:
+        if posix == entry or posix.endswith("/" + entry):
+            return entry
+    return None
 
 
 def _installed_version(pkg: str) -> str | None:
@@ -132,9 +160,21 @@ def _check_provenance(built_with: dict, installed: dict) -> list[str]:
     problems: list[str] = []
     for key in _PROVENANCE_KEYS:
         declared = built_with.get(key)
-        if declared is None:
-            continue
         have = installed.get(key)
+        if declared is None and have is None:
+            # The engine pin carries no such package and the manifest declares
+            # none — consistent, nothing to reconcile.
+            continue
+        if declared is None:
+            # Installed in the engine pin but OMITTED from built_with: we cannot
+            # confirm the dump was prepped against this version. Fail closed — a
+            # partial built_with block (e.g. only `torch`) must not let a
+            # transformers/timm/peft drift pass unseen.
+            problems.append(
+                f"{key}: engine pin installs {have}, but it is absent from the "
+                f"manifest built_with (a partial block cannot hide a drift)"
+            )
+            continue
         if have is None:
             problems.append(f"{key}: manifest built_with={declared}, but not installed")
         elif have != declared:
@@ -171,6 +211,16 @@ def _verify_one(entry: dict, dumps_dir: Path, repo_root: Path) -> dict:
             result["detail"] = f"sha256 {actual} != manifest {entry['sha256']}"
             return result
 
+    if _ci_ram_skip_key(template):
+        # Skip the BUILD only — existence + sha above already ran. Constructing
+        # this template's fp32 params would exceed CI RAM and OOM the whole job.
+        result["category"] = SKIPPED_RAM
+        result["detail"] = (
+            "random-init construction exceeds CI runner RAM; build not attempted "
+            "(see _TOO_LARGE_FOR_CI_RAM)"
+        )
+        return result
+
     template_path = repo_root / template
     try:
         model = _build_ship(str(template_path))
@@ -197,7 +247,7 @@ def _summary(results: list[dict], transformers_version: str | None) -> str:
     for r in results:
         counts[r["category"]] = counts.get(r["category"], 0) + 1
     lines = [f"=== SUMMARY (transformers {transformers_version}) ==="]
-    for cat in (OK, KEY_MISMATCH, BUILD_FAIL, MISSING, SHA_MISMATCH):
+    for cat in (OK, KEY_MISMATCH, BUILD_FAIL, MISSING, SHA_MISMATCH, SKIPPED_RAM):
         if counts.get(cat):
             lines.append(f"  {cat:<14} {counts[cat]:>3}")
     return "\n".join(lines)
@@ -258,7 +308,9 @@ def run_sweep(
         if r["category"] != OK:
             print(f"  {r['category']:<14} {r['name']}: {r.get('detail', '')}")
 
-    failed = [r for r in results if r["category"] != OK]
+    # SKIPPED_RAM is a reported coverage gap, not a failure — it must not redden
+    # the gate (an OOM would have verified nothing at all).
+    failed = [r for r in results if r["category"] not in (OK, SKIPPED_RAM)]
     if failed or provenance_problems:
         print(
             f"\nFAIL: {len(failed)} dump(s) not OK, "
