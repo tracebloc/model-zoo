@@ -46,7 +46,7 @@ The averaging service averages model parameters per-tensor across clients. New p
 
 - **BatchNorm running stats** (`running_mean` / `running_var`) average poorly across non-IID clients. Either freeze BN layers (`eval()` + `requires_grad=False`) or replace with `GroupNorm` / `LayerNorm`.
 - **EMA buffers** (some detectors, Mamba SSMs) are not trained parameters — strip them or document the workaround.
-- **Foundation models** (Mitra, Chronos, ModernBERT-large, etc.) should be fine-tuned **LoRA-only** via `peft`. Freeze the base model and only the small adapter tensors get averaged. This is the only tractable path for >100M-param backbones over federated clients.
+- **Foundation models** (Mitra, Chronos, ModernBERT-large, etc.) should be fine-tuned **LoRA-only**, so only the small adapter tensors get averaged — the only tractable path for >100M-param backbones over federated clients. LoRA is selected in the **training plan** (the platform applies the adapter via the experiment configuration); it is **never** bundled into the model file. A model file that imports `peft` / builds its own `get_peft_model` wrapper is rejected by the server model-checker (its validation environment has no `peft`), and it changes the module tree the seed-weight dump has to strict-load against. The model file ships the plain backbone.
 
 ## File naming convention
 
