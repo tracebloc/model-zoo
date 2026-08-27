@@ -1,0 +1,124 @@
+name: Verify dumps against engine pin
+
+# Prevention half of backend#2641 (backend#2658). A prepped <base>_weights.pkl
+# state_dict's key layout is decided by the transformers/timm/torchvision
+# version that built the module tree, and the engine strict-loads seeds. So a
+# dump built under a different version than the engine pins is a silent,
+# edge-only training abort. This gate rebuilds each shipped template under the
+# ENGINE's pin and strict-loads the staged dump into it, and fails if the
+# engine pin drifts from what the dumps were built with.
+
+on:
+  pull_request:
+    branches: [develop]
+    paths:
+      - "model_zoo/**"
+      - "tools/prep_offline_weights.py"
+      - "tools/verify_dumps_against_engine_pin.py"
+      - "tools/requirements-engine-pin.txt"
+      - "manifest.json"
+      - ".github/workflows/verify-dumps-engine-pin.yml"
+  push:
+    branches: [develop]
+    paths:
+      - "model_zoo/**"
+      - "tools/prep_offline_weights.py"
+      - "tools/verify_dumps_against_engine_pin.py"
+      - "tools/requirements-engine-pin.txt"
+      - "manifest.json"
+      - ".github/workflows/verify-dumps-engine-pin.yml"
+  # An engine transformers bump invalidates hosted seeds WITHOUT touching this
+  # repo. The scheduled run makes the drift guard go red on such a bump even
+  # with no model-zoo change, so a seed-invalidating change fails loudly rather
+  # than stranding every dump silently (backend#2658 acceptance).
+  schedule:
+    - cron: "17 6 * * 1-5"
+  workflow_dispatch:
+    inputs:
+      engine-ref:
+        description: "tracebloc-engine ref to pin against"
+        default: develop
+
+concurrency:
+  group: verify-dumps-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+env:
+  ENGINE_REF: ${{ github.event.inputs.engine-ref || 'develop' }}
+
+jobs:
+  # 1) The mirror tools/requirements-engine-pin.txt must EQUAL the engine's live
+  #    pin. The engine is the single source of truth; this guard is what makes
+  #    the mirror safe to install from and what turns an engine `transformers`
+  #    bump red until the mirror (and then the dumps) are regenerated.
+  engine-pin-drift-guard:
+    timeout-minutes: 10
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # tracebloc-engine is a separate private repo; GITHUB_TOKEN cannot read it.
+      # Mint an installation token scoped to that one repo, contents:read only
+      # (same App as add-to-kanban.yml, least-privilege per backend#2166).
+      - name: Mint an engine-read token
+        id: engine-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.RELEASE_TRAIN_APP_ID }}
+          private-key: ${{ secrets.RELEASE_TRAIN_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: tracebloc-engine
+          permission-contents: read
+      - name: Check out the engine pin
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.repository_owner }}/tracebloc-engine
+          ref: ${{ env.ENGINE_REF }}
+          token: ${{ steps.engine-token.outputs.token }}
+          path: _engine
+          sparse-checkout: use_cases
+          sparse-checkout-cone-mode: false
+      - name: Assert the mirror matches the engine's pin
+        run: |
+          python3 tools/check_engine_pin_drift.py \
+            --mirror tools/requirements-engine-pin.txt \
+            --engine _engine/use_cases/requirements.txt \
+            --engine _engine/use_cases/requirements_cuda.txt
+
+  # 2) Rebuild each shipped template under the engine pin and strict-load its
+  #    staged dump. Fails closed on any KEY_MISMATCH / BUILD_FAIL / provenance
+  #    drift. Runs only after the mirror is confirmed == the engine.
+  verify-dumps:
+    needs: engine-pin-drift-guard
+    timeout-minutes: 30
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: tools/requirements-engine-pin.txt
+      # Install the engine's pinned stack (guard above proved it == the engine).
+      # A failure here is a hard error, never a swallowed green (fail-closed).
+      - run: pip install -r tools/requirements-engine-pin.txt
+      # Obtain the staged dumps. They are NOT committed (served from the
+      # tracebloc model store; hosting is backend#2659). When a manifest.json
+      # and a store-sync tool land, fetch the <base>_weights.pkl files into
+      # ./dist here. Until then there is no manifest and the sweep is an armed
+      # no-op. tools/sync_zoo_weights.py is the fetch hook (backend#2658 refs);
+      # wire it in when #2659 hosts the dumps.
+      - name: Obtain staged dumps from the model store
+        run: |
+          mkdir -p dist
+          if [ -f manifest.json ] && [ -x tools/sync_zoo_weights.py ]; then
+            python3 tools/sync_zoo_weights.py --manifest manifest.json --out dist
+          else
+            echo "No manifest.json / sync tool yet — dumps hosting is backend#2659."
+            echo "The verifier runs armed; it activates when a manifest lands."
+          fi
+      # The gate. Exits non-zero on any dump that cannot strict-load into its
+      # template under the engine pin, or any built_with-vs-engine drift.
+      - run: python3 tools/verify_dumps_against_engine_pin.py

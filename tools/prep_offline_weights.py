@@ -80,7 +80,15 @@ Usage
         --out   dist/bert_base_uncased_weights.pkl
 
 Run the prep build in an environment that allows the one-time download
-(network on, hub token exported for license-gated models).
+(network on, hub token exported for license-gated models) AND is pinned to the
+engine's dependency set — install ``tools/requirements-engine-pin.txt`` first.
+That pin mirrors the engine's ``use_cases/requirements.txt`` (transformers /
+timm / torch / torchvision / peft), which is the ONLY thing that makes a dump's
+key layout match what the edge builds. Record those versions in
+``manifest.json``'s schema-2 ``built_with`` block so
+``verify_dumps_against_engine_pin.py`` can gate them in CI (backend#2641,
+backend#2658). Prep and verify therefore share one environment definition; a
+drift between it and the engine is caught by the CI gate.
 
 The produced weight file is NOT committed to this repo — it is uploaded next
 to the template via ``upload_model(..., weights=True)`` and served from the
