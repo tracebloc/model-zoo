@@ -1,4 +1,4 @@
-"""TimesFM 2.0 (Google, 2024-2025). Decoder-only time-series foundation model; Chronos's main competitor and the leading zero-shot forecaster on GIFT-Eval as of 2025. LoRA-only fine-tune so federated averaging only syncs the adapter. A thin wrapper exposes the zoo's (B, L, N) → (B, H, N) tensor contract by flattening multivariate input to per-channel univariate calls.
+"""TimesFM 2.0 (Google, 2024-2025). Decoder-only time-series foundation model; Chronos's main competitor and the leading zero-shot forecaster on GIFT-Eval as of 2025. Select LoRA-only fine-tuning in the training plan so federated averaging only syncs the adapter. A thin wrapper exposes the zoo's (B, L, N) → (B, H, N) tensor contract by flattening multivariate input to per-channel univariate calls.
 
 Offline variant: the architecture is built from the inlined config below —
 no hub model id, no config fetch, no download at build time, so the template
@@ -12,8 +12,8 @@ sitting next to this file via ``weights=True``::
 See ``tools/prep_offline_weights.py`` for producing and verifying the
 matched weight file.
 """
+
 import torch.nn as nn
-from peft import LoraConfig, get_peft_model
 from transformers import TimesFmConfig, TimesFmModelForPrediction
 
 framework = "pytorch"
@@ -71,9 +71,10 @@ class _TimesFMWrapper(nn.Module):
         b, L, n = past_values.shape
         # (B, L, N) → (B*N, L)
         flat = past_values.permute(0, 2, 1).reshape(b * n, L)
-        # Standard differentiable forward through PEFT → TimesFmModelForPrediction.
+        # Standard differentiable forward through TimesFmModelForPrediction.
         # `TimesFmOutputForPrediction.mean_predictions` has shape (B*N, H), so
-        # LoRA adapters receive gradients in both training and inference.
+        # a LoRA adapter applied by the training plan receives gradients in
+        # both training and inference.
         out = self.base(past_values=flat)
         pred = out.mean_predictions  # (B*N, H)
         # If the model emitted more horizon than requested, trim to self.h.
@@ -89,9 +90,4 @@ def MyModel(forecast_horizon=forecast_horizon):
     # `last_hidden_state`, which would be hidden representations rather than
     # forecast values — silently corrupting fine-tuning gradients.
     base = TimesFmModelForPrediction(TimesFmConfig(**CONFIG))
-    lora_config = LoraConfig(
-        r=8, lora_alpha=16, lora_dropout=0.1, bias="none",
-        target_modules=["q_proj", "k_proj", "v_proj", "o_proj"],
-    )
-    base = get_peft_model(base, lora_config)
     return _TimesFMWrapper(base, forecast_horizon)

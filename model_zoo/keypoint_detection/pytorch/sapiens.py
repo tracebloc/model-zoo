@@ -26,11 +26,11 @@ matched weight file (weights of ``facebook/vit-mae-base``; the position
 embeddings are sized to the declared 256px input, freshly initialized —
 same as before via the checkpoint's size-mismatch reinit).
 
-Fine-tuned LoRA-only so federated averaging only syncs the adapter +
-the final regressor.
+Select LoRA-only fine-tuning in the training plan so federated averaging
+only syncs the adapter + the final regressor.
 """
+
 import torch.nn as nn
-from peft import LoraConfig, get_peft_model
 from transformers import AutoConfig, AutoModel
 
 framework = "pytorch"
@@ -75,7 +75,6 @@ class _SapiensWrapper(nn.Module):
     def __init__(self, backbone, num_feature_points):
         super().__init__()
         self.backbone = backbone
-        # PEFT-wrapped backbones expose the underlying config via `.config`
         hidden = backbone.config.hidden_size
         self.head = nn.Linear(hidden, num_feature_points * 3)
         self.num_feature_points = num_feature_points
@@ -87,29 +86,6 @@ class _SapiensWrapper(nn.Module):
         return coords
 
 
-def _lora_target_modules(model):
-    """Pick the attention-projection names this build actually exposes.
-
-    The naming is transformers-version-dependent: 5.8.x (the version the
-    engine pins) exposes ViT-MAE attention as ``query`` / ``key`` / ``value``
-    / ``dense``, while newer releases renamed them to ``q_proj`` / ``k_proj``
-    / ``v_proj`` / ``o_proj``. A hardcoded list therefore builds on one
-    version and raises ``Target modules not found`` on the other — which is
-    exactly what happened here: the list was pinned to the newer naming while
-    the fleet runs 5.8.0, so the template could not be constructed on the
-    edge at all. Resolve against the built module tree instead, so the
-    adapter lands on both and survives the next rename.
-    """
-    names = {name.rsplit(".", 1)[-1] for name, _ in model.named_modules()}
-    for candidate in (["q_proj", "v_proj"], ["query", "value"]):
-        if set(candidate) <= names:
-            return candidate
-    raise ValueError(
-        "No known attention-projection modules found for LoRA; saw: "
-        f"{sorted(n for n in names if any(k in n for k in ('proj', 'quer', 'val')))}"
-    )
-
-
 def MyModel(num_feature_points=num_feature_points):
     # ViT-MAE base ships at 224x224 by default; we declare 256 above to
     # match the rest of the keypoint model family. ``image_size`` is a
@@ -119,9 +95,4 @@ def MyModel(num_feature_points=num_feature_points):
     # The patch projection and attention weights carry the pretrained seed.
     config = AutoConfig.for_model(**CONFIG, image_size=image_size)
     base = AutoModel.from_config(config)
-    lora_config = LoraConfig(
-        r=8, lora_alpha=16, lora_dropout=0.1, bias="none",
-        target_modules=_lora_target_modules(base),
-    )
-    base = get_peft_model(base, lora_config)
     return _SapiensWrapper(base, num_feature_points)
