@@ -1,6 +1,21 @@
-"""Segmenter: pure-transformer segmentation model. Pick when you have a lot of data and GPU time."""
+"""Segmenter: pure-transformer segmentation model. Pick when you have a lot of data and GPU time.
+
+Offline variant: the architecture is built from the inlined config below —
+no hub model id, no config fetch, no download at build time, so the template
+constructs anywhere, network or not. The pretrained tensors are delivered
+from the tracebloc model store as the training seed: upload the matched
+``segmenter_weights.pkl`` sitting next to this file via ``weights=True``::
+
+    user.upload_model("segmenter", weights=True)
+
+See ``tools/prep_offline_weights.py`` for producing and verifying the
+matched weight file (weights of ``nvidia/segformer-b0-finetuned-ade-512-512``
+— this wrapper has always been backed by the SegFormer-B0 checkpoint; the
+decode head's classifier is sized to ``output_classes`` and freshly
+initialized).
+"""
 import torch.nn as nn
-from transformers import SegformerForSemanticSegmentation
+from transformers import AutoConfig, SegformerForSemanticSegmentation
 
 # Configuration
 framework = "pytorch"
@@ -10,55 +25,46 @@ batch_size = 8
 output_classes = 2
 category = "semantic_segmentation"
 
+# Architecture config for nvidia/segformer-b0-finetuned-ade-512-512
+# (SegformerForSemanticSegmentation, model_type "segformer"), inlined so
+# the model builds with no config fetch. The SDK uploads the .py plus its
+# named weight sibling — there is no config.json path — so the config lives
+# here in the template.
+CONFIG = {
+    "model_type": "segformer",
+    "num_channels": 3,
+    "num_encoder_blocks": 4,
+    "depths": [2, 2, 2, 2],
+    "sr_ratios": [8, 4, 2, 1],
+    "hidden_sizes": [32, 64, 160, 256],
+    "patch_sizes": [7, 3, 3, 3],
+    "strides": [4, 2, 2, 2],
+    "num_attention_heads": [1, 2, 5, 8],
+    "mlp_ratios": [4, 4, 4, 4],
+    "downsampling_rates": [1, 4, 8, 16],
+    "hidden_act": "gelu",
+    "hidden_dropout_prob": 0.0,
+    "attention_probs_dropout_prob": 0.0,
+    "classifier_dropout_prob": 0.1,
+    "drop_path_rate": 0.1,
+    "initializer_range": 0.02,
+    "layer_norm_eps": 1e-06,
+    "decoder_hidden_size": 256,
+    "reshape_last_stage": True,
+    "semantic_loss_ignore_index": 255,
+    "image_size": 224,
+}
+
 
 class Segmenter(nn.Module):
-    def __init__(self, model_name="nvidia/segformer-b0-finetuned-ade-512-512"):
+    def __init__(self):
         super(Segmenter, self).__init__()
-        
-        # Load Segformer model from Hugging Face
-        self.model = SegformerForSemanticSegmentation.from_pretrained(
-            model_name,
-            num_labels=output_classes,
-            ignore_mismatched_sizes=True
-        )
+
+        # Build the SegFormer-B0 architecture from the inlined config
+        config = AutoConfig.for_model(**CONFIG, num_labels=output_classes)
+        self.model = SegformerForSemanticSegmentation(config)
 
     def forward(self, x):
         # Segformer expects inputs in format (batch_size, channels, height, width)
         outputs = self.model(pixel_values=x)
         return outputs.logits
-
-
-# class SegmenterB0(Segmenter):
-#     """Segmenter with Segformer-B0 backbone"""
-#     def __init__(self):
-#         super(SegmenterB0, self).__init__(model_name="nvidia/segformer-b0-finetuned-ade-512-512")
-
-
-# class SegmenterB1(Segmenter):
-#     """Segmenter with Segformer-B1 backbone"""
-#     def __init__(self):
-#         super(SegmenterB1, self).__init__(model_name="nvidia/segformer-b1-finetuned-ade-512-512")
-
-
-# class SegmenterB2(Segmenter):
-#     """Segmenter with Segformer-B2 backbone"""
-#     def __init__(self):
-#         super(SegmenterB2, self).__init__(model_name="nvidia/segformer-b2-finetuned-ade-512-512")
-
-
-# class SegmenterB3(Segmenter):
-#     """Segmenter with Segformer-B3 backbone"""
-#     def __init__(self):
-#         super(SegmenterB3, self).__init__(model_name="nvidia/segformer-b3-finetuned-ade-512-512")
-
-
-# class SegmenterB4(Segmenter):
-#     """Segmenter with Segformer-B4 backbone"""
-#     def __init__(self):
-#         super(SegmenterB4, self).__init__(model_name="nvidia/segformer-b4-finetuned-ade-512-512")
-
-
-# class SegmenterB5(Segmenter):
-#     """Segmenter with Segformer-B5 backbone"""
-#     def __init__(self):
-#         super(SegmenterB5, self).__init__(model_name="nvidia/segformer-b5-finetuned-ade-512-512") 

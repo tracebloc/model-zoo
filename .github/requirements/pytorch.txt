@@ -4,3 +4,4 @@ torchvision
 transformers
 timm
 peft
+scipy

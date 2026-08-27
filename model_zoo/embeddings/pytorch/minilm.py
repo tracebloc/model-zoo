@@ -25,6 +25,7 @@ category = "embeddings"
 model_type = ""
 batch_size = 16
 sequence_length = 128
+vocab_size = 30522
 license = "Apache-2.0"
 
 # Architecture config for sentence-transformers/all-MiniLM-L6-v2 (a 6-layer
@@ -33,7 +34,7 @@ license = "Apache-2.0"
 # there is no config.json path — so the config lives here in the template.
 CONFIG = {
     "model_type": "bert",
-    "vocab_size": 30522,
+    "vocab_size": vocab_size,
     "hidden_size": 384,
     "num_hidden_layers": 6,
     "num_attention_heads": 12,
