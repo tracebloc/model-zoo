@@ -26,6 +26,7 @@ category = "seq2seq"
 model_type = ""
 batch_size = 8
 sequence_length = 128
+vocab_size = 32128
 license = "Apache-2.0"
 
 # Architecture config for t5-small, inlined so the model builds with no
@@ -34,7 +35,7 @@ license = "Apache-2.0"
 # template.
 CONFIG = {
     "model_type": "t5",
-    "vocab_size": 32128,
+    "vocab_size": vocab_size,
     "d_model": 512,
     "d_kv": 64,
     "d_ff": 2048,

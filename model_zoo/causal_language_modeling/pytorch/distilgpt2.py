@@ -28,6 +28,7 @@ batch_size = 8
 # distilgpt2 supports up to 1024 positions; the causal-LM uploader caps
 # sequence_length at max_position_embeddings=512.
 sequence_length = 128
+vocab_size = 50257
 license = "Apache-2.0"
 
 # Architecture config for distilgpt2, inlined so the model builds with no
@@ -36,7 +37,7 @@ license = "Apache-2.0"
 # template.
 CONFIG = {
     "model_type": "gpt2",
-    "vocab_size": 50257,
+    "vocab_size": vocab_size,
     "n_positions": 1024,
     "n_embd": 768,
     "n_layer": 6,
