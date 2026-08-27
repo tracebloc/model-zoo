@@ -87,6 +87,29 @@ class _SapiensWrapper(nn.Module):
         return coords
 
 
+def _lora_target_modules(model):
+    """Pick the attention-projection names this build actually exposes.
+
+    The naming is transformers-version-dependent: 5.8.x (the version the
+    engine pins) exposes ViT-MAE attention as ``query`` / ``key`` / ``value``
+    / ``dense``, while newer releases renamed them to ``q_proj`` / ``k_proj``
+    / ``v_proj`` / ``o_proj``. A hardcoded list therefore builds on one
+    version and raises ``Target modules not found`` on the other — which is
+    exactly what happened here: the list was pinned to the newer naming while
+    the fleet runs 5.8.0, so the template could not be constructed on the
+    edge at all. Resolve against the built module tree instead, so the
+    adapter lands on both and survives the next rename.
+    """
+    names = {name.rsplit(".", 1)[-1] for name, _ in model.named_modules()}
+    for candidate in (["q_proj", "v_proj"], ["query", "value"]):
+        if set(candidate) <= names:
+            return candidate
+    raise ValueError(
+        "No known attention-projection modules found for LoRA; saw: "
+        f"{sorted(n for n in names if any(k in n for k in ('proj', 'quer', 'val')))}"
+    )
+
+
 def MyModel(num_feature_points=num_feature_points):
     # ViT-MAE base ships at 224x224 by default; we declare 256 above to
     # match the rest of the keypoint model family. ``image_size`` is a
@@ -98,11 +121,7 @@ def MyModel(num_feature_points=num_feature_points):
     base = AutoModel.from_config(config)
     lora_config = LoraConfig(
         r=8, lora_alpha=16, lora_dropout=0.1, bias="none",
-        # transformers 5.x exposes ViT-MAE attention as ``q_proj`` /
-        # ``k_proj`` / ``v_proj`` / ``o_proj`` (the pre-5.x ``query`` /
-        # ``value`` naming no longer exists), so the LoRA target list has
-        # to match that naming for the adapter wrap to land.
-        target_modules=["q_proj", "v_proj"],
+        target_modules=_lora_target_modules(base),
     )
     base = get_peft_model(base, lora_config)
     return _SapiensWrapper(base, num_feature_points)
