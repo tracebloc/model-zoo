@@ -1,7 +1,19 @@
+# Pinned to tracebloc-engine's runtime versions so CI validates templates
+# against what the fleet actually runs (backend#2658).
+#
+# Unpinned, CI resolved the latest releases (transformers 5.12.x) while the
+# engine pins 5.8.0 — so a template could pass here and be broken on the edge.
+# That is not hypothetical: sapiens' LoRA target_modules were written for
+# 5.12's attention naming, CI went green, and the template could not be
+# constructed on the edge at all (backend#2641).
+#
+# torch/torchvision come from tracebloc-engine's Dockerfile.base.text.cpu;
+# the rest from its use_cases/requirements.txt. Bump these together with the
+# engine's pins, never ahead of them.
 pytest
-torch
-torchvision
-transformers
-timm
-peft
+torch==2.11.0
+torchvision==0.26.0
+transformers==5.8.0
+timm==1.0.26
+peft==0.19.1
 scipy
