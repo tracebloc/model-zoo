@@ -80,6 +80,11 @@ jobs:
           ref: ${{ env.ENGINE_REF }}
           token: ${{ steps.engine-token.outputs.token }}
           path: _engine
+          # Don't leave the App token in _engine/.git/config: the PR's own
+          # check_engine_pin_drift.py runs next and a same-repo PR could
+          # otherwise read it to fetch private tracebloc-engine beyond these
+          # two files. We only need the token for the checkout itself.
+          persist-credentials: false
           sparse-checkout: |
             use_cases/requirements.txt
             use_cases/requirements_cuda.txt
