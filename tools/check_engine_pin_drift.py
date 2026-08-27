@@ -27,6 +27,15 @@ import re
 import sys
 from pathlib import Path
 
+# Single source of truth for which pins are dump-invalidating, shared with the
+# verifier so the two tools cannot disagree. tools/ is on sys.path when this is
+# run as a script (python tools/check_engine_pin_drift.py); make the import work
+# regardless of the invoking cwd.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from verify_dumps_against_engine_pin import (  # noqa: E402
+    _PROVENANCE_KEYS as _REQUIRED_PINS,
+)
+
 _EXACT = re.compile(r"^([A-Za-z0-9._-]+)==([^\s#]+)")
 
 
@@ -54,6 +63,16 @@ def main() -> int:
         engine.update(_exact_pins(Path(eng_path)))
 
     problems: list[str] = []
+    # Fail closed on an emptied, comment-only, or partial mirror: the loop below
+    # only walks pins that ARE present, so a mirror that drops a load-bearing pin
+    # (or has none at all) would otherwise pass vacuously and stop turning the
+    # schedule red on an engine bump — the only alarm while dumps are unhosted.
+    for pkg in _REQUIRED_PINS:
+        if pkg not in mirror:
+            problems.append(
+                f"{pkg}: REQUIRED exact pin is missing from the mirror — an "
+                "emptied/comment-only/partial mirror must not pass the drift check"
+            )
     for pkg, ver in sorted(mirror.items()):
         eng_ver = engine.get(pkg)
         if eng_ver is None:
