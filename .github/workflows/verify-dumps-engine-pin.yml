@@ -15,6 +15,7 @@ on:
       - "model_zoo/**"
       - "tools/prep_offline_weights.py"
       - "tools/verify_dumps_against_engine_pin.py"
+      - "tools/check_engine_pin_drift.py"
       - "tools/requirements-engine-pin.txt"
       - "manifest.json"
       - ".github/workflows/verify-dumps-engine-pin.yml"
@@ -24,6 +25,7 @@ on:
       - "model_zoo/**"
       - "tools/prep_offline_weights.py"
       - "tools/verify_dumps_against_engine_pin.py"
+      - "tools/check_engine_pin_drift.py"
       - "tools/requirements-engine-pin.txt"
       - "manifest.json"
       - ".github/workflows/verify-dumps-engine-pin.yml"
@@ -113,7 +115,7 @@ jobs:
       - name: Obtain staged dumps from the model store
         run: |
           mkdir -p dist
-          if [ -f manifest.json ] && [ -x tools/sync_zoo_weights.py ]; then
+          if [ -f manifest.json ] && [ -f tools/sync_zoo_weights.py ]; then
             python3 tools/sync_zoo_weights.py --manifest manifest.json --out dist
           else
             echo "No manifest.json / sync tool yet — dumps hosting is backend#2659."
