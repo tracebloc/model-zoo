@@ -12,6 +12,7 @@ See ``tools/prep_offline_weights.py`` for producing and verifying the
 matched weight file (weights of ``facebook/hiera-tiny-224-in1k-hf``; the
 classification head is sized to ``output_classes`` and freshly initialized).
 """
+import torch.nn as nn
 from transformers import AutoConfig, AutoModelForImageClassification
 
 framework = "pytorch"
@@ -53,6 +54,25 @@ CONFIG = {
 }
 
 
+class Hiera(nn.Module):
+    """Wraps the HF classifier so ``forward`` returns a plain logits tensor.
+
+    ``HieraForImageClassification`` returns a
+    ``HieraForImageClassificationOutput`` dataclass, which the training loop
+    hands straight to the loss — ``cross_entropy`` then rejects it
+    ("argument 'input' must be Tensor, not HieraForImageClassificationOutput").
+    Every sibling HF template here (vit_google, aimv2, dinov3, siglip2) already
+    unwraps to a tensor; this one did not.
+    """
+
+    def __init__(self, num_classes=output_classes):
+        super().__init__()
+        config = AutoConfig.for_model(**CONFIG, num_labels=num_classes)
+        self.hiera = AutoModelForImageClassification.from_config(config)
+
+    def forward(self, pixel_values):
+        return self.hiera(pixel_values=pixel_values).logits
+
+
 def MyModel(num_classes=output_classes):
-    config = AutoConfig.for_model(**CONFIG, num_labels=num_classes)
-    return AutoModelForImageClassification.from_config(config)
+    return Hiera(num_classes=num_classes)
