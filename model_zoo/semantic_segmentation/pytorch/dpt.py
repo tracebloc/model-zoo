@@ -1,5 +1,18 @@
-"""DPT — Dense Prediction Transformer (Intel ISL, ICCV 2021). ViT backbone with a dense prediction head; primarily known for depth but the semantic-segmentation variant is a strong reference baseline on ADE20K."""
-from transformers import DPTForSemanticSegmentation, DPTConfig
+"""DPT — Dense Prediction Transformer (Intel ISL, ICCV 2021). ViT backbone with a dense prediction head; primarily known for depth but the semantic-segmentation variant is a strong reference baseline on ADE20K.
+
+Offline variant: the architecture is built from the inlined config below —
+no hub model id, no config fetch, no download at build time, so the template
+constructs anywhere, network or not. The pretrained tensors are delivered
+from the tracebloc model store as the training seed: upload the matched
+``dpt_weights.pkl`` sitting next to this file via ``weights=True``::
+
+    user.upload_model("dpt", weights=True)
+
+See ``tools/prep_offline_weights.py`` for producing and verifying the
+matched weight file (weights of ``Intel/dpt-large-ade``; the segmentation
+head is sized to ``output_classes`` and freshly initialized).
+"""
+from transformers import AutoConfig, AutoModelForSemanticSegmentation
 
 framework = "pytorch"
 main_method = "MyModel"
@@ -9,11 +22,47 @@ batch_size = 4
 output_classes = 2
 category = "semantic_segmentation"
 
-_PRETRAINED_ID = "Intel/dpt-large-ade"
+# Architecture config for Intel/dpt-large-ade (DPTForSemanticSegmentation,
+# model_type "dpt"), inlined so the model builds with no config fetch. The
+# SDK uploads the .py plus its named weight sibling — there is no
+# config.json path — so the config lives here in the template.
+CONFIG = {
+    "model_type": "dpt",
+    "hidden_size": 1024,
+    "intermediate_size": 4096,
+    "num_hidden_layers": 24,
+    "num_attention_heads": 16,
+    "num_channels": 3,
+    "image_size": 384,
+    "patch_size": 16,
+    "hidden_act": "gelu",
+    "hidden_dropout_prob": 0.0,
+    "attention_probs_dropout_prob": 0.0,
+    "initializer_range": 0.02,
+    "layer_norm_eps": 1e-12,
+    "qkv_bias": True,
+    "is_hybrid": False,
+    "backbone_config": None,
+    "backbone_featmap_shape": None,
+    "backbone_out_indices": [5, 11, 17, 23],
+    "readout_type": "project",
+    "reassemble_factors": [4, 2, 1, 0.5],
+    "neck_hidden_sizes": [256, 512, 1024, 1024],
+    "neck_ignore_stages": [],
+    "fusion_hidden_size": 256,
+    "use_batch_norm_in_fusion_residual": True,
+    "use_bias_in_fusion_residual": None,
+    "add_projection": False,
+    "head_in_index": -1,
+    "use_auxiliary_head": True,
+    "auxiliary_loss_weight": 0.4,
+    "semantic_loss_ignore_index": 255,
+    "semantic_classifier_dropout": 0.1,
+    "pooler_output_size": 1024,
+    "pooler_act": "tanh",
+}
 
 
 def MyModel(num_classes=output_classes):
-    config = DPTConfig.from_pretrained(_PRETRAINED_ID, num_labels=num_classes)
-    return DPTForSemanticSegmentation.from_pretrained(
-        _PRETRAINED_ID, config=config, ignore_mismatched_sizes=True
-    )
+    config = AutoConfig.for_model(**CONFIG, num_labels=num_classes)
+    return AutoModelForSemanticSegmentation.from_config(config)

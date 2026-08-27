@@ -101,51 +101,40 @@ def _missing_optional_deps(path: pathlib.Path) -> list[str]:
     return missing
 
 
-# A template "fetches from the hub" — and so cannot be constructed in CI
-# without pulling weights over the network — if it does any of:
-#   - HuggingFace `from_pretrained(...)`                 -> transformers / timm hub
+# Runtime hub-fetch patterns forbidden under model_zoo/ (RFC-0003 D6 /
+# backend#1501). The HuggingFace hub is a closed door: a template must build
+# from local library code or an inlined config, never pull weights, configs, or
+# datasets over the network at construction time. Forbidden:
+#   - HuggingFace `from_pretrained(...)` / `hf_hub_download` / `snapshot_download`
+#   - `datasets.load_dataset(...)`                       -> HuggingFace hub
 #   - torchvision `weights="DEFAULT"` (any "UPPER" id)   -> download.pytorch.org
 #   - a torchvision `<Arch>_Weights.<MEMBER>` enum value -> download.pytorch.org
-# The last two also download ImageNet/COCO checkpoints, so matching only
-# `from_pretrained` let them slip through and made CI fetch them anyway.
+#   - `pretrained=True` (timm / torchvision legacy)      -> checkpoint download
+#   - `torch.hub.load(...)` / `load_state_dict_from_url` -> arbitrary URL fetch
 # Local builds (`pretrained=False`, `weights=None`, timm `create_model(...,
-# pretrained=False)`) match none of these and stay covered by the test.
-_HUB_FETCH = re.compile(
+# pretrained=False)`, `AutoConfig.for_model(...)` + `from_config`) match none of
+# these and are the required offline pattern.
+_RUNTIME_HUB_FETCH = re.compile(
     r"from_pretrained"
+    r"|hf_hub_download"
+    r"|snapshot_download"
+    r"|load_dataset"
     r"|weights\s*=\s*[\"'][A-Z]"
     r"|_Weights\."
+    r"|pretrained\s*=\s*True"
+    r"|torch\.hub\.load"
+    r"|load_state_dict_from_url"
 )
 
 
-def _fetches_from_hub(path: pathlib.Path) -> bool:
-    """Does this template pull a model/config from an external hub to build?
-
-    Those templates cannot be constructed in a test without network:
-    `from_pretrained` downloads from the HuggingFace hub (some are
-    multi-gigabyte — gemma_2, sam2), and torchvision builders asked
-    for pretrained checkpoints — `weights="DEFAULT"` or a `<Arch>_Weights.*`
-    enum — pull ImageNet/COCO weights from download.pytorch.org. They are
-    excluded from the instantiation test rather than making CI download the
-    world. Templates that build their architecture from local library code —
-    the ones a `create_model("name")` typo can break silently, plus torchvision
-    builders called with `pretrained=False`/`weights=None` — are all still
-    covered.
-    """
-    try:
-        text = path.read_text(encoding="utf-8")
-    except (OSError, UnicodeDecodeError):
-        return False
-    return bool(_HUB_FETCH.search(text))
-
-
 # Offline-migrated templates (#156) build from an inlined config with no hub
-# fetch, so they fall out of _HUB_FETCH and become constructible in tests —
-# which is the point. But construction materializes the full fp32 random-init
-# parameter set in RAM, and for multi-billion-parameter templates that
-# exceeds the ~16GB of a standard ubuntu-latest runner (gemma_2: ~2.6B params
-# -> ~10.5GB for the tensors alone, before torch/test overhead). These were
-# already skipped before their migration (they matched _HUB_FETCH), so
-# skipping them here loses no coverage — it merely keeps the OOM out of CI.
+# fetch, so they are constructible in tests — which is the point. But
+# construction materializes the full fp32 random-init parameter set in RAM, and
+# for multi-billion-parameter templates that exceeds the ~16GB of a standard
+# ubuntu-latest runner (gemma_2: ~2.6B params -> ~10.5GB for the tensors alone,
+# before torch/test overhead). This is the ONLY reason a template is excluded
+# from the instantiation test — a RAM ceiling, never a network dependency (the
+# hub is closed; see test_no_runtime_hub_fetch_patterns).
 # Keyed on the path relative to MODEL_ROOT (posix), not the basename: 19
 # basenames are duplicated across task directories (e.g. bert_base_uncased.py
 # in both text_classification and sentence_pair_classification), so a
@@ -220,10 +209,14 @@ def test_model_instantiates(path: pathlib.Path) -> None:
     arguments" is the weakest promise it can make. Architecture names are
     looked up in a third-party registry (timm, torchvision) at construction
     time, and nothing else in this repo checks that those strings resolve.
-    """
-    if _read_framework(path) is not None and _fetches_from_hub(path):
-        pytest.skip("builds from an external hub — needs network, see _fetches_from_hub")
 
+    The whole session runs with the HuggingFace hub closed (tests/conftest.py:
+    HF_HUB_OFFLINE / TRANSFORMERS_OFFLINE / HF_DATASETS_OFFLINE), so this also
+    proves every template builds offline. There is no "fetches from the hub"
+    skip any more — a template that needs a runtime fetch is a bug caught here
+    (offline construction error) and at the source by
+    test_no_runtime_hub_fetch_patterns.
+    """
     if _ci_ram_skip_key(path) in _TOO_LARGE_FOR_CI_RAM:
         pytest.skip(
             "random-init construction exceeds CI runner RAM, see _TOO_LARGE_FOR_CI_RAM"
@@ -239,6 +232,34 @@ def test_model_instantiates(path: pathlib.Path) -> None:
 
     model = entry()
     assert model is not None, f"{path}: {entry_name}() returned None"
+
+
+def test_no_runtime_hub_fetch_patterns() -> None:
+    """No template may fetch from a remote hub at construction time.
+
+    The HuggingFace hub is a closed door (RFC-0003 D6 / backend#1501): the
+    offline-weights migration (#182-#193) removed every runtime fetch, and this
+    guard keeps the door shut. It fails at the SOURCE — a reintroduced
+    `from_pretrained` / `pretrained=True` / `load_dataset` / torchvision
+    pretrained checkpoint is caught here even for a template that a given CI
+    job's framework matrix does not instantiate. Comment text is ignored so
+    prose that merely names a pattern does not trip the guard.
+    """
+    offenders = []
+    for path in _model_files():
+        try:
+            lines = path.read_text(encoding="utf-8").splitlines()
+        except (OSError, UnicodeDecodeError):
+            continue
+        for lineno, line in enumerate(lines, start=1):
+            code = line.split("#", 1)[0]
+            if _RUNTIME_HUB_FETCH.search(code):
+                offenders.append(f"{path.relative_to(ROOT)}:{lineno}: {line.strip()}")
+    assert not offenders, (
+        "runtime hub-fetch pattern(s) found under model_zoo/ — the HuggingFace "
+        "hub is a closed door, build from an inlined config / uploaded weights "
+        "(RFC-0003 D6 / backend#1501):\n" + "\n".join(offenders)
+    )
 
 
 def test_ci_ram_skip_entries_exist() -> None:
