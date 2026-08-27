@@ -60,6 +60,10 @@ The averaging service averages model parameters per-tensor across clients. New p
 
 If a user wants to ship pretrained weights alongside `mymodel.py`, name them `mymodel_weights.pkl` and place them in the same directory. The zoo itself does not bundle weight files.
 
+### Prepping offline-weight dumps is pinned to the engine
+
+A prepped `<base>_weights.pkl` state_dict's key layout is fixed by the transformers/timm/torchvision version that built the module tree, and the engine strict-loads seeds — so a dump built under a different version than the engine pins is a silent, edge-only training abort (backend#2641). Prep AND verify therefore run against one pinned environment, `tools/requirements-engine-pin.txt`, which mirrors the engine's `use_cases/requirements.txt` (the single source of truth). Install that file before running `tools/prep_offline_weights.py`, and record the versions in `manifest.json`'s schema-2 `built_with` block. CI (`.github/workflows/verify-dumps-engine-pin.yml`) enforces both: `tools/check_engine_pin_drift.py` fails if the mirror drifts from the live engine pin, and `tools/verify_dumps_against_engine_pin.py` rebuilds each shipped template under that pin and strict-loads every staged dump — so an engine `transformers` bump turns the gate red instead of stranding hosted seeds (backend#2658).
+
 ## Tokenizer convention (NLP models)
 
 Every NLP model (`text_classification`, `token_classification`, `masked_language_modeling`, `causal_language_modeling`) must declare a tokenizer — it is the federation's single source of truth, distributed to every client (issue #805). The rule depends on whether the model is a HuggingFace model (exposes `.config`) or a plain `nn.Module`:
