@@ -26,11 +26,11 @@ matched weight file (weights of ``facebook/vit-mae-base``; the position
 embeddings are sized to the declared 256px input, freshly initialized —
 same as before via the checkpoint's size-mismatch reinit).
 
-Fine-tuned LoRA-only so federated averaging only syncs the adapter +
-the final regressor.
+Select LoRA-only fine-tuning in the training plan so federated averaging
+only syncs the adapter + the final regressor.
 """
+
 import torch.nn as nn
-from peft import LoraConfig, get_peft_model
 from transformers import AutoConfig, AutoModel
 
 framework = "pytorch"
@@ -75,7 +75,6 @@ class _SapiensWrapper(nn.Module):
     def __init__(self, backbone, num_feature_points):
         super().__init__()
         self.backbone = backbone
-        # PEFT-wrapped backbones expose the underlying config via `.config`
         hidden = backbone.config.hidden_size
         self.head = nn.Linear(hidden, num_feature_points * 3)
         self.num_feature_points = num_feature_points
@@ -96,13 +95,4 @@ def MyModel(num_feature_points=num_feature_points):
     # The patch projection and attention weights carry the pretrained seed.
     config = AutoConfig.for_model(**CONFIG, image_size=image_size)
     base = AutoModel.from_config(config)
-    lora_config = LoraConfig(
-        r=8, lora_alpha=16, lora_dropout=0.1, bias="none",
-        # transformers 5.x exposes ViT-MAE attention as ``q_proj`` /
-        # ``k_proj`` / ``v_proj`` / ``o_proj`` (the pre-5.x ``query`` /
-        # ``value`` naming no longer exists), so the LoRA target list has
-        # to match that naming for the adapter wrap to land.
-        target_modules=["q_proj", "v_proj"],
-    )
-    base = get_peft_model(base, lora_config)
     return _SapiensWrapper(base, num_feature_points)
