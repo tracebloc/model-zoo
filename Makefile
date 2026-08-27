@@ -124,11 +124,18 @@ install-hooks:
 	      'done' \
 	      '[ "$$had_update" = 0 ] && exit 0' \
 	      '#' \
-	      '# Degrade gracefully when the toolchain is absent: GUI/IDE git clients' \
-	      '# (Tower, GitKraken, VS Code) launch hooks with a minimal PATH, so make' \
-	      '# may be missing — and several do not expose --no-verify. Skipping beats' \
-	      '# hard-blocking every push with "make: command not found".' \
-	      'command -v make >/dev/null 2>&1 || exit 0' \
+	      '# Degrade gracefully when the TOOLCHAIN is absent, not just the runner:' \
+	      '# GUI/IDE git clients (Tower, GitKraken, VS Code) launch hooks with a' \
+	      '# minimal PATH, so make OR the python that make check drives its lint' \
+	      '# and tests through may be missing — and several of these clients do' \
+	      '# not expose --no-verify. Guarding make alone still reached "exec make' \
+	      '# check" and hard-blocked the push with a python-not-found error; test' \
+	      '# every tool the check will invoke and skip if ANY is absent — the guard' \
+	      '# tests the toolchain the runner needs, not just the runner (backend#1995,' \
+	      '# tracebloc-website#501).' \
+	      'for tool in make python3; do' \
+	      '  command -v "$$tool" >/dev/null 2>&1 || exit 0' \
+	      'done' \
 	      '#' \
 	      '# Git exports GIT_DIR/GIT_WORK_TREE/etc into hook processes; a nested git' \
 	      '# invocation (from a test, tool, or setuptools-scm) then fails in a linked' \
