@@ -227,3 +227,29 @@ def test_too_large_entries_exist():
         assert (model_root / entry).is_file(), (
             f"_TOO_LARGE_FOR_CI_RAM entry {entry!r} does not exist under model_zoo/"
         )
+
+
+def test_too_large_set_matches_contract_suite():
+    """The verifier's _TOO_LARGE_FOR_CI_RAM must stay byte-equal to the contract
+    suite's set. Two hand-maintained copies would otherwise drift, and a newly
+    skipped large template would still be BUILT here and could OOM the sweep."""
+    mod = _tool()
+    spec = importlib.util.spec_from_file_location(
+        "_contract_for_skipset", ROOT / "tests" / "test_model_contract.py"
+    )
+    assert spec and spec.loader
+    contract = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(contract)
+    assert mod._TOO_LARGE_FOR_CI_RAM == contract._TOO_LARGE_FOR_CI_RAM
+
+
+def test_present_manifest_with_empty_dumps_is_red(tmp_path):
+    """A PRESENT manifest that declares no dumps must fail closed (exit 2): it
+    protects nothing while looking green. Only an ABSENT manifest is the intended
+    armed-green no-op."""
+    mod = _tool()
+    dumps = _write_dumps(tmp_path)
+    manifest = tmp_path / "manifest.json"
+    manifest.write_text(json.dumps({"schema": 2, "built_with": {}, "dumps": []}))
+    rc = mod.run_sweep(manifest, dumps, tmp_path, tmp_path / "report.json", False, True)
+    assert rc == 2

@@ -47,8 +47,9 @@ Manifest schema (v2)
 --------------------
     {
       "schema": 2,
-      "built_with": {"torch": "2.11.0", "transformers": "5.8.0",
-                     "timm": "1.0.26", "peft": "0.19.1"},
+      "built_with": {"torch": "2.11.0", "torchvision": "0.26.0",
+                     "transformers": "5.8.0", "timm": "1.0.26",
+                     "peft": "0.19.1"},
       "dumps": [
         {"name": "bert_base_uncased",
          "template": "model_zoo/text_classification/pytorch/bert_base_uncased.py",
@@ -78,8 +79,10 @@ from pathlib import Path
 # Package versions to reconcile against manifest["built_with"]. The engine pins
 # every one of these; transformers is the load-bearing one (it restructures HF
 # module trees between releases), but a drift in any is a dump-invalidating
-# change, so all are checked.
-_PROVENANCE_KEYS = ("torch", "transformers", "timm", "peft")
+# change, so all are checked. torchvision is included because it likewise
+# determines the key layout of torchvision-detector/keypoint templates and the
+# engine mirror pins it.
+_PROVENANCE_KEYS = ("torch", "torchvision", "transformers", "timm", "peft")
 
 OK = "OK"
 KEY_MISMATCH = "KEY_MISMATCH"
@@ -278,6 +281,18 @@ def run_sweep(
     manifest = json.loads(manifest_path.read_text())
     built_with = manifest.get("built_with", {})
     dumps = manifest.get("dumps", [])
+
+    if not dumps:
+        # A PRESENT manifest that declares no dumps verifies nothing while looking
+        # green. The only intended no-op is an ABSENT manifest (handled above);
+        # a stub manifest is a fail-closed condition, not a successful sweep.
+        print(
+            f"FAIL (fail-closed): manifest {manifest_path} exists but its 'dumps' "
+            "list is missing or empty — it protects nothing. Remove the manifest "
+            "to arm the gate, or populate it.",
+            file=sys.stderr,
+        )
+        return 2
 
     provenance_problems: list[str] = []
     if check_provenance:
