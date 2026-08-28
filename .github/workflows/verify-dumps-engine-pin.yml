@@ -16,6 +16,8 @@ on:
       - "tools/prep_offline_weights.py"
       - "tools/verify_dumps_against_engine_pin.py"
       - "tools/check_engine_pin_drift.py"
+      - "tools/derive_seed_excluded.py"
+      - "tools/seed_contract.py"
       - "tools/requirements-engine-pin.txt"
       - "manifest.json"
       - ".github/workflows/verify-dumps-engine-pin.yml"
@@ -26,6 +28,8 @@ on:
       - "tools/prep_offline_weights.py"
       - "tools/verify_dumps_against_engine_pin.py"
       - "tools/check_engine_pin_drift.py"
+      - "tools/derive_seed_excluded.py"
+      - "tools/seed_contract.py"
       - "tools/requirements-engine-pin.txt"
       - "manifest.json"
       - ".github/workflows/verify-dumps-engine-pin.yml"
@@ -162,3 +166,79 @@ jobs:
       # The gate. Exits non-zero on any dump that cannot strict-load into its
       # template under the engine pin, or any built_with-vs-engine drift.
       - run: python3 tools/verify_dumps_against_engine_pin.py
+
+  # 3) SEED_EXCLUDED_PREFIXES must keep agreeing with what the template BUILDS.
+  #
+  #    The constant is a literal, and a literal rots. `seed_contract.py apply`
+  #    runs once, at authoring time; from then on the templates restate a
+  #    derivation that nothing re-runs. Rename `fc.` to `head.`, add a layer, and
+  #    the declaration is quietly wrong -- after which a seed either carries head
+  #    weights it must not, or excludes keys that no longer exist. That is the
+  #    failure the backbone-only contract exists to remove, coming back through
+  #    the declaration instead of the load (Lukas, model-zoo#217).
+  #
+  #    So the derivation is the CHECK rather than the authoring step. It runs
+  #    under the ENGINE's pinned stack for the same reason `verify-dumps` does: a
+  #    head's shape is decided by the libraries that build the module tree, so a
+  #    derivation under any other stack describes a model nobody runs.
+  #
+  #    SCOPE IS DELIBERATE. Each template is BUILT TWICE, so re-deriving all 46
+  #    every PR is ~92 model builds -- slow enough that people would route around
+  #    it. A PR re-derives only the templates it TOUCHES, which is exactly where
+  #    drift is introduced; the scheduled run re-derives everything, which is
+  #    where a drift introduced any other way gets caught.
+  seed-contract-drift:
+    needs: engine-pin-drift-guard
+    timeout-minutes: 30
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # `git diff base...HEAD` needs the merge base, not a shallow tip.
+          fetch-depth: 0
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: tools/requirements-engine-pin.txt
+      # The drift guard above proved this mirror == the engine's live pin.
+      - run: pip install -r tools/requirements-engine-pin.txt
+      - name: Decide which templates to re-derive
+        id: scope
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" != "pull_request" ]; then
+            echo "reason=full sweep (${{ github.event_name }})" >> "$GITHUB_OUTPUT"
+            echo "only=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          base="origin/${{ github.base_ref }}"
+          changed="$(git diff --name-only "$base...HEAD")"
+          # A change to the tooling can move EVERY answer, so it forces a full
+          # sweep -- narrowing to touched templates there would be checking the
+          # new tool against the files least likely to expose its bug.
+          if echo "$changed" | grep -qE '^tools/(derive_seed_excluded|seed_contract)\.py$'; then
+            echo "reason=full sweep (seed-contract tooling changed)" >> "$GITHUB_OUTPUT"
+            echo "only=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          stems="$(echo "$changed" \
+            | grep -E '^model_zoo/[^/]+/pytorch/[^/]+\.py$' \
+            | sed -E 's#.*/##; s#\.py$##' | sort -u | tr '\n' ' ')"
+          echo "reason=changed templates: ${stems:-none}" >> "$GITHUB_OUTPUT"
+          echo "only=$stems" >> "$GITHUB_OUTPUT"
+      - name: Re-derive and compare against the declared constants
+        run: |
+          set -euo pipefail
+          echo "Scope: ${{ steps.scope.outputs.reason }}"
+          only="${{ steps.scope.outputs.only }}"
+          if [ "${{ github.event_name }}" = "pull_request" ] && [ -z "$only" ] \
+             && ! echo "${{ steps.scope.outputs.reason }}" | grep -q '^full sweep'; then
+            echo "No template touched — nothing to re-derive."
+            exit 0
+          fi
+          # $only is a deliberate word-split list of template stems.
+          # shellcheck disable=SC2086
+          python3 tools/derive_seed_excluded.py --zoo . --out seed_derived.json \
+            ${only:+--only $only}
+          python3 tools/seed_contract.py --zoo . check --verdict seed_derived.json

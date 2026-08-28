@@ -80,6 +80,81 @@ def _insert(src: str, block: str) -> str:
     return "".join(lines[:anchor]) + "\n" + block + "".join(lines[anchor:])
 
 
+def cmd_check(zoo: Path, verdict: Path) -> int:
+    """Fail if any template's DECLARED head disagrees with the DERIVED one.
+
+    THE DECLARATION IS A LITERAL, AND A LITERAL ROTS. ``apply`` runs once, at
+    authoring time, and from then on 46 templates restate a derivation nobody
+    re-runs. Rename ``fc.`` to ``head.``, add a layer, and the constant is
+    quietly wrong -- after which a seed either carries head weights it should
+    not or excludes keys that no longer exist. That is the failure this whole
+    contract exists to remove, coming back through the declaration instead of
+    the load (Lukas, model-zoo#217).
+
+    So the derivation is the CHECK, not the authoring step. Two ways to be
+    wrong, and both are failures rather than one being a warning:
+
+    * declared != derived  -- the head moved and the constant did not.
+    * has a head, declares nothing -- a new template that never got a constant
+      would otherwise ship a head-carrying seed and fail on the first dataset
+      whose class count differs, which is exactly backend#2660's five failures.
+    """
+    results = json.loads(verdict.read_text(encoding="utf-8"))
+    root = zoo / "model_zoo" if (zoo / "model_zoo").is_dir() else zoo
+    checked = 0
+    drifted: List[str] = []
+
+    for key, record in sorted(results.items()):
+        category, stem = key.split("/", 1)
+        path = root / category / "pytorch" / f"{stem}.py"
+        if not path.is_file():
+            drifted.append(f"{key}: template not found at {path}")
+            continue
+
+        status = record.get("status")
+        declared = read_prefixes(path)
+
+        if status in {"NO_HEAD", "NO_CLASS_CONSTANT"}:
+            # No head: declaring one would exclude keys the seed must carry.
+            if declared:
+                drifted.append(
+                    f"{key}: declares {declared} but the derivation finds no "
+                    f"class-dependent parameter ({status})"
+                )
+            checked += 1
+            continue
+        if status != "OK":
+            drifted.append(f"{key}: derivation returned {status} — cannot be checked")
+            continue
+
+        derived = tuple(record["prefixes"])
+        if declared is None:
+            drifted.append(
+                f"{key}: has a head {derived} but declares no {CONSTANT} — its "
+                f"seed would carry head weights"
+            )
+        elif declared != derived:
+            drifted.append(f"{key}: declares {declared}, derivation says {derived}")
+        checked += 1
+
+    print(f"{checked} template(s) checked, {len(drifted)} drifted")
+    if drifted:
+        print(
+            f"\n{CONSTANT} disagrees with what the template actually builds:",
+            file=sys.stderr,
+        )
+        for line in drifted:
+            print(f"  {line}", file=sys.stderr)
+        print(
+            "\nRe-derive and re-apply rather than editing the constant by hand:\n"
+            "  python3 tools/derive_seed_excluded.py --zoo . --out /tmp/seed.json\n"
+            "  python3 tools/seed_contract.py --zoo . apply --verdict /tmp/seed.json",
+            file=sys.stderr,
+        )
+        return 1
+    return 0
+
+
 def cmd_apply(zoo: Path, verdict: Path, dry_run: bool) -> int:
     results = json.loads(verdict.read_text(encoding="utf-8"))
     root = zoo / "model_zoo" if (zoo / "model_zoo").is_dir() else zoo
@@ -223,12 +298,17 @@ def main(argv=None) -> int:
     a = sub.add_parser("apply", help="write SEED_EXCLUDED_PREFIXES into templates")
     a.add_argument("--verdict", required=True, help="derive_seed_excluded.py --out")
 
+    c = sub.add_parser("check", help="fail if a declared head != the derived one")
+    c.add_argument("--verdict", required=True, help="derive_seed_excluded.py --out")
+
     s = sub.add_parser("strip", help="derive backbone-only dumps from staged ones")
     s.add_argument("--weights", required=True, help="staged full dumps")
     s.add_argument("--dest", required=True, help="where backbone-only seeds go")
 
     args = parser.parse_args(argv)
     zoo = Path(args.zoo).expanduser()
+    if args.cmd == "check":
+        return cmd_check(zoo, Path(args.verdict).expanduser())
     if args.cmd == "apply":
         return cmd_apply(zoo, Path(args.verdict).expanduser(), args.dry_run)
     return cmd_strip(
