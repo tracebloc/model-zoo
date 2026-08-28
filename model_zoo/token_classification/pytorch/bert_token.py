@@ -19,6 +19,13 @@ matched weight file.
 
 from transformers import AutoModelForTokenClassification, AutoConfig
 
+# backend#2642 — the task head is NOT carried by the hosted seed.
+# The seed holds the backbone; the head initialises fresh from output_classes,
+# which is where the dataset's class count lands. Derived mechanically by
+# tools/derive_seed_excluded.py (build twice, diff the shapes) — regenerate it
+# rather than editing by hand if this model's head changes.
+SEED_EXCLUDED_PREFIXES = ("classifier.",)
+
 framework = "pytorch"
 main_class = "MyModel"
 category = "token_classification"
