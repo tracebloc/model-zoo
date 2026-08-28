@@ -240,7 +240,22 @@ jobs:
           done <<EOF
           $(echo "$changed" | grep -E '^model_zoo/[^/]+/pytorch/[^/]+\.py$' || true)
           EOF
-          stems="$(echo "$stems" | tr ' ' '\n' | sort -u | tr '\n' ' ')"
+          # DEDUPE ONLY IF THERE IS SOMETHING TO DEDUPE (Bugbot). Running the
+          # empty string through `tr | sort -u | tr` yields a single SPACE, not
+          # "", so `[ -z "$only" ]` never held and `${only:+--only $only}` still
+          # emitted a bare `--only` -- which made a PR touching no template
+          # re-derive the entire zoo, the exact opposite of this step's purpose.
+          #
+          # My first "proof" of this step printed "${stems## }", which strips the
+          # leading space and so displayed [] for a value that was " ". The test
+          # below asserts the RAW length instead.
+          if [ -n "${stems// /}" ]; then
+            stems="$(echo "$stems" | tr ' ' '\n' | sort -u | tr '\n' ' ')"
+            stems="${stems# }"
+            stems="${stems% }"
+          else
+            stems=""
+          fi
           echo "reason=changed templates: ${stems:-none}" >> "$GITHUB_OUTPUT"
           echo "only=$stems" >> "$GITHUB_OUTPUT"
       - name: Re-derive and compare against the declared constants
