@@ -225,8 +225,20 @@ jobs:
           # A change to the tooling can move EVERY answer, so it forces a full
           # sweep -- narrowing to touched templates there would be checking the
           # new tool against the files least likely to expose its bug.
-          if echo "$changed" | grep -qE '^tools/(derive_seed_excluded|seed_contract|seed_index)\.py$'; then
-            echo "reason=full sweep (seed-contract tooling changed)" >> "$GITHUB_OUTPUT"
+          #
+          # THE PIN COUNTS AS TOOLING, and missing that was a real hole (Bugbot):
+          # a head's shape is decided by the LIBRARY VERSIONS that build the
+          # module tree, so bumping `requirements-engine-pin.txt` can stale every
+          # prefix while the dumps still strict-load at each template's default.
+          # That PR triggers this workflow via `paths:` but touches no template,
+          # so it would have exited "nothing to re-derive" and gone green on the
+          # one change most able to invalidate the constants. The weekday sweep
+          # would find it eventually; the PR that caused it would not.
+          #
+          # The workflow file is here for the same reason: editing the gate
+          # should re-run the gate in full, not trust it narrowed correctly.
+          if echo "$changed" | grep -qE '^(tools/(derive_seed_excluded|seed_contract|seed_index)\.py|tools/requirements-engine-pin\.txt|\.github/workflows/verify-dumps-engine-pin\.yml)$'; then
+            echo "reason=full sweep (seed-contract tooling or engine pin changed)" >> "$GITHUB_OUTPUT"
             echo "only=" >> "$GITHUB_OUTPUT"
             exit 0
           fi
