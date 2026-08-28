@@ -31,9 +31,16 @@ import json
 import shutil
 import sys
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List
 
-CONSTANT = "SEED_EXCLUDED_PREFIXES"
+from seed_index import (  # noqa: E402 — sibling tool module, same directory
+    AmbiguousTemplate,
+    CONSTANT,
+    build_index,
+    read_prefixes,
+    resolve,
+    zoo_root,
+)
 
 _DOC = f"""# backend#2642 — the task head is NOT carried by the hosted seed.
 # The seed holds the backbone; the head initialises fresh from output_classes,
@@ -41,19 +48,6 @@ _DOC = f"""# backend#2642 — the task head is NOT carried by the hosted seed.
 # tools/derive_seed_excluded.py (build twice, diff the shapes) — regenerate it
 # rather than editing by hand if this model's head changes.
 """
-
-
-def read_prefixes(path: Path) -> Optional[Tuple[str, ...]]:
-    """The template's declared head prefixes, or None if it declares none."""
-    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
-    for node in tree.body:
-        if not isinstance(node, ast.Assign):
-            continue
-        for target in node.targets:
-            if isinstance(target, ast.Name) and target.id == CONSTANT:
-                value = ast.literal_eval(node.value)
-                return tuple(value)
-    return None
 
 
 def _render(prefixes: List[str]) -> str:
@@ -100,7 +94,7 @@ def cmd_check(zoo: Path, verdict: Path) -> int:
       whose class count differs, which is exactly backend#2660's five failures.
     """
     results = json.loads(verdict.read_text(encoding="utf-8"))
-    root = zoo / "model_zoo" if (zoo / "model_zoo").is_dir() else zoo
+    root = zoo_root(zoo)
     checked = 0
     drifted: List[str] = []
 
@@ -157,7 +151,7 @@ def cmd_check(zoo: Path, verdict: Path) -> int:
 
 def cmd_apply(zoo: Path, verdict: Path, dry_run: bool) -> int:
     results = json.loads(verdict.read_text(encoding="utf-8"))
-    root = zoo / "model_zoo" if (zoo / "model_zoo").is_dir() else zoo
+    root = zoo_root(zoo)
     written = skipped = 0
     blocked: List[str] = []
 
@@ -217,25 +211,24 @@ def _sha256(path: Path) -> str:
 def cmd_strip(zoo: Path, weights: Path, dest: Path, dry_run: bool) -> int:
     import torch
 
-    root = zoo / "model_zoo" if (zoo / "model_zoo").is_dir() else zoo
-    templates: Dict[str, Path] = {}
-    for category in sorted(p.name for p in root.iterdir() if p.is_dir()):
-        for path in (root / category / "pytorch").glob("*.py"):
-            templates.setdefault(path.stem, path)
+    # ONE resolver, shared with verify_backbone_seeds — a stem is not unique
+    # (`bert_base_uncased` ships in two categories) and `.setdefault()` used to
+    # let one silently win (Bugbot, model-zoo#217).
+    index = build_index(zoo)
 
     entries: Dict[str, Dict] = {}
     problems: List[str] = []
     dest.mkdir(parents=True, exist_ok=True)
 
     for directory in sorted(p.name for p in weights.iterdir() if p.is_dir()):
-        stem = directory
-        for prefix in ("sentence_pair_",):
-            if stem.startswith(prefix):
-                stem = stem[len(prefix) :]
         dump = weights / directory / f"{directory}_weights.pkl"
-        template = templates.get(stem)
-        if not dump.is_file() or template is None:
-            problems.append(f"{directory}: dump or template missing")
+        try:
+            _, template = resolve(index, directory)
+        except AmbiguousTemplate as exc:
+            problems.append(str(exc))
+            continue
+        if not dump.is_file():
+            problems.append(f"{directory}: no dump at {dump}")
             continue
 
         prefixes = read_prefixes(template)

@@ -38,6 +38,7 @@ Every model file defines:
 - `main_class` OR `main_method`: the symbol the SDK loads (class for `nn.Module` subclasses, function for factory-style models)
 - `category`: must match the task directory name
 - `batch_size`, `output_classes`, plus task-specific fields (`image_size`, `num_feature_points`, `sequence_length`, `forecast_horizon`, etc.)
+- `SEED_EXCLUDED_PREFIXES` (models with a task head): the state_dict key prefixes whose shape depends on `output_classes` — i.e. the head. A hosted pretrained seed carries the **backbone only** and the head initialises fresh, because the linked dataset decides `output_classes` and a seed carrying the head fits only the one class count it was built with (backend#2642). **Do not write it by hand:** it is derived by `tools/derive_seed_excluded.py` (build the template twice at different class counts, diff the state_dict shapes) and applied by `tools/seed_contract.py apply`. CI re-derives and fails on drift — see the weight-file section.
 - `license` (recommended for new files): SPDX-style string such as `"Apache-2.0"`, `"MIT"`, `"AGPL-3.0"`, or `"non-commercial"`. Lets downstream tooling filter models by license — important since some pretrained weights ship under restrictive terms.
 
 ## Federated averaging conventions
@@ -63,6 +64,14 @@ If a user wants to ship pretrained weights alongside `mymodel.py`, name them `my
 ### Prepping offline-weight dumps is pinned to the engine
 
 A prepped `<base>_weights.pkl` state_dict's key layout is fixed by the transformers/timm/torchvision version that built the module tree, and the engine strict-loads seeds — so a dump built under a different version than the engine pins is a silent, edge-only training abort (backend#2641). Prep AND verify therefore run against one pinned environment, `tools/requirements-engine-pin.txt`, which mirrors the engine's `use_cases/requirements.txt` (the single source of truth). Install that file before running `tools/prep_offline_weights.py`, and record the versions in `manifest.json`'s schema-2 `built_with` block. CI (`.github/workflows/verify-dumps-engine-pin.yml`) enforces both: `tools/check_engine_pin_drift.py` fails if the mirror drifts from the live engine pin, and `tools/verify_dumps_against_engine_pin.py` rebuilds each shipped template under that pin and strict-loads every staged dump — so an engine `transformers` bump turns the gate red instead of stranding hosted seeds (backend#2658).
+
+### A seed carries the backbone, not the head
+
+`SEED_EXCLUDED_PREFIXES` (above) names each template's head, and the tooling reads that one declaration on both sides: `tools/seed_contract.py strip` removes exactly those keys when building a seed, and the loaders allow exactly those keys to be missing. Neither side restates the other, so they cannot drift apart.
+
+The declaration is a literal, so CI re-derives it rather than trusting it: `seed-contract-drift` in `.github/workflows/verify-dumps-engine-pin.yml` rebuilds the templates a PR touches (the scheduled run does all of them) under the engine's pinned stack and fails when a declared head disagrees with the derived one — or when a template that *has* a head declares nothing. Re-run `tools/derive_seed_excluded.py` and re-apply rather than editing a constant by hand.
+
+`tools/verify_backbone_seeds.py` checks the other half: each seed must load into a model built at a class count no dump ever had, with an unexpected key failing, a missing key failing unless the template declared it, and a shape mismatch failing.
 
 ## Tokenizer convention (NLP models)
 

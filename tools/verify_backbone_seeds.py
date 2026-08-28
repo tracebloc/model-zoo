@@ -39,18 +39,16 @@ os.environ["TRANSFORMERS_OFFLINE"] = "1"
 #: head shape no staged dump was ever built with.
 PROBE_CLASSES = 7
 CLASS_CONSTANTS = ("output_classes", "num_feature_points")
-CONSTANT = "SEED_EXCLUDED_PREFIXES"
 
-
-def read_prefixes(path: Path) -> Tuple[str, ...]:
-    import ast
-
-    for node in ast.parse(path.read_text(encoding="utf-8")).body:
-        if isinstance(node, ast.Assign):
-            for target in node.targets:
-                if isinstance(target, ast.Name) and target.id == CONSTANT:
-                    return tuple(ast.literal_eval(node.value))
-    return ()
+# Same resolver and same reader as seed_contract — a stem is not unique
+# (`bert_base_uncased` ships in two categories), and indexing by basename let one
+# silently win in BOTH tools (Bugbot, model-zoo#217). Fixed once, imported twice.
+from seed_index import (  # noqa: E402 — after the offline env is set, deliberately
+    AmbiguousTemplate,
+    build_index,
+    read_prefixes,
+    resolve as resolve_one,
+)
 
 
 def build_at(path: Path, value: int, tmp: Path):
@@ -105,24 +103,22 @@ def main(argv=None) -> int:
     import torch
 
     zoo, weights = Path(args.zoo).expanduser(), Path(args.weights).expanduser()
-    root = zoo / "model_zoo" if (zoo / "model_zoo").is_dir() else zoo
-    templates: Dict[str, Path] = {}
-    for category in sorted(p.name for p in root.iterdir() if p.is_dir()):
-        for path in (root / category / "pytorch").glob("*.py"):
-            templates.setdefault(path.stem, path)
+    index = build_index(zoo)
 
     results: Dict[str, Dict] = {}
     for directory in sorted(p.name for p in weights.iterdir() if p.is_dir()):
-        stem = directory
-        for prefix in ("sentence_pair_",):
-            if stem.startswith(prefix):
-                stem = stem[len(prefix) :]
         dump = weights / directory / f"{directory}_weights.pkl"
-        path = templates.get(stem)
-        if path is None or not dump.is_file():
-            results[directory] = {"status": "NO_TEMPLATE_OR_DUMP"}
+        try:
+            _, path = resolve_one(index, directory)
+        except AmbiguousTemplate as exc:
+            results[directory] = {"status": "AMBIGUOUS", "detail": str(exc)}
+            path = None
+        if path is None:
+            pass
+        elif not dump.is_file():
+            results[directory] = {"status": "NO_DUMP", "detail": str(dump)}
         else:
-            prefixes = read_prefixes(path)
+            prefixes = read_prefixes(path) or ()
             with tempfile.TemporaryDirectory(prefix="tb-bbverify-") as raw:
                 try:
                     model = build_at(path, PROBE_CLASSES, Path(raw))
