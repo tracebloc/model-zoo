@@ -150,3 +150,33 @@ def resolve(
         f"directory names no category. Add a DUMP_DIR_CATEGORY_PREFIXES entry, or "
         f"rename the dump directory to `<category-prefix>_{stem}`."
     )
+
+
+#: WHICH CONSTANTS ARE OUTPUT-SEMANTIC, PER CATEGORY — shared, because one
+#: constant name means OPPOSITE things in different families and every tool that
+#: probes a template has to agree about it.
+#:
+#: A head key is a key whose shape depends on the model's OUTPUT shape, so a
+#: prober may only vary constants that describe outputs.
+#:
+#: * `output_classes` is output-semantic everywhere.
+#: * `num_feature_points` is output-semantic ONLY for keypoint_detection, where
+#:   the head is literally `nn.Linear(num_features, num_feature_points * 3)` —
+#:   the number of keypoints predicted. In the tabular and time-series families
+#:   the SAME NAME is the INPUT feature count (`tcn` passes it to `num_inputs`).
+#:
+#: THIS LIVES HERE RATHER THAN IN THE DERIVER because it was fixed in the
+#: deriver and left wrong in `verify_backbone_seeds`, which went on rewriting
+#: both constants — so a backbone seed sized to a real feature count would fail
+#: the verifier's shape check the moment it was pointed at those families
+#: (Bugbot, model-zoo#217). Same instance-not-the-class mistake as the stem
+#: lookup earlier in this PR; one definition removes the third chance.
+CLASS_CONSTANTS_BY_CATEGORY = {
+    "keypoint_detection": ("output_classes", "num_feature_points"),
+}
+DEFAULT_CLASS_CONSTANTS = ("output_classes",)
+
+
+def class_constants(category: str):
+    """The constants that describe THIS category's output shape."""
+    return CLASS_CONSTANTS_BY_CATEGORY.get(category, DEFAULT_CLASS_CONSTANTS)

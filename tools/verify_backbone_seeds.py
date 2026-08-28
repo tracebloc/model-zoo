@@ -38,7 +38,6 @@ os.environ["TRANSFORMERS_OFFLINE"] = "1"
 #: Deliberately not a round number and not any template's default: the point is a
 #: head shape no staged dump was ever built with.
 PROBE_CLASSES = 7
-CLASS_CONSTANTS = ("output_classes", "num_feature_points")
 
 # Same resolver and same reader as seed_contract — a stem is not unique
 # (`bert_base_uncased` ships in two categories), and indexing by basename let one
@@ -46,14 +45,23 @@ CLASS_CONSTANTS = ("output_classes", "num_feature_points")
 from seed_index import (  # noqa: E402 — after the offline env is set, deliberately
     AmbiguousTemplate,
     build_index,
+    class_constants,
     read_prefixes,
     resolve as resolve_one,
 )
 
 
-def build_at(path: Path, value: int, tmp: Path):
+def build_at(path: Path, value: int, tmp: Path, category: str):
+    """Build the template with its OUTPUT-shape constants set to `value`.
+
+    The category is required, not optional: `num_feature_points` is an output
+    for keypoint and an INPUT for tabular/time-series, so rewriting it blindly
+    resizes the input projection and the seed then fails a shape check it should
+    have passed (Bugbot, model-zoo#217). `class_constants` is the one definition,
+    shared with the deriver.
+    """
     src = path.read_text(encoding="utf-8")
-    for name in CLASS_CONSTANTS:
+    for name in class_constants(category):
         src = re.sub(rf"(?m)^{name}\s*=\s*\S+", f"{name} = {value}", src, count=1)
     target = tmp / f"probe_{path.stem}.py"
     target.write_text(src, encoding="utf-8")
@@ -109,7 +117,7 @@ def main(argv=None) -> int:
     for directory in sorted(p.name for p in weights.iterdir() if p.is_dir()):
         dump = weights / directory / f"{directory}_weights.pkl"
         try:
-            _, path = resolve_one(index, directory)
+            category, path = resolve_one(index, directory)
         except AmbiguousTemplate as exc:
             results[directory] = {"status": "AMBIGUOUS", "detail": str(exc)}
             path = None
@@ -121,7 +129,7 @@ def main(argv=None) -> int:
             prefixes = read_prefixes(path) or ()
             with tempfile.TemporaryDirectory(prefix="tb-bbverify-") as raw:
                 try:
-                    model = build_at(path, PROBE_CLASSES, Path(raw))
+                    model = build_at(path, PROBE_CLASSES, Path(raw), category)
                     state = torch.load(dump, weights_only=True, map_location="cpu")
                     ok, detail = check(model, state, prefixes)
                     results[directory] = {

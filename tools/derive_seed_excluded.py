@@ -37,7 +37,10 @@ import tempfile
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
-from seed_index import ci_ram_skips  # noqa: E402 — sibling tool module
+from seed_index import (  # noqa: E402 — sibling tool module
+    ci_ram_skips,
+    class_constants,
+)
 
 # The seed verifier's isolation, for the same reason it has it: a warm hub cache
 # makes an offline build succeed on a template that would abort on a closed edge.
@@ -50,33 +53,7 @@ os.environ["TRANSFORMERS_OFFLINE"] = "1"
 #: "no head".
 PROBE_A, PROBE_B = 7, 13
 
-#: WHICH CONSTANTS ARE OUTPUT-SEMANTIC, PER CATEGORY — and this map exists
-#: because one constant name means OPPOSITE things in different families.
-#:
-#: A head key is a key whose shape depends on the model's OUTPUT shape, so the
-#: derivation may only vary constants that describe outputs.
-#:
-#: * `output_classes` is output-semantic everywhere.
-#: * `num_feature_points` is output-semantic ONLY for keypoint_detection, where
-#:   the head is literally `nn.Linear(num_features, num_feature_points * 3)` —
-#:   the number of keypoints predicted. In the tabular and time-series families
-#:   the SAME NAME is the INPUT feature count (`tcn` passes it straight to
-#:   `num_inputs`).
-#:
-#: Both naive rules are wrong, and the CI sweep caught each in turn
-#: (model-zoo#217): varying both reported input projections as "head" across 30+
-#: tabular/TS templates, which would drop weights a seed must carry; varying only
-#: `output_classes` reported the whole keypoint family as NO_HEAD, which would
-#: un-protect the very templates whose head-shape failure started this contract.
-CLASS_CONSTANTS_BY_CATEGORY = {
-    "keypoint_detection": ("output_classes", "num_feature_points"),
-}
-DEFAULT_CLASS_CONSTANTS = ("output_classes",)
-
-
-def class_constants(category: str):
-    """The constants that describe THIS category's output shape."""
-    return CLASS_CONSTANTS_BY_CATEGORY.get(category, DEFAULT_CLASS_CONSTANTS)
+# Output-semantics live in seed_index so every prober agrees — see there.
 
 
 def _rewrite_constants(src: str, value: int, category: str) -> Tuple[str, List[str]]:
