@@ -189,7 +189,13 @@ jobs:
   #    where a drift introduced any other way gets caught.
   seed-contract-drift:
     needs: engine-pin-drift-guard
-    timeout-minutes: 30
+    # 60, not 30, and the reason is the full-sweep path rather than the common
+    # one. A PR touching a few templates finishes in minutes; a PR touching the
+    # seed-contract TOOLING re-derives all ~140, and each is BUILT TWICE. That
+    # measured ~30 minutes locally with a warm cache, which is exactly the
+    # budget -- so the sweep this gate exists for would be the run that times
+    # out, and a timeout reads as a broken gate rather than a slow one.
+    timeout-minutes: 60
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
