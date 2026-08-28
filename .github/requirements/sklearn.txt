@@ -1,6 +1,24 @@
+# Pinned to tracebloc-engine's runtime versions so CI validates templates
+# against what the fleet actually runs (backend#2658, backend#2752).
+#
+# Unpinned, CI resolved whatever PyPI served that day while the engine pins
+# the versions below — so a template could pass here and be broken on the
+# edge, silently, and only for customers. That is not hypothetical: the same
+# gap on the pytorch env let sapiens' LoRA target_modules (written for
+# transformers 5.12's attention naming, against the engine's 5.8.0) go green
+# in CI and fail to construct at all on the edge (backend#2641).
+#
+# All of these come from tracebloc-engine's use_cases/requirements.txt. Bump
+# them together with the engine's pins, never ahead of them. That ordering is
+# the entire point -- and it is a comment, not a check, until backend#2753
+# lands the scheduled drift detection.
+#
+# pytest is deliberately NOT pinned: it does not appear in the engine's
+# requirements, so there is nothing to sync it to, and inventing a pin would
+# assert an agreement that does not exist. Same call as the pytorch env.
 pytest
-scikit-learn
-xgboost
-lightgbm
-catboost
-interpret
+scikit-learn==1.8.0
+xgboost==3.2.0
+lightgbm==4.6.0
+catboost==1.2.10
+interpret==0.6.9
