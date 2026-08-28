@@ -46,7 +46,7 @@ The averaging service averages model parameters per-tensor across clients. New p
 
 - **BatchNorm running stats** (`running_mean` / `running_var`) average poorly across non-IID clients. Either freeze BN layers (`eval()` + `requires_grad=False`) or replace with `GroupNorm` / `LayerNorm`.
 - **EMA buffers** (some detectors, Mamba SSMs) are not trained parameters — strip them or document the workaround.
-- **Foundation models** (Mitra, Chronos, ModernBERT-large, etc.) should be fine-tuned **LoRA-only** via `peft`. Freeze the base model and only the small adapter tensors get averaged. This is the only tractable path for >100M-param backbones over federated clients.
+- **Foundation models** (Mitra, Chronos, ModernBERT-large, etc.) should be fine-tuned **LoRA-only**, so only the small adapter tensors get averaged — the only tractable path for >100M-param backbones over federated clients. LoRA is selected in the **training plan** (the platform applies the adapter via the experiment configuration); it is **never** bundled into the model file. A model file that imports `peft` / builds its own `get_peft_model` wrapper is rejected by the server model-checker (its validation environment has no `peft`), and it changes the module tree the seed-weight dump has to strict-load against. The model file ships the plain backbone.
 
 ## File naming convention
 
@@ -59,6 +59,10 @@ The averaging service averages model parameters per-tensor across clients. New p
 ## Weight file convention
 
 If a user wants to ship pretrained weights alongside `mymodel.py`, name them `mymodel_weights.pkl` and place them in the same directory. The zoo itself does not bundle weight files.
+
+### Prepping offline-weight dumps is pinned to the engine
+
+A prepped `<base>_weights.pkl` state_dict's key layout is fixed by the transformers/timm/torchvision version that built the module tree, and the engine strict-loads seeds — so a dump built under a different version than the engine pins is a silent, edge-only training abort (backend#2641). Prep AND verify therefore run against one pinned environment, `tools/requirements-engine-pin.txt`, which mirrors the engine's `use_cases/requirements.txt` (the single source of truth). Install that file before running `tools/prep_offline_weights.py`, and record the versions in `manifest.json`'s schema-2 `built_with` block. CI (`.github/workflows/verify-dumps-engine-pin.yml`) enforces both: `tools/check_engine_pin_drift.py` fails if the mirror drifts from the live engine pin, and `tools/verify_dumps_against_engine_pin.py` rebuilds each shipped template under that pin and strict-loads every staged dump — so an engine `transformers` bump turns the gate red instead of stranding hosted seeds (backend#2658).
 
 ## Tokenizer convention (NLP models)
 
