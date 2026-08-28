@@ -28,7 +28,7 @@ from torchvision.ops import misc as misc_nn_ops
 from torchvision.ops.feature_pyramid_network import LastLevelP6P7
 
 framework = "pytorch"
-model_type = "fcos"
+model_type = "torchvision_detection"
 main_method = "MyModel"
 license = "BSD-3-Clause"
 image_size = 448
