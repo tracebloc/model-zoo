@@ -18,7 +18,7 @@ matched weight file.
 from transformers import DetrForObjectDetection, DetrConfig
 
 framework = "pytorch"
-model_type = "detr"
+model_type = "hf_transformer"
 main_method = "MyModel"
 license = "Apache-2.0"
 image_size = 800
