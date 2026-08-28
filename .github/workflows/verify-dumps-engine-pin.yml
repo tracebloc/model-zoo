@@ -18,6 +18,7 @@ on:
       - "tools/check_engine_pin_drift.py"
       - "tools/derive_seed_excluded.py"
       - "tools/seed_contract.py"
+      - "tools/seed_index.py"
       - "tools/requirements-engine-pin.txt"
       - "manifest.json"
       - ".github/workflows/verify-dumps-engine-pin.yml"
@@ -30,6 +31,7 @@ on:
       - "tools/check_engine_pin_drift.py"
       - "tools/derive_seed_excluded.py"
       - "tools/seed_contract.py"
+      - "tools/seed_index.py"
       - "tools/requirements-engine-pin.txt"
       - "manifest.json"
       - ".github/workflows/verify-dumps-engine-pin.yml"
@@ -223,14 +225,22 @@ jobs:
           # A change to the tooling can move EVERY answer, so it forces a full
           # sweep -- narrowing to touched templates there would be checking the
           # new tool against the files least likely to expose its bug.
-          if echo "$changed" | grep -qE '^tools/(derive_seed_excluded|seed_contract)\.py$'; then
+          if echo "$changed" | grep -qE '^tools/(derive_seed_excluded|seed_contract|seed_index)\.py$'; then
             echo "reason=full sweep (seed-contract tooling changed)" >> "$GITHUB_OUTPUT"
             echo "only=" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          stems="$(echo "$changed" \
-            | grep -E '^model_zoo/[^/]+/pytorch/[^/]+\.py$' \
-            | sed -E 's#.*/##; s#\.py$##' | sort -u | tr '\n' ' ')"
+          # `|| true` because grep exits 1 on NO MATCH, and `pipefail` would
+          # turn "this PR touches no template" into a failed job. `-e` on each
+          # path drops templates the PR DELETED -- `--only` on a stem that no
+          # longer exists makes the derivation exit 2.
+          stems=""
+          while IFS= read -r f; do
+            [ -n "$f" ] && [ -e "$f" ] && stems="$stems $(basename "$f" .py)"
+          done <<EOF
+          $(echo "$changed" | grep -E '^model_zoo/[^/]+/pytorch/[^/]+\.py$' || true)
+          EOF
+          stems="$(echo "$stems" | tr ' ' '\n' | sort -u | tr '\n' ' ')"
           echo "reason=changed templates: ${stems:-none}" >> "$GITHUB_OUTPUT"
           echo "only=$stems" >> "$GITHUB_OUTPUT"
       - name: Re-derive and compare against the declared constants

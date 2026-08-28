@@ -85,18 +85,24 @@ def cmd_check(zoo: Path, verdict: Path) -> int:
     contract exists to remove, coming back through the declaration instead of
     the load (Lukas, model-zoo#217).
 
-    So the derivation is the CHECK, not the authoring step. Two ways to be
-    wrong, and both are failures rather than one being a warning:
+    So the derivation is the CHECK, not the authoring step.
 
-    * declared != derived  -- the head moved and the constant did not.
-    * has a head, declares nothing -- a new template that never got a constant
-      would otherwise ship a head-carrying seed and fail on the first dataset
-      whose class count differs, which is exactly backend#2660's five failures.
+    FATAL: ``declared != derived`` -- the head moved and the constant did not.
+    Also fatal: a template that declares a head the derivation says it has not
+    got, since excluding those keys would drop weights the seed must carry.
+
+    REPORTED, NOT FATAL: a template that HAS a head and declares nothing. Having
+    a head and shipping a hosted seed are different things, and most of the
+    pytorch tree is the former without being the latter. That becomes fatal when
+    backend#2659 lands ``manifest.json`` and "hosted" is checkable -- see the
+    comment at the call site.
     """
     results = json.loads(verdict.read_text(encoding="utf-8"))
     root = zoo_root(zoo)
     checked = 0
     drifted: List[str] = []
+    undeclared: List[str] = []
+    skipped: List[str] = []
 
     for key, record in sorted(results.items()):
         category, stem = key.split("/", 1)
@@ -108,6 +114,11 @@ def cmd_check(zoo: Path, verdict: Path) -> int:
         status = record.get("status")
         declared = read_prefixes(path)
 
+        if status == "SKIPPED_CI_RAM":
+            # Not built, so nothing was derived to compare against. A skip is not
+            # a pass and must not read like one — counted separately.
+            skipped.append(key)
+            continue
         if status in {"NO_HEAD", "NO_CLASS_CONSTANT"}:
             # No head: declaring one would exclude keys the seed must carry.
             if declared:
@@ -123,15 +134,43 @@ def cmd_check(zoo: Path, verdict: Path) -> int:
 
         derived = tuple(record["prefixes"])
         if declared is None:
-            drifted.append(
-                f"{key}: has a head {derived} but declares no {CONSTANT} — its "
-                f"seed would carry head weights"
-            )
+            # NOT FATAL, AND THE REASON IS SCOPE (Bugbot, model-zoo#217).
+            #
+            # Having a head and shipping a hosted SEED are different things. The
+            # contract binds templates whose seed is hosted; the rest of the
+            # pytorch tree has class-sized layers too (`resnet_18`,
+            # `faster_rcnn_resnet`, the whole tabular/TS family) and was never in
+            # scope here. Failing the full sweep on those would red the weekday
+            # run and every tooling PR over templates this change never claimed.
+            #
+            # The honest gate is "declared AND hosted", and the artifact that
+            # knows which templates are hosted is `manifest.json` — which arrives
+            # with backend#2659. Until then this is reported, not fatal, and the
+            # same "armed no-op until a manifest lands" shape the `verify-dumps`
+            # job already uses in this workflow.
+            undeclared.append(f"{key}: has a head {derived}, declares nothing")
         elif declared != derived:
             drifted.append(f"{key}: declares {declared}, derivation says {derived}")
         checked += 1
 
-    print(f"{checked} template(s) checked, {len(drifted)} drifted")
+    print(
+        f"{checked} template(s) checked, {len(drifted)} drifted, "
+        f"{len(undeclared)} head-bearing but undeclared, "
+        f"{len(skipped)} skipped (too large for CI RAM)"
+    )
+    for line in skipped:
+        print(f"  skipped: {line}")
+    if undeclared:
+        # Printed in full rather than counted: "N undeclared" invites nobody to
+        # look, and this list is the queue for whatever comes into scope next.
+        print(
+            f"\nNOT FAILING THE BUILD — {len(undeclared)} template(s) have a head "
+            "but declare nothing. They are out of the hosted-seed scope today; "
+            "this becomes fatal when backend#2659 lands manifest.json and "
+            "'hosted' is checkable:"
+        )
+        for line in undeclared:
+            print(f"  {line}")
     if drifted:
         print(
             f"\n{CONSTANT} disagrees with what the template actually builds:",

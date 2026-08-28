@@ -46,8 +46,41 @@ DUMP_DIR_CATEGORY = {
 }
 
 
+#: `tests/test_model_contract.py` is the SOURCE OF TRUTH for which templates are
+#: too big to build on a CI runner (`gemma_2`'s fp32 tensors alone are ~10.5 GB
+#: on a ~16 GB runner). `verify_dumps_against_engine_pin.py` already mirrors it
+#: by hand; rather than add a THIRD copy, read the real one.
+_CONTRACT_TEST = "tests/test_model_contract.py"
+_RAM_SKIP_CONSTANT = "_TOO_LARGE_FOR_CI_RAM"
+
+
 class AmbiguousTemplate(RuntimeError):
     """A dump directory maps to more than one template, with no disambiguator."""
+
+
+def ci_ram_skips(repo: Path) -> frozenset:
+    """Templates that must not be BUILT in CI, as `<category>/<fw>/<name>.py`.
+
+    Parsed out of the test module with `ast` — importing it would drag in pytest
+    and execute collection to read one set literal. Returns an empty set if the
+    constant cannot be found, and the caller treats that as "skip nothing":
+    a build that OOMs is loud, whereas silently skipping everything would be a
+    green sweep that checked nothing.
+    """
+    path = repo / _CONTRACT_TEST
+    try:
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    except OSError:
+        return frozenset()
+    for node in tree.body:
+        if isinstance(node, ast.Assign):
+            for target in node.targets:
+                if isinstance(target, ast.Name) and target.id == _RAM_SKIP_CONSTANT:
+                    try:
+                        return frozenset(ast.literal_eval(node.value))
+                    except ValueError:
+                        return frozenset()
+    return frozenset()
 
 
 def read_prefixes(path: Path) -> Optional[Tuple[str, ...]]:

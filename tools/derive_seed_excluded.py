@@ -37,6 +37,8 @@ import tempfile
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
+from seed_index import ci_ram_skips  # noqa: E402 — sibling tool module
+
 # The seed verifier's isolation, for the same reason it has it: a warm hub cache
 # makes an offline build succeed on a template that would abort on a closed edge.
 os.environ["HF_HUB_OFFLINE"] = "1"
@@ -48,13 +50,36 @@ os.environ["TRANSFORMERS_OFFLINE"] = "1"
 #: "no head".
 PROBE_A, PROBE_B = 7, 13
 
-#: Module-level constants that carry a class count. `num_feature_points` is the
-#: keypoint family's, and it multiplies into the head width — so a template can
-#: be head-coupled through either.
-CLASS_CONSTANTS = ("output_classes", "num_feature_points")
+#: WHICH CONSTANTS ARE OUTPUT-SEMANTIC, PER CATEGORY — and this map exists
+#: because one constant name means OPPOSITE things in different families.
+#:
+#: A head key is a key whose shape depends on the model's OUTPUT shape, so the
+#: derivation may only vary constants that describe outputs.
+#:
+#: * `output_classes` is output-semantic everywhere.
+#: * `num_feature_points` is output-semantic ONLY for keypoint_detection, where
+#:   the head is literally `nn.Linear(num_features, num_feature_points * 3)` —
+#:   the number of keypoints predicted. In the tabular and time-series families
+#:   the SAME NAME is the INPUT feature count (`tcn` passes it straight to
+#:   `num_inputs`).
+#:
+#: Both naive rules are wrong, and the CI sweep caught each in turn
+#: (model-zoo#217): varying both reported input projections as "head" across 30+
+#: tabular/TS templates, which would drop weights a seed must carry; varying only
+#: `output_classes` reported the whole keypoint family as NO_HEAD, which would
+#: un-protect the very templates whose head-shape failure started this contract.
+CLASS_CONSTANTS_BY_CATEGORY = {
+    "keypoint_detection": ("output_classes", "num_feature_points"),
+}
+DEFAULT_CLASS_CONSTANTS = ("output_classes",)
 
 
-def _rewrite_constants(src: str, value: int) -> Tuple[str, List[str]]:
+def class_constants(category: str):
+    """The constants that describe THIS category's output shape."""
+    return CLASS_CONSTANTS_BY_CATEGORY.get(category, DEFAULT_CLASS_CONSTANTS)
+
+
+def _rewrite_constants(src: str, value: int, category: str) -> Tuple[str, List[str]]:
     """Set every class-count constant in `src` to `value`.
 
     Word-boundary anchored at line start: a `.replace()` here would corrupt any
@@ -62,7 +87,7 @@ def _rewrite_constants(src: str, value: int) -> Tuple[str, List[str]]:
     `main_class` substring bug repeated.
     """
     touched = []
-    for name in CLASS_CONSTANTS:
+    for name in class_constants(category):
         pattern = rf"(?m)^{name}\s*=\s*\S+"
         if re.search(pattern, src):
             src = re.sub(pattern, f"{name} = {value}", src, count=1)
@@ -70,10 +95,12 @@ def _rewrite_constants(src: str, value: int) -> Tuple[str, List[str]]:
     return src, touched
 
 
-def _build_state_shapes(path: Path, value: int, tmp: Path) -> Optional[Dict[str, tuple]]:
+def _build_state_shapes(
+    path: Path, value: int, tmp: Path, category: str
+) -> Optional[Dict[str, tuple]]:
     """`{key: shape}` for the template built with the class constants at `value`."""
     src = path.read_text(encoding="utf-8")
-    rewritten, touched = _rewrite_constants(src, value)
+    rewritten, touched = _rewrite_constants(src, value, category)
     if not touched:
         return None  # no class constant at all -> cannot be head-coupled
 
@@ -118,15 +145,15 @@ def _collapse(keys: List[str]) -> List[str]:
     return minimal
 
 
-def derive(path: Path) -> Dict:
+def derive(path: Path, category: str) -> Dict:
     """`SEED_EXCLUDED_PREFIXES` for one template, or a reason it could not be found."""
     with tempfile.TemporaryDirectory(prefix="tb-derive-") as raw:
         tmp = Path(raw)
         try:
-            a = _build_state_shapes(path, PROBE_A, tmp)
+            a = _build_state_shapes(path, PROBE_A, tmp, category)
             if a is None:
                 return {"status": "NO_CLASS_CONSTANT"}
-            b = _build_state_shapes(path, PROBE_B, tmp)
+            b = _build_state_shapes(path, PROBE_B, tmp, category)
         except Exception as exc:  # noqa: BLE001 — any build failure is a finding
             return {"status": "BUILD_FAIL", "error": f"{type(exc).__name__}: {exc}"[:300]}
 
@@ -184,6 +211,12 @@ def main(argv=None) -> int:
     # happened the first time this was used. `--resume` then makes a re-run cost
     # only what is actually missing.
     out_path = Path(args.out) if args.out else None
+    # DO NOT BUILD WHAT CI CANNOT HOLD (Bugbot). This sweep builds every template
+    # TWICE, and `gemma_2`'s fp32 tensors alone are ~10.5 GB on a ~16 GB runner --
+    # so the full sweep would SIGKILL rather than report drift. The existing
+    # tooling already skips it; this reads the same list instead of restating it.
+    skips = ci_ram_skips(zoo)
+
     results: Dict[str, Dict] = {}
     if out_path and args.resume and out_path.is_file():
         results = json.loads(out_path.read_text(encoding="utf-8"))
@@ -196,7 +229,11 @@ def main(argv=None) -> int:
         key = f"{category}/{path.stem}"
         if key in results:
             continue
-        record = derive(path)
+        rel = path.relative_to(root).as_posix()
+        if rel in skips:
+            record = {"status": "SKIPPED_CI_RAM", "detail": rel}
+        else:
+            record = derive(path, category)
         record["category"] = category
         results[key] = record
         if out_path:
