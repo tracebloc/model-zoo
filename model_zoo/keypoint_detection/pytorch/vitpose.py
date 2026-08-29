@@ -18,6 +18,13 @@ import torch
 import torch.nn as nn
 from transformers import AutoConfig, VitPoseForPoseEstimation
 
+# backend#2642 — the task head is NOT carried by the hosted seed.
+# The seed holds the backbone; the head initialises fresh from output_classes,
+# which is where the dataset's class count lands. Derived mechanically by
+# tools/derive_seed_excluded.py (build twice, diff the shapes) — regenerate it
+# rather than editing by hand if this model's head changes.
+SEED_EXCLUDED_PREFIXES = ("model.head.conv.",)
+
 framework = "pytorch"
 model_type = "transformer"
 main_method = "MyModel"
