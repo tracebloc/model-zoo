@@ -15,6 +15,13 @@ matched weight file.
 """
 from transformers import DFineForObjectDetection, DFineConfig
 
+# backend#2642 — the task head is NOT carried by the hosted seed.
+# The seed holds the backbone; the head initialises fresh from output_classes,
+# which is where the dataset's class count lands. Derived mechanically by
+# tools/derive_seed_excluded.py (build twice, diff the shapes) — regenerate it
+# rather than editing by hand if this model's head changes.
+SEED_EXCLUDED_PREFIXES = ("class_embed.0.", "class_embed.1.", "class_embed.2.", "model.decoder.class_embed.0.", "model.decoder.class_embed.1.", "model.decoder.class_embed.2.", "model.denoising_class_embed.", "model.enc_score_head.")
+
 framework = "pytorch"
 model_type = "hf_transformer"
 main_method = "MyModel"

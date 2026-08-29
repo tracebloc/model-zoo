@@ -17,6 +17,13 @@ initialized).
 import torch.nn as nn
 from transformers import AutoConfig, SegformerForSemanticSegmentation
 
+# backend#2642 — the task head is NOT carried by the hosted seed.
+# The seed holds the backbone; the head initialises fresh from output_classes,
+# which is where the dataset's class count lands. Derived mechanically by
+# tools/derive_seed_excluded.py (build twice, diff the shapes) — regenerate it
+# rather than editing by hand if this model's head changes.
+SEED_EXCLUDED_PREFIXES = ("model.decode_head.classifier.",)
+
 # Configuration
 framework = "pytorch"
 main_class = "Segmenter"

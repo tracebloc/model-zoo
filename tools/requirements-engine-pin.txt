@@ -40,3 +40,19 @@ timm==1.0.26
 transformers==5.8.0
 safetensors>=0.4.3
 peft==0.19.1
+
+# scikit-learn is here for SCIPY, which it pulls transitively (Requires-Dist:
+# scipy>=1.10.0) exactly as it does in the engine image. `mask2former` and
+# `oneformer` raise at construction without it --
+#   ImportError: Mask2FormerLoss requires the scipy library
+# -- so a sweep that BUILDS every template needs it, and the previous mirror had
+# no path to it. `verify-dumps` never noticed because it is still an armed no-op
+# until backend#2659 hosts a manifest, so `seed-contract-drift` is the first job
+# to actually construct these two under the mirror.
+#
+# scikit-learn AND NOT a bare `scipy` pin, deliberately: `check_engine_pin_drift`
+# fails any exact pin the engine does not itself name, and the engine names
+# scikit-learn==1.8.0 while never naming scipy. Mirroring the package the engine
+# actually pins keeps the guard meaningful and reproduces the same transitive
+# resolution the edge gets.
+scikit-learn==1.8.0
