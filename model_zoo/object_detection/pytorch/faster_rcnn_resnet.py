@@ -31,6 +31,13 @@ from torchvision.models.detection.backbone_utils import _resnet_fpn_extractor
 from torchvision.models.detection.faster_rcnn import FasterRCNN, FastRCNNPredictor
 from torchvision.ops import misc as misc_nn_ops
 
+# backend#2642 — the task head is NOT carried by the hosted seed.
+# The seed holds the backbone; the head initialises fresh from output_classes,
+# which is where the dataset's class count lands. Derived mechanically by
+# tools/derive_seed_excluded.py (build twice, diff the shapes) — regenerate it
+# rather than editing by hand if this model's head changes.
+SEED_EXCLUDED_PREFIXES = ("roi_heads.box_predictor.bbox_pred.", "roi_heads.box_predictor.cls_score.")
+
 
 framework = "pytorch"
 model_type = "rcnn"

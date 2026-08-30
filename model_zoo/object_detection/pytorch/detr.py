@@ -17,6 +17,13 @@ matched weight file.
 """
 from transformers import DetrForObjectDetection, DetrConfig
 
+# backend#2642 — the task head is NOT carried by the hosted seed.
+# The seed holds the backbone; the head initialises fresh from output_classes,
+# which is where the dataset's class count lands. Derived mechanically by
+# tools/derive_seed_excluded.py (build twice, diff the shapes) — regenerate it
+# rather than editing by hand if this model's head changes.
+SEED_EXCLUDED_PREFIXES = ("class_labels_classifier.",)
+
 framework = "pytorch"
 model_type = "hf_transformer"
 main_method = "MyModel"
