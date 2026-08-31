@@ -127,14 +127,26 @@ def dump_dir_candidates(category: str, stem: str, sharing: int = 1) -> List[str]
         for prefix, prefixed_category in DUMP_DIR_CATEGORY_PREFIXES.items()
         if prefixed_category == category
     ]
+    if sharing <= 1:
+        # A UNIQUE STEM IS FILED UNDER THE BARE NAME. That is not an inference —
+        # `seed_index` states it: "Dump directories are named `<stem>` except
+        # where a stem collides, in which case the category is prefixed." An
+        # earlier revision returned the category prefix for EVERY template in a
+        # prefixed category, so a unique-stem template in
+        # `sentence_pair_classification` (or in any category that later gains a
+        # prefix entry) resolved to a name nothing is filed under (Bugbot).
+        #
+        # The prefixed form is accepted too, second: it also resolves forward,
+        # so a dump filed that way is findable, not missing. This direction
+        # fails LOUD (a false "NO DUMP") rather than silently, which is why it
+        # was survivable — but a gate that cries wolf is a gate people switch off.
+        return [stem] + prefixed
     if prefixed:
         return prefixed
     owner = DUMP_DIR_CATEGORY.get(stem)
     if owner is not None:
         return [stem] if owner == category else []
-    if sharing > 1:
-        return []
-    return [stem]
+    return []
 
 
 def manifest_names(declared: Dict) -> Tuple[Set[str], Optional[str]]:

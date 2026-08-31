@@ -368,3 +368,59 @@ def test_the_real_zoo_has_no_ambiguous_template(tmp_path):
     ambiguous = {k: v["detail"] for k, v in found.items()
                  if v["status"] == tool.AMBIGUOUS}
     assert not ambiguous, f"ambiguous templates: {ambiguous}"
+
+
+# --- the prefix applies to collisions, not to a whole category --------------
+#
+# `seed_index` states the convention outright: "Dump directories are named
+# `<stem>` except where a stem collides, in which case the category is
+# prefixed." An earlier revision returned the category prefix for EVERY template
+# in a prefixed category, so a unique-stem template in
+# `sentence_pair_classification` resolved to a name nothing is filed under
+# (Bugbot). That direction fails LOUD — a false "NO DUMP" — unlike the collision
+# bug above, which failed silent. Both are worth closing; a gate that cries wolf
+# gets switched off.
+
+def test_a_unique_stem_in_a_prefixed_category_uses_the_bare_name(tmp_path):
+    """THE REGRESSION. Only one `solo` template exists, so its dump is filed
+    bare — the category prefix must not be imposed on it."""
+    zoo = _zoo(tmp_path, {"sentence_pair_classification/solo": SEED_EXPECTING})
+    dumps = _dumps(tmp_path, ["solo"])
+    assert _tool().main(["--zoo", str(zoo), "--dumps-dir", str(dumps)]) == 0
+
+
+def test_a_unique_stem_also_accepts_the_prefixed_form(tmp_path):
+    """A prefixed dump for a unique stem still resolves forward through
+    `seed_index`, so it is findable rather than missing."""
+    zoo = _zoo(tmp_path, {"sentence_pair_classification/solo": SEED_EXPECTING})
+    dumps = _dumps(tmp_path, ["sentence_pair_solo"])
+    assert _tool().main(["--zoo", str(zoo), "--dumps-dir", str(dumps)]) == 0
+
+
+def test_the_bare_name_is_preferred_for_a_unique_stem(tmp_path):
+    """Order matters for orphan detection: the convention's name comes first."""
+    tool = _tool()
+    zoo = _zoo(tmp_path, {"sentence_pair_classification/solo": SEED_EXPECTING})
+    candidates = tool.survey(zoo)["sentence_pair_classification/solo"]["candidates"]
+    assert candidates[0] == "solo"
+    assert "sentence_pair_solo" in candidates
+
+
+def test_a_colliding_stem_in_the_prefixed_category_still_uses_the_prefix(tmp_path):
+    """The collision case is unchanged — this is the real `bert_base_uncased`,
+    and the prefix is exactly what disambiguates it."""
+    tool = _tool()
+    zoo = _zoo(
+        tmp_path,
+        {
+            "text_classification/bert_base_uncased": SEED_EXPECTING,
+            "sentence_pair_classification/bert_base_uncased": SEED_EXPECTING,
+        },
+    )
+    found = tool.survey(zoo)
+    assert found["sentence_pair_classification/bert_base_uncased"]["candidates"] == [
+        "sentence_pair_bert_base_uncased"
+    ]
+    assert found["text_classification/bert_base_uncased"]["candidates"] == [
+        "bert_base_uncased"
+    ]
