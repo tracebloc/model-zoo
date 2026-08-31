@@ -19,6 +19,7 @@ on:
       - "tools/derive_seed_excluded.py"
       - "tools/seed_contract.py"
       - "tools/seed_index.py"
+      - "tools/check_dump_coverage.py"
       - "tools/requirements-engine-pin.txt"
       - "manifest.json"
       - ".github/workflows/verify-dumps-engine-pin.yml"
@@ -32,6 +33,7 @@ on:
       - "tools/derive_seed_excluded.py"
       - "tools/seed_contract.py"
       - "tools/seed_index.py"
+      - "tools/check_dump_coverage.py"
       - "tools/requirements-engine-pin.txt"
       - "manifest.json"
       - ".github/workflows/verify-dumps-engine-pin.yml"
@@ -285,3 +287,36 @@ jobs:
           python3 tools/derive_seed_excluded.py --zoo . --out seed_derived.json \
             ${only:+--only $only}
           python3 tools/seed_contract.py --zoo . check --verdict seed_derived.json
+
+  # backend#2659 — THE COMPLEMENT DIRECTION. Every other gate in this workflow is
+  # keyed on the dumps that exist and asks "are they good?". None asks "is there
+  # one for every template that needs one?", so a template that was migrated but
+  # never prepped passes them all BY BEING ABSENT, and trains from random init on
+  # an edge while the migration's premise is that it does not. Two slipped
+  # through exactly this way: `faster_rcnn_resnet` and, found by this gate,
+  # `text_classification/bert_base_uncased`.
+  #
+  # DELIBERATELY INDEPENDENT of the engine pin and of every other job here. The
+  # check is template text and set arithmetic — no torch, no transformers, no
+  # build — so it runs in seconds on stdlib alone. Giving it `needs:` would make
+  # a slow or red pin guard hide a coverage answer that does not depend on the
+  # pin at all.
+  dump-coverage:
+    timeout-minutes: 5
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+      # No --dumps-dir / --manifest yet: the seeds are not hosted (backend#2659),
+      # so today this enforces the CLASSIFICATION half — every migrated template
+      # must say whether it needs a seed, and a docstring edit that leaves one
+      # silent goes red by name instead of being read as "needs no dump".
+      #
+      # ON HOSTING, add `--manifest` (or `--dumps-dir`) here and the coverage
+      # half arms itself. That is the same shape as the sweep above, which is an
+      # armed no-op until a manifest exists — with the same reason: red on a
+      # state nobody can fix yet is red people learn to skip.
+      - name: Every migrated template accounts for its seed
+        run: python3 tools/check_dump_coverage.py --zoo .
