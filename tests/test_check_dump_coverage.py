@@ -263,3 +263,108 @@ def test_the_real_zoo_writes_a_survey(tmp_path):
     survey = json.loads(out.read_text("utf-8"))
     assert survey["inventory_checked"] is False
     assert len(survey["templates"]) == 57
+
+
+# --- unmapped collisions ----------------------------------------------------
+#
+# `seed_index.resolve` already settled this question in the forward direction:
+# AMBIGUITY IS AN ERROR, NOT A PICK — it raises rather than `setdefault`-ing,
+# because a tool that strips head keys using the wrong template's declaration
+# produces a seed that is wrong in a way nobody can see.
+#
+# The reverse mapping here quietly chose "pick". `DUMP_DIR_CATEGORY.get(stem,
+# category) == category` is ALWAYS TRUE for a stem absent from that map, so two
+# seed-expecting templates sharing an unmapped stem both claimed the same bare
+# dump and coverage went green with one of them unseeded (Bugbot) — the exact
+# gap this gate exists to close, reintroduced inside the gate.
+
+def test_two_unmapped_colliding_templates_do_not_share_one_dump(tmp_path):
+    """THE REGRESSION. One bare dump, two seed-expecting templates, nothing in
+    seed_index to tell them apart: this must be red, not green."""
+    zoo = _zoo(
+        tmp_path,
+        {
+            "object_detection/twinned": SEED_EXPECTING,
+            "semantic_segmentation/twinned": SEED_EXPECTING,
+        },
+    )
+    dumps = _dumps(tmp_path, ["twinned"])
+    assert _tool().main(["--zoo", str(zoo), "--dumps-dir", str(dumps)]) == 1
+
+
+def test_an_unmapped_collision_is_named_as_ambiguous_not_as_a_missing_dump(tmp_path):
+    """A distinct status, and the message carries the fix. "NO DUMP" would be a
+    lie — the dump may exist; what is missing is a rule saying whose it is."""
+    tool = _tool()
+    zoo = _zoo(
+        tmp_path,
+        {
+            "object_detection/twinned": SEED_EXPECTING,
+            "semantic_segmentation/twinned": SEED_EXPECTING,
+        },
+    )
+    found = tool.survey(zoo)
+    assert found["object_detection/twinned"]["status"] == tool.AMBIGUOUS
+    assert found["semantic_segmentation/twinned"]["status"] == tool.AMBIGUOUS
+    assert "seed_index" in found["object_detection/twinned"]["detail"]
+
+
+def test_an_unmapped_collision_is_red_even_with_no_inventory(tmp_path):
+    """The classification half must catch it too — a collision is a defect in
+    the naming rules, and does not need any dump to exist to be one."""
+    zoo = _zoo(
+        tmp_path,
+        {
+            "object_detection/twinned": SEED_EXPECTING,
+            "semantic_segmentation/twinned": SEED_EXPECTING,
+        },
+    )
+    assert _tool().main(["--zoo", str(zoo)]) == 1
+
+
+def test_a_stem_shared_with_a_NO_SEED_template_is_not_a_collision(tmp_path):
+    """Only seed-expecting templates compete for a dump. A scratch sibling that
+    declares it needs none must not turn its neighbour ambiguous."""
+    tool = _tool()
+    zoo = _zoo(
+        tmp_path,
+        {
+            "object_detection/twinned": SEED_EXPECTING,
+            "text_classification/twinned": NO_SEED,
+        },
+    )
+    found = tool.survey(zoo)
+    assert found["object_detection/twinned"]["status"] == tool.EXPECTS_SEED
+    assert found["object_detection/twinned"]["candidates"] == ["twinned"]
+    assert _tool().main(["--zoo", str(zoo), "--dumps-dir", str(_dumps(tmp_path, ["twinned"]))]) == 0
+
+
+def test_the_mapped_collision_still_resolves_both_ways(tmp_path):
+    """The real `bert_base_uncased` case must be unaffected: one side files
+    under its category prefix, the other owns the bare name."""
+    tool = _tool()
+    zoo = _zoo(
+        tmp_path,
+        {
+            "text_classification/bert_base_uncased": SEED_EXPECTING,
+            "sentence_pair_classification/bert_base_uncased": SEED_EXPECTING,
+        },
+    )
+    found = tool.survey(zoo)
+    assert found["text_classification/bert_base_uncased"]["candidates"] == [
+        "bert_base_uncased"
+    ]
+    assert found["sentence_pair_classification/bert_base_uncased"]["candidates"] == [
+        "sentence_pair_bert_base_uncased"
+    ]
+
+
+def test_the_real_zoo_has_no_ambiguous_template(tmp_path):
+    """Today's only seed-expecting collision (`bert_base_uncased`) is fully
+    disambiguated, so this bug was latent rather than firing. This test is what
+    makes the NEXT collision loud instead of silent."""
+    tool = _tool()
+    found = tool.survey(ROOT)
+    ambiguous = {k: v["detail"] for k, v in found.items()
+                 if v["status"] == tool.AMBIGUOUS}
+    assert not ambiguous, f"ambiguous templates: {ambiguous}"

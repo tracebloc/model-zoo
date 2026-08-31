@@ -69,6 +69,10 @@ NO_SEED_MARKERS = ("weights=False", "no weight file")
 EXPECTS_SEED = "EXPECTS_SEED"
 NO_SEED = "NO_SEED"
 UNCLASSIFIED = "UNCLASSIFIED"
+#: A seed-expecting stem shared by more than one category with nothing in
+#: ``seed_index`` to tell the dumps apart. Its own status, not a NO DUMP: the
+#: dump may well exist, and the defect is that no rule says whose it is.
+AMBIGUOUS = "AMBIGUOUS"
 
 
 def classify(path: Path) -> Tuple[Optional[str], str]:
@@ -96,21 +100,41 @@ def classify(path: Path) -> Tuple[Optional[str], str]:
     )
 
 
-def dump_dir_candidates(category: str, stem: str) -> List[str]:
+def dump_dir_candidates(category: str, stem: str, sharing: int = 1) -> List[str]:
     """The dump-directory name(s) this template's seed could be filed under.
 
     Mirrors ``seed_index.resolve`` in reverse: a colliding stem is filed under a
     category prefix, and the bare name belongs to whichever category
     ``DUMP_DIR_CATEGORY`` names. Derived from those two maps rather than
     restated, so a new collision is handled by editing ``seed_index`` alone.
+
+    ``sharing`` is how many seed-expecting templates carry this stem. AN
+    UNMAPPED COLLISION RETURNS NOTHING RATHER THAN THE BARE NAME (Bugbot).
+    The previous rule was ``DUMP_DIR_CATEGORY.get(stem, category) == category``,
+    and for a stem absent from that map ``.get`` returns ``category``, so the
+    test was always true: two seed-expecting templates sharing an unmapped stem
+    would BOTH claim the same bare dump, and coverage would go green with one of
+    them unseeded — the exact gap this gate exists to close, reintroduced inside
+    the gate.
+
+    ``seed_index.resolve`` already decided this question the other way round:
+    *ambiguity is an error, not a pick*, and it raises rather than
+    ``setdefault``-ing. Returning ``[]`` here lets the caller say so by name
+    instead of silently agreeing with itself.
     """
     prefixed = [
         f"{prefix}{stem}"
         for prefix, prefixed_category in DUMP_DIR_CATEGORY_PREFIXES.items()
         if prefixed_category == category
     ]
-    owns_bare = DUMP_DIR_CATEGORY.get(stem, category) == category
-    return prefixed + ([stem] if owns_bare else [])
+    if prefixed:
+        return prefixed
+    owner = DUMP_DIR_CATEGORY.get(stem)
+    if owner is not None:
+        return [stem] if owner == category else []
+    if sharing > 1:
+        return []
+    return [stem]
 
 
 def manifest_names(declared: Dict) -> Tuple[Set[str], Optional[str]]:
@@ -169,9 +193,14 @@ def available(
 
 
 def survey(zoo: Path) -> Dict[str, Dict]:
-    """``{"<category>/<stem>": {...}}`` for every migrated template."""
+    """``{"<category>/<stem>": {...}}`` for every migrated template.
+
+    Two passes on purpose: a template's candidate dump names depend on how many
+    OTHER templates share its stem, so every stem has to be counted before any
+    one of them can be resolved.
+    """
     root = zoo_root(zoo)
-    found: Dict[str, Dict] = {}
+    classified: Dict[str, Dict] = {}
     for category_dir in sorted(p for p in root.iterdir() if p.is_dir()):
         pytorch = category_dir / "pytorch"
         if not pytorch.is_dir():
@@ -180,11 +209,40 @@ def survey(zoo: Path) -> Dict[str, Dict]:
             status, detail = classify(path)
             if status is None:
                 continue
-            found[f"{category_dir.name}/{path.stem}"] = {
+            classified[f"{category_dir.name}/{path.stem}"] = {
                 "status": status,
                 "detail": detail,
-                "candidates": dump_dir_candidates(category_dir.name, path.stem),
+                "category": category_dir.name,
+                "stem": path.stem,
             }
+
+    sharing: Dict[str, int] = {}
+    for record in classified.values():
+        if record["status"] == EXPECTS_SEED:
+            sharing[record["stem"]] = sharing.get(record["stem"], 0) + 1
+
+    found: Dict[str, Dict] = {}
+    for key, record in classified.items():
+        candidates = dump_dir_candidates(
+            record["category"], record["stem"], sharing.get(record["stem"], 1)
+        )
+        if record["status"] == EXPECTS_SEED and not candidates:
+            record = dict(
+                record,
+                status=AMBIGUOUS,
+                detail=(
+                    f"{record['stem']}.py expects a seed in "
+                    f"{sharing[record['stem']]} categories and nothing in "
+                    f"seed_index says which dump is whose. Add a "
+                    f"DUMP_DIR_CATEGORY_PREFIXES entry for this category, or a "
+                    f"DUMP_DIR_CATEGORY entry naming the owner of the bare name"
+                ),
+            )
+        found[key] = {
+            "status": record["status"],
+            "detail": record["detail"],
+            "candidates": candidates,
+        }
     return found
 
 
@@ -222,6 +280,7 @@ def main(argv=None) -> int:
         print(f"  WARNING       {warning}")
 
     unclassified = sorted(k for k, v in found.items() if v["status"] == UNCLASSIFIED)
+    ambiguous = sorted(k for k, v in found.items() if v["status"] == AMBIGUOUS)
     expecting = {k: v for k, v in found.items() if v["status"] == EXPECTS_SEED}
     no_seed = sorted(k for k, v in found.items() if v["status"] == NO_SEED)
 
@@ -229,9 +288,12 @@ def main(argv=None) -> int:
     print(f"  expect a hosted seed  : {len(expecting)}")
     print(f"  declare no seed       : {len(no_seed)}")
     print(f"  UNCLASSIFIED          : {len(unclassified)}")
+    print(f"  AMBIGUOUS             : {len(ambiguous)}")
 
     for key in unclassified:
         print(f"  UNCLASSIFIED  {key}: {found[key]['detail']}")
+    for key in ambiguous:
+        print(f"  AMBIGUOUS     {key}: {found[key]['detail']}")
 
     missing: List[str] = []
     orphans: List[str] = []
@@ -258,6 +320,7 @@ def main(argv=None) -> int:
             json.dumps(
                 {
                     "templates": found,
+                    "ambiguous": ambiguous,
                     "missing": missing,
                     "orphans": orphans,
                     "inventory_checked": have_inventory,
@@ -272,7 +335,7 @@ def main(argv=None) -> int:
         # green. Same fail-closed rule verify_dumps_against_engine_pin.py applies.
         print("\nFAIL (fail-closed): the manifest names no dumps.")
         return 1
-    if unclassified or missing or orphans:
+    if unclassified or ambiguous or missing or orphans:
         return 1
     if args.require_dumps and not have_inventory:
         return 1
