@@ -246,6 +246,22 @@ def test_an_empty_zoo_is_an_error_not_a_green(tmp_path):
 
 # --- against the real zoo --------------------------------------------------
 
+# The census both tests below pin. It is an EXACT count, not a floor: a template
+# appearing or disappearing should be a deliberate edit here, not silent drift in
+# what the gate surveys.
+#
+# 57 (#1499's migrated set) -> 56: backend#2988 deleted
+# object_detection/pytorch/mask_rcnn.py. It could never train — torchvision's
+# RoIHeads requires a `masks` target key that no object-detection producer emits
+# (see tests/test_od_torchvision_family_train_step.py, which now holds that line
+# for the whole torchvision_detection roster). Its hosted dump
+# (mask_rcnn_weights.pkl, backend tools/offline_weights/manifest.json) is NOT
+# deleted here and is now orphaned in the model store; the orphan half of this
+# gate is unarmed in CI (no --manifest / --dumps-dir), so it will name the dump
+# on the day hosting arms it, which is the correct alarm rather than a silent loss.
+MIGRATED_TEMPLATE_CENSUS = 56
+
+
 def test_the_real_zoo_classifies_every_migrated_template(tmp_path):
     """No template in the shipped zoo may be UNCLASSIFIED. This is the test that
     keeps the derivation honest as templates are edited."""
@@ -254,7 +270,9 @@ def test_the_real_zoo_classifies_every_migrated_template(tmp_path):
     unclassified = {k: v["detail"] for k, v in found.items()
                     if v["status"] == tool.UNCLASSIFIED}
     assert not unclassified, f"unclassified migrated templates: {unclassified}"
-    assert len(found) == 57, f"expected #1499's 57 migrated templates, got {len(found)}"
+    assert len(found) == MIGRATED_TEMPLATE_CENSUS, (
+        f"expected {MIGRATED_TEMPLATE_CENSUS} migrated templates, got {len(found)}"
+    )
 
 
 def test_the_real_zoo_writes_a_survey(tmp_path):
@@ -262,7 +280,7 @@ def test_the_real_zoo_writes_a_survey(tmp_path):
     assert _tool().main(["--zoo", str(ROOT), "--out", str(out)]) == 0
     survey = json.loads(out.read_text("utf-8"))
     assert survey["inventory_checked"] is False
-    assert len(survey["templates"]) == 57
+    assert len(survey["templates"]) == MIGRATED_TEMPLATE_CENSUS
 
 
 # --- unmapped collisions ----------------------------------------------------
