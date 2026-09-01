@@ -254,7 +254,8 @@ def test_the_real_zoo_classifies_every_migrated_template(tmp_path):
     unclassified = {k: v["detail"] for k, v in found.items()
                     if v["status"] == tool.UNCLASSIFIED}
     assert not unclassified, f"unclassified migrated templates: {unclassified}"
-    assert len(found) == 57, f"expected #1499's 57 migrated templates, got {len(found)}"
+    # 56 = #1499's 57 minus mask_rcnn, deleted as unusable in backend#2988.
+    assert len(found) == 56, f"expected 56 migrated templates, got {len(found)}"
 
 
 def test_the_real_zoo_writes_a_survey(tmp_path):
@@ -262,7 +263,7 @@ def test_the_real_zoo_writes_a_survey(tmp_path):
     assert _tool().main(["--zoo", str(ROOT), "--out", str(out)]) == 0
     survey = json.loads(out.read_text("utf-8"))
     assert survey["inventory_checked"] is False
-    assert len(survey["templates"]) == 57
+    assert len(survey["templates"]) == 56
 
 
 # --- unmapped collisions ----------------------------------------------------
