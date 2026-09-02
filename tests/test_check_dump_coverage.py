@@ -282,10 +282,16 @@ def test_an_empty_zoo_is_an_error_not_a_green(tmp_path):
 # so they genuinely random-initialise and stage no dump. That is what makes them
 # invisible to the newly-armed orphan half: no dump, and no expectation of one.
 #
-# ⚠️ 55 is a RUNNING TOTAL, not this branch's arithmetic. 57 + 6 = 63 is what a
-# calculation from the pre-#2973 zoo produces and it is wrong by two deletions;
-# whoever rebases onto a moved develop takes the count the tree actually has.
-MIGRATED_TEMPLATE_CENSUS = 55
+# 55 -> 59: backend#2982 Tier 1 added four modern-backbone detectors —
+# faster_rcnn_convnext_small, faster_rcnn_swin_t, fcos_convnext_small,
+# fcos_swin_t — assembled via detection.backbone_utils.BackboneWithFPN. All
+# four classify NO_SEED for the same reason.
+#
+# ⚠️ EACH NUMBER HERE IS A RUNNING TOTAL, NOT ITS BRANCH'S ARITHMETIC. Tier 0
+# had to unlearn a plausible-looking `57 + 6 = 63` — wrong by the eight
+# templates #2973 and #2988 deleted. Whoever rebases onto a moved develop takes
+# what `tools/check_dump_coverage.py --zoo .` reports against the merged tree.
+MIGRATED_TEMPLATE_CENSUS = 59
 
 
 def test_the_real_zoo_classifies_every_migrated_template(tmp_path):
