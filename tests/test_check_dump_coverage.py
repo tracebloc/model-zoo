@@ -19,6 +19,7 @@ name a template that has gone silent rather than guess on its behalf.
 import importlib.util
 import json
 import pathlib
+import re
 import sys
 
 ROOT = pathlib.Path(__file__).parent.parent
@@ -254,29 +255,49 @@ def test_an_empty_zoo_is_an_error_not_a_green(tmp_path):
 # (detr, rt_detr, rt_detr_v2, deformable_detr, d_fine, owlv2, grounding_dino)
 # when the hf_transformer family was retired — the platform stopped supporting
 # HuggingFace models and the engine handler those templates routed to never
-# trained anything. Their seven hosted dumps are NOT deleted by that change and
-# are now orphaned in the model store; the orphan half of this gate is unarmed
-# (CI passes no --manifest / --dumps-dir), so it will surface them by name on
-# the day hosting arms it, which is the correct alarm rather than a silent loss.
+# trained anything. Their seven dumps are NOT deleted by that change: under
+# backend#2985 they are RETAINED and marked `"status": "retired"` in the
+# manifest, because they were prepped under the stack pinned at
+# `scripts/.tracebloc-engine-ref` and a deletion is irreversible in practice
+# while a flag is one line. The orphan half of this gate is now armed (the CI
+# job passes --manifest, pinned by the tests at the bottom of this file) and
+# reports them as RETIRED rather than failing on them.
+#
+# This paragraph previously said the orphan half was "unarmed (CI passes no
+# --manifest / --dumps-dir), so it will surface them by name on the day hosting
+# arms it". Both halves of that are now false, and the second was never right:
+# hosting (backend#2659) does not supply the manifest — a cross-repo read does.
 #
 # 50 -> 49: backend#2988 deleted mask_rcnn (unusable — its mask head needs a
-# masks target key the OD path never supplies); its dump is likewise orphaned.
+# masks target key the OD path never supplies). Its dump was the one deletion
+# taken under #2985: trivially regenerable from torchvision, and re-homing Mask
+# R-CNN under backend#795 would need a seed built against a different module
+# tree, so retaining it pre-paid for nothing. Manifest entry removed by
+# backend#2996, blob deleted under #2985 — gone from both sides.
 #
 # 49 -> 55: backend#2982 Tier 0 added the six torchvision_detection roster
 # templates the zoo never wrapped (faster_rcnn_resnet_v2, retinanet_v2,
 # faster_rcnn_mobilenet, faster_rcnn_mobilenet_320, ssd_vgg16,
 # ssdlite_mobilenet). They landed classifying NO_SEED — `weights=None`
 # genuinely random-initialises, and saying so is what made that green honest.
+# Under the newly-armed orphan half that also made them invisible to it: no
+# dump, and no expectation of one.
 #
-# backend#3055 FLIPS ALL SIX TO EXPECTS_SEED. The COCO tensors are prepped and
-# verified (573.8 MB of backbone-only seed across the six; 6/6 OK under
-# `tools/verify_backbone_seeds.py` at output_classes=7), so the truthful
-# classification is now that each names its `<stem>_weights.pkl`. THE CENSUS IS
-# UNCHANGED AT 55 — a flip moves a template between the two classified buckets
-# and adds none. What it does change is coverage: with the orphan half armed
-# (model-zoo#230) these six are red until backend's manifest carries their
-# entries, which is exactly the fail-closed behaviour and the reason this must
-# not land before the blobs are hosted (backend#2659).
+# backend#3055 FLIPS ALL SIX TO EXPECTS_SEED, so neither half of that is true
+# of them any more. The COCO tensors are prepped and verified — 573.8 MB of
+# backbone-only seed across the six, 6/6 OK under
+# `tools/verify_backbone_seeds.py` at output_classes=7 — so the truthful
+# classification is that each names its `<stem>_weights.pkl`.
+#
+# THE CENSUS IS UNCHANGED AT 55. A flip moves a template between the two
+# classified buckets and adds none.
+#
+# WHAT IT DOES CHANGE IS COVERAGE, and in the direction that fails closed: the
+# armed gate now looks for six dumps backend's manifest does not list, and says
+# so by name. That is the gate working, not a regression — and it is why this
+# must not land before the blobs are hosted (backend#2659) and the manifest
+# entries exist. The red is load-bearing evidence, so it is left standing
+# rather than papered over.
 #
 # ⚠️ 55 is a RUNNING TOTAL, not this branch's arithmetic. 57 + 6 = 63 is what a
 # calculation from the pre-#2973 zoo produces and it is wrong by two deletions;
@@ -464,3 +485,369 @@ def test_a_colliding_stem_in_the_prefixed_category_still_uses_the_prefix(tmp_pat
     assert found["text_classification/bert_base_uncased"]["candidates"] == [
         "bert_base_uncased"
     ]
+
+
+# --- a retirement is a decision, not an orphan (backend#2985) --------------
+#
+# The seven DETR seeds are RETAINED rather than deleted: they were prepped under
+# the stack pinned at `scripts/.tracebloc-engine-ref` and regenerating them
+# means standing that environment back up, so a deletion is irreversible in
+# practice while a status flag is one line. That makes "no template claims this
+# dump" two findings — a drift nobody noticed, and a decision somebody took —
+# and this gate has to tell them apart without becoming a way to switch itself
+# off. Each narrowing below is a test, and each was seen to fail before it
+# passed.
+
+
+def _manifest(tmp_path, entries, shape="entries"):
+    """A schema-2 manifest in either of the two shapes that call themselves 2."""
+    path = tmp_path / "manifest.json"
+    if shape == "entries":
+        body = {"schema": 2, "prefix": "zoo-weights", "entries": entries}
+    else:
+        body = {
+            "schema": 2,
+            "dumps": [{"name": name, **record} for name, record in entries.items()],
+        }
+    path.write_text(json.dumps(body), "utf-8")
+    return path
+
+
+LIVE = {"file": "x_weights.pkl", "sha256": "a" * 64, "size_bytes": 1}
+RETIRED_ENTRY = {**LIVE, "status": "retired"}
+
+
+def test_a_retired_dump_no_template_claims_is_not_an_orphan(tmp_path):
+    """The state backend#2985 settles: seven kept dumps, zero live templates for
+    them, and a gate that stays usable instead of permanently red."""
+    zoo = _zoo(tmp_path, {"object_detection/fcos": SEED_EXPECTING})
+    manifest = _manifest(tmp_path, {"fcos": LIVE, "detr": RETIRED_ENTRY})
+    assert _tool().main(["--zoo", str(zoo), "--manifest", str(manifest)]) == 0
+
+
+def test_a_retired_dump_is_still_reported_every_run(tmp_path, capsys):
+    """Retaining them visibly is the point. A retirement nobody is reminded of
+    is a deletion with extra steps, so this must not go quiet."""
+    zoo = _zoo(tmp_path, {"object_detection/fcos": SEED_EXPECTING})
+    manifest = _manifest(tmp_path, {"fcos": LIVE, "detr": RETIRED_ENTRY})
+    _tool().main(["--zoo", str(zoo), "--manifest", str(manifest)])
+    out = capsys.readouterr().out
+    assert "RETIRED DUMP  detr" in out
+    assert "1 retired" in out
+
+
+def test_an_orphan_with_no_status_is_STILL_RED(tmp_path):
+    """THE TEST THAT KEEPS THE EXEMPTION HONEST. If `retired` were read
+    permissively — any status, or a missing one — this gate would go green over
+    the exact eight dumps it failed to catch, and #2985 would recur silently."""
+    zoo = _zoo(tmp_path, {"object_detection/fcos": SEED_EXPECTING})
+    manifest = _manifest(tmp_path, {"fcos": LIVE, "stranded": LIVE})
+    assert _tool().main(["--zoo", str(zoo), "--manifest", str(manifest)]) == 1
+
+
+def test_an_unknown_status_is_named_rather_than_assumed_live(tmp_path, capsys):
+    """A typo'd `retried` must not send someone hunting for a stranded blob that
+    is really a misspelling — the same refusal-to-guess as UNCLASSIFIED.
+
+    The bad entry is one a template DOES claim, on purpose: an unclaimed one
+    goes red as an orphan anyway, so it would pass this test with the
+    unknown-status verdict deleted. Here the verdict is the only thing red."""
+    zoo = _zoo(tmp_path, {"object_detection/fcos": SEED_EXPECTING})
+    manifest = _manifest(tmp_path, {"fcos": {**LIVE, "status": "retried"}})
+    assert _tool().main(["--zoo", str(zoo), "--manifest", str(manifest)]) == 1
+    assert "BAD STATUS    fcos: 'retried'" in capsys.readouterr().out
+
+
+def test_a_retired_dump_a_template_still_claims_is_red(tmp_path, capsys):
+    """The direction that would ship a retired seed into a live training run.
+    Two unrelated edits produce it — retiring an entry whose template is still
+    there, or re-adding a template whose seed was retired — and neither author
+    is looking at the other half.
+
+    A second, live template is present so that the inventory still holds a live
+    dump. Without it the all-retired fail-closed guard goes red too, and this
+    test would pass with the retired-in-use verdict deleted."""
+    zoo = _zoo(
+        tmp_path,
+        {
+            "object_detection/fcos": SEED_EXPECTING,
+            "object_detection/retinanet": SEED_EXPECTING,
+        },
+    )
+    manifest = _manifest(tmp_path, {"fcos": RETIRED_ENTRY, "retinanet": LIVE})
+    assert _tool().main(["--zoo", str(zoo), "--manifest", str(manifest)]) == 1
+    assert "RETIRED IN USE fcos" in capsys.readouterr().out
+
+
+def test_a_manifest_of_only_retired_dumps_fails_closed(tmp_path, capsys):
+    """"Every dump is exempt" must not be the quiet way to switch this gate off.
+    An all-retired inventory protects exactly as little as an empty one, which
+    the gate already refuses. No template is missing a seed here and nothing is
+    orphaned, so this guard is the only thing standing between the arrangement
+    and a green run."""
+    zoo = _zoo(tmp_path, {"image_classification/vit": NO_SEED})
+    manifest = _manifest(tmp_path, {"detr": RETIRED_ENTRY})
+    assert _tool().main(["--zoo", str(zoo), "--manifest", str(manifest)]) == 1
+    assert "names no live dumps" in capsys.readouterr().out
+
+
+def test_retirement_is_honoured_in_the_dumps_list_shape_too(tmp_path):
+    """Two shapes both call themselves schema 2. Wiring the exemption to the
+    `entries` dict alone would mean a later switch to the `dumps` list silently
+    un-retires all seven — a green gate over a decision it had stopped
+    honouring."""
+    zoo = _zoo(tmp_path, {"object_detection/fcos": SEED_EXPECTING})
+    manifest = _manifest(
+        tmp_path, {"fcos": LIVE, "detr": RETIRED_ENTRY}, shape="dumps"
+    )
+    assert _tool().main(["--zoo", str(zoo), "--manifest", str(manifest)]) == 0
+
+
+def test_a_staging_dir_cannot_launder_an_unlisted_blob_into_a_retired_one(tmp_path):
+    """Only the manifest grants the exemption. A staging directory is a listing
+    of folders with no statuses in it, so a blob present there and absent from
+    the manifest is an orphan — which is precisely the direction backend#2996
+    created for `mask_rcnn` and the reason store state cannot be inferred from
+    manifest state."""
+    zoo = _zoo(tmp_path, {"object_detection/fcos": SEED_EXPECTING})
+    dumps = _dumps(tmp_path, ["fcos", "detr", "unlisted"])
+    manifest = _manifest(tmp_path, {"fcos": LIVE, "detr": RETIRED_ENTRY})
+    assert (
+        _tool().main(
+            ["--zoo", str(zoo), "--manifest", str(manifest), "--dumps-dir", str(dumps)]
+        )
+        == 1
+    )
+
+
+def test_the_survey_json_records_the_retirements(tmp_path):
+    """`--out` is what a human reads after a red run; a retirement invisible in
+    it would look like a dump that had simply vanished from the report."""
+    zoo = _zoo(tmp_path, {"object_detection/fcos": SEED_EXPECTING})
+    manifest = _manifest(tmp_path, {"fcos": LIVE, "detr": RETIRED_ENTRY})
+    out = tmp_path / "survey.json"
+    _tool().main(
+        ["--zoo", str(zoo), "--manifest", str(manifest), "--out", str(out)]
+    )
+    survey = json.loads(out.read_text())
+    assert survey["retired"] == ["detr"]
+    assert survey["orphans"] == []
+
+
+def test_the_real_manifest_shape_is_read_by_status(tmp_path):
+    """Against the real entry shape, not a reduced fixture: the seven retired
+    DETR seeds carry `file`/`sha256`/`size_bytes` alongside their status, and a
+    reader that only tolerated a two-key record would pass this suite and fail
+    on the artifact."""
+    tool = _tool()
+    inventory = tool.manifest_names(
+        {
+            "schema": 2,
+            "prefix": "zoo-weights",
+            "entries": {
+                "detr": {
+                    "file": "detr_weights.pkl",
+                    "sha256": "be50c162032ad57c17ca28285029a0f1c4ac6784e1716b69b5bf8d8317e2ffcb",
+                    "size_bytes": 166639507,
+                    "status": "retired",
+                },
+                "fcos": {"file": "fcos_weights.pkl", "sha256": "b" * 64, "size_bytes": 2},
+            },
+        }
+    )
+    assert inventory.retired == {"detr"}
+    assert inventory.names == {"detr", "fcos"}
+    assert inventory.bad_status == []
+
+
+# --------------------------------------------------------------------------
+# backend#2985 — the orphan half must STAY armed in CI.
+#
+# The gate was fail-closed both ways in code and half-executed in practice: the
+# workflow passed neither `--manifest` nor `--dumps-dir`, so `have_inventory`
+# was false and the orphan branch was dead. Eight orphaned dumps accumulated
+# behind a green check, and a person found them, not the guard.
+#
+# So the arming itself now has a test. Dropping the flag again is a one-line
+# YAML edit that changes no Python, breaks no other test, and leaves this
+# workflow green — which is exactly the class of regression that produced #2985.
+# --------------------------------------------------------------------------
+
+WORKFLOW = ROOT / ".github/workflows/verify-dumps-engine-pin.yml"
+
+
+def _job_block(job="dump-coverage"):
+    """One job's YAML, as text. NO PyYAML.
+
+    This suite runs in the template test environments (`test-sklearn`,
+    `test-survival`, ...), and PyYAML is not installed in them -- the first
+    version of these four tests imported it and failed two jobs on exactly
+    that. The assertions here are about text a YAML parser would only
+    round-trip anyway, so the parser was never earning its dependency.
+
+    Sliced from the job key to the next top-level key at the same indent, so a
+    job added after it cannot leak into the block.
+    """
+    text = WORKFLOW.read_text()
+    key = f"  {job}:\n"
+    start = text.index("\n" + key) + 1
+    rest = text[start + len(key) :]
+    end = len(rest)
+    for line_start, line in _lines_with_offsets(rest):
+        if line.strip() and not line.startswith("   ") and not line.startswith("\t"):
+            end = line_start
+            break
+    block = rest[:end]
+    # Join shell line continuations so a wrapped invocation reads as one line.
+    return block.replace("\\\n", " ")
+
+
+def _coverage_job_block():
+    return _job_block("dump-coverage")
+
+
+def _lines_with_offsets(text):
+    offset = 0
+    for line in text.splitlines(keepends=True):
+        yield offset, line
+        offset += len(line)
+
+
+def _coverage_invocation():
+    return "\n".join(
+        line
+        for line in _coverage_job_block().splitlines()
+        if "check_dump_coverage.py" in line
+    )
+
+
+def test_the_block_slicer_finds_the_job_and_stops_at_the_next_one():
+    """The extractor itself, because every test below trusts its boundaries."""
+    block = _coverage_job_block()
+    assert "check_dump_coverage.py" in block
+    assert "dump-coverage" not in block, "the slice re-included its own job key"
+    assert "\n  verify-dumps:" not in block, "the slice ran into a sibling job"
+
+
+def test_ci_invokes_the_coverage_tool_at_all():
+    assert "check_dump_coverage.py" in _coverage_invocation()
+
+
+def test_CI_ARMS_AN_INVENTORY_SO_THE_ORPHAN_BRANCH_EXECUTES():
+    """Without one of these flags the orphan half is dead code in CI."""
+    invocation = _coverage_invocation()
+    assert (
+        "--manifest" in invocation or "--dumps-dir" in invocation
+    ), "the coverage job passes no inventory: the orphan half is unarmed again"
+
+
+def test_the_manifest_it_arms_is_the_one_a_step_actually_puts_there():
+    """The path passed to `--manifest` must be one a step actually populates.
+
+    A stale path would make the tool exit 1 on `--manifest does not exist` --
+    loud, so survivable -- but a path NOTHING writes to is how a cross-repo read
+    rots silently when the sibling repo moves its file. The path now comes from
+    a `download-artifact` rather than a checkout (see the token-split tests
+    below), so this reads `path:` wherever the job declares it.
+    """
+    block = _coverage_job_block()
+    paths = re.findall(r"^\s*path:\s*(\S+)\s*$", block, re.MULTILINE)
+    invocation = _coverage_invocation()
+    assert paths, "no step puts a manifest anywhere for the checker to read"
+    assert any(
+        f"{path}/" in invocation for path in paths
+    ), f"--manifest path is not under any populated path {paths}"
+
+
+def test_the_manifest_presence_is_asserted_rather_than_assumed():
+    """A sparse checkout that matches nothing must fail, not fall through.
+
+    `check_dump_coverage.py` exits 1 on a missing `--manifest`, so this is
+    belt-and-braces -- but the braces are what stop a silent revert to the
+    classification-only run that #2985 was invisible behind.
+    """
+    block = _coverage_job_block()
+    assert "manifest.json" in block and ("test -s" in block or "test -f" in block)
+
+
+# --------------------------------------------------------------------------
+# backend#2985 — THE TOKEN MUST STAY IN ITS OWN JOB.
+#
+# Arming the manifest read put a `backend`-scoped App token in the same job as
+# the PR-controlled checker. `persist-credentials: false` keeps it out of
+# `_backend/.git/config` but NOT out of the runner's step-output files, so a PR
+# that edited `tools/check_dump_coverage.py` could have read private `backend`.
+# Cursor Bugbot caught it at high severity on a learned rule naming this repo's
+# own convention, and the convention was already in this very workflow:
+# `fetch-engine-pin` holds the engine token and runs no PR code,
+# `engine-pin-drift-guard` runs the PR code and holds no token.
+#
+# The fix is a two-job split, so these tests pin the SPLIT rather than the flag.
+# Re-collapsing the jobs is a small, plausible YAML tidy-up that would restore
+# the vulnerability while leaving every other test here green.
+# --------------------------------------------------------------------------
+
+FETCH_JOB = "fetch-dump-manifest"
+
+TOKEN_MARKERS = ("create-github-app-token", "secrets.")
+
+
+def test_the_slicer_finds_the_fetch_job_too():
+    block = _job_block(FETCH_JOB)
+    assert "create-github-app-token" in block
+    assert FETCH_JOB not in block, "the slice re-included its own job key"
+    assert "\n  dump-coverage:" not in block, "the slice ran into the next job"
+
+
+def test_THE_COVERAGE_JOB_HOLDS_NO_TOKEN():
+    """The security property, stated directly. The job that runs PR-controlled
+    code must not be able to mint or see a cross-repo credential."""
+    block = _job_block("dump-coverage")
+    for marker in TOKEN_MARKERS:
+        assert marker not in block, (
+            f"the coverage job references {marker!r}: a PR that edits "
+            "check_dump_coverage.py could reach private backend"
+        )
+
+
+def test_the_fetch_job_runs_no_pr_controlled_code():
+    """The other half of the isolation. A token-holding job that also ran a
+    checked-in script would be the same hazard with the jobs merely renamed."""
+    block = _job_block(FETCH_JOB)
+    assert "python3 tools/" not in block
+    assert "check_dump_coverage.py" not in block
+
+
+def test_the_manifest_crosses_as_an_artifact_not_as_a_checkout():
+    """`needs:` plus a download is what makes the split load-bearing rather than
+    decorative -- without the dependency the coverage job would race a manifest
+    that is not there yet."""
+    coverage = _job_block("dump-coverage")
+    assert f"needs: {FETCH_JOB}" in coverage
+    assert "download-artifact" in coverage
+    assert "upload-artifact" in _job_block(FETCH_JOB)
+
+
+def test_only_the_manifest_crosses_the_boundary():
+    """Never `_backend/.git`. The UPLOAD's path must name the one JSON file, so
+    a widened glob cannot carry the token's credential store across.
+
+    Scoped to the upload step rather than to every `path:` in the job. A first
+    version read them all and excused `_backend` because the CHECKOUT legitimately
+    uses it -- which excused exactly the widening this test exists to catch, and
+    the mutation (`path: _backend` on the upload) passed. Read the one step whose
+    path decides what crosses.
+    """
+    block = _job_block(FETCH_JOB)
+    upload = block[block.index("upload-artifact") :]
+    uploaded = re.findall(r"^\s*path:\s*(\S+)\s*$", upload, re.MULTILINE)
+    assert uploaded == ["_backend/tools/offline_weights/manifest.json"], uploaded
+
+
+def test_both_jobs_refuse_an_absent_manifest():
+    """Fail-closed on each side of the hand-off: a sparse checkout that matched
+    nothing, and an artifact that arrived empty, are different failures and
+    neither may fall through to the classification-only run."""
+    for job in (FETCH_JOB, "dump-coverage"):
+        block = _job_block(job)
+        assert "test -s" in block or "test -f" in block, job
