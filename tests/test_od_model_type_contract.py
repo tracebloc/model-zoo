@@ -109,10 +109,15 @@ def test_od_templates_declaring_model_type_were_found() -> None:
     # yolo model.py entry points). The floor tracks the live tree, not a
     # historical high-water mark — left too high it would have failed on a
     # deletion that is the point of the change, which teaches people to lower it
-    # reflexively and defeats the guard. It rises again when backend#2982 Tier 0
-    # wraps the torchvision builders the zoo never shipped; raise it with that
-    # roster, do not leave it trailing.
-    assert len(declared) >= 6, (
+    # reflexively and defeats the guard.
+    #
+    # It rose again with the roster work, as that note said it would: 6 -> 12
+    # with backend#2982's Tier 0 (six torchvision builders) and 12 -> 14 with
+    # its Tier 2 (yolox_s, rtmdet_s). Like the census in
+    # test_check_dump_coverage.py this is a RUNNING TOTAL — model-zoo#231 and
+    # #232 are in flight with their own increments, so a rebase re-counts the
+    # tree rather than keeping this branch's literal.
+    assert len(declared) >= 14, (
         f"expected the OD templates to declare model_type, found {len(declared)} "
         f"under {OD_ROOT} — did the tree move?"
     )

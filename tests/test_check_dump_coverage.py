@@ -268,10 +268,19 @@ def test_an_empty_zoo_is_an_error_not_a_green(tmp_path):
 # ssdlite_mobilenet). All six classify NO_SEED — they build with weights=None,
 # so they genuinely random-initialise and stage no dump.
 #
-# ⚠️ 55 is a RUNNING TOTAL, not this branch's arithmetic. 57 + 6 = 63 is what a
-# calculation from the pre-#2973 zoo produces and it is wrong by two deletions;
-# whoever rebases onto a moved develop takes the count the tree actually has.
-MIGRATED_TEMPLATE_CENSUS = 55
+# 55 -> 57: backend#2982 Tier 2 added the two hand-written detectors
+# (yolox_s, rtmdet_s). Both classify NO_SEED — they are written from scratch
+# with no hub id and no torchvision pretrained enum, so they genuinely
+# random-initialise and stage no dump.
+#
+# ⚠️ 57 is a RUNNING TOTAL TAKEN FROM THE TOOL, not this branch's arithmetic.
+# 57 + 6 = 63 was the number a calculation from the pre-#2973 zoo produced, and
+# it was wrong by two deletions. Two more Tier 1/Tier 2 PRs are in flight
+# (model-zoo#231 adds four, model-zoo#232 adds one) and each states its own
+# arithmetic; the numbers only reconcile in landing order. Whoever rebases onto
+# a moved develop re-runs `python tools/check_dump_coverage.py --zoo .` and
+# takes the count the tree actually has — never the literal written here.
+MIGRATED_TEMPLATE_CENSUS = 57
 
 
 def test_the_real_zoo_classifies_every_migrated_template(tmp_path):
