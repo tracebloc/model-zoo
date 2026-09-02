@@ -289,8 +289,11 @@ def test_an_empty_zoo_is_an_error_not_a_green(tmp_path):
 # `tools/verify_backbone_seeds.py` at output_classes=7 — so the truthful
 # classification is that each names its `<stem>_weights.pkl`.
 #
-# THE CENSUS IS UNCHANGED AT 55. A flip moves a template between the two
-# classified buckets and adds none.
+# THE FLIP DOES NOT MOVE THE CENSUS, whatever the census currently is: it
+# reclassifies six templates between the two classified buckets and adds none.
+# (Written that way on purpose — an earlier revision said "unchanged at 55" and
+# was stale within the hour, when Tier 1 took the total to 59 for reasons that
+# have nothing to do with this change.)
 #
 # WHAT IT DOES CHANGE IS COVERAGE, and in the direction that fails closed: the
 # armed gate now looks for six dumps backend's manifest does not list, and says
