@@ -172,7 +172,7 @@ def test_family_templates_were_found() -> None:
     )
     # A RUNNING TOTAL, like the census in test_check_dump_coverage.py: a
     # rebase re-counts the tree rather than keeping this branch's literal.
-    assert len(FAMILY_TEMPLATES) >= 15, (
+    assert len(FAMILY_TEMPLATES) >= 16, (
         f"expected the {FAMILY} roster under {OD_ROOT}, found "
         f"{[p.name for p in FAMILY_TEMPLATES]} — did the tree move? The floor "
         f"tracks the live roster; raise it as the roster grows."

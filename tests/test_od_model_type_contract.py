@@ -113,11 +113,11 @@ def test_od_templates_declaring_model_type_were_found() -> None:
     #
     # It rose again with the roster work, as that note said it would: 6 -> 12
     # with backend#2982's Tier 0 (six torchvision builders), 12 -> 16 with its
-    # Tier 1 (four modern-backbone detectors) and 16 -> 18 with its Tier 2
-    # (yolox_s, rtmdet_s). Like the census in test_check_dump_coverage.py this
-    # is a RUNNING TOTAL: a rebase re-counts the tree rather than keeping this
-    # branch's literal.
-    assert len(declared) >= 18, (
+    # Tier 1 (four modern-backbone detectors), 16 -> 17 with atss_resnet and
+    # 17 -> 19 with yolox_s and rtmdet_s. Like the census in
+    # test_check_dump_coverage.py this is a RUNNING TOTAL: a rebase re-counts
+    # the tree rather than keeping this branch's literal.
+    assert len(declared) >= 19, (
         f"expected the OD templates to declare model_type, found {len(declared)} "
         f"under {OD_ROOT} — did the tree move?"
     )

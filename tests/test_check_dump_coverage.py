@@ -287,17 +287,22 @@ def test_an_empty_zoo_is_an_error_not_a_green(tmp_path):
 # fcos_swin_t — assembled via detection.backbone_utils.BackboneWithFPN. All
 # four classify NO_SEED for the same reason.
 #
-# 59 -> 61: backend#2982 Tier 2 added the two hand-written detectors, yolox_s
-# and rtmdet_s — CSPDarknet/PAFPN with SimOTA and CSPNeXt/PAFPN with a dynamic
-# soft-label assigner, written from scratch rather than assembled from
-# torchvision builders. Both classify NO_SEED for the same reason as Tiers 0
-# and 1: no hub id, no pretrained enum, nothing to stage.
+# 59 -> 60: backend#2982 Tier 2 added atss_resnet — RetinaNet's backbone and
+# head with Adaptive Training Sample Selection replacing the fixed-IoU matcher.
+# NO_SEED for the same reason.
+#
+# 60 -> 62: backend#2982 Tier 2 also added the two hand-written real-time
+# detectors, yolox_s and rtmdet_s — CSPDarknet/PAFPN with SimOTA and
+# CSPNeXt/PAFPN with a dynamic soft-label assigner, written from scratch rather
+# than assembled from torchvision builders. NO_SEED for the same reason.
 #
 # ⚠️ EACH NUMBER HERE IS A RUNNING TOTAL, NOT ITS BRANCH'S ARITHMETIC. Tier 0
 # had to unlearn a plausible-looking `57 + 6 = 63` — wrong by the eight
 # templates #2973 and #2988 deleted. Whoever rebases onto a moved develop takes
 # what `tools/check_dump_coverage.py --zoo .` reports against the merged tree.
-MIGRATED_TEMPLATE_CENSUS = 61
+# gfl_resnet (model-zoo#235, +1) is also in flight; whichever lands after this
+# becomes 63 — re-read the tool, do not add.
+MIGRATED_TEMPLATE_CENSUS = 62
 
 
 def test_the_real_zoo_classifies_every_migrated_template(tmp_path):
