@@ -103,15 +103,16 @@ def test_od_templates_declaring_model_type_were_found() -> None:
     declared = [
         p for p in _od_model_files() if (_read_model_type(p) or "") != ""
     ]
-    # Floor lowered 10 -> 7 by backend#2973: deleting the seven DETR templates
-    # left seven declaring templates (faster_rcnn_resnet, mask_rcnn, fcos,
-    # retinanet, and the three yolo model.py entry points). The floor tracks the
-    # live tree, not a historical high-water mark — left at 10 it would have
-    # failed on a deletion that is the point of the change, which teaches people
-    # to lower it reflexively and defeats the guard. It rises again when
-    # backend#2982 Tier 0 wraps the torchvision builders the zoo never shipped;
-    # raise it with that roster, do not leave it trailing.
-    assert len(declared) >= 7, (
+    # Floor lowered 10 -> 7 by backend#2973 (deleting the seven DETR templates),
+    # then 7 -> 6 by backend#2988 (deleting the unusable mask_rcnn), leaving six
+    # declaring templates (faster_rcnn_resnet, fcos, retinanet, and the three
+    # yolo model.py entry points). The floor tracks the live tree, not a
+    # historical high-water mark — left too high it would have failed on a
+    # deletion that is the point of the change, which teaches people to lower it
+    # reflexively and defeats the guard. It rises again when backend#2982 Tier 0
+    # wraps the torchvision builders the zoo never shipped; raise it with that
+    # roster, do not leave it trailing.
+    assert len(declared) >= 6, (
         f"expected the OD templates to declare model_type, found {len(declared)} "
         f"under {OD_ROOT} — did the tree move?"
     )

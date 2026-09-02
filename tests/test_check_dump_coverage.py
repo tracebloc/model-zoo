@@ -258,7 +258,10 @@ def test_an_empty_zoo_is_an_error_not_a_green(tmp_path):
 # are now orphaned in the model store; the orphan half of this gate is unarmed
 # (CI passes no --manifest / --dumps-dir), so it will surface them by name on
 # the day hosting arms it, which is the correct alarm rather than a silent loss.
-MIGRATED_TEMPLATE_CENSUS = 50
+#
+# 50 -> 49: backend#2988 deleted mask_rcnn (unusable — its mask head needs a
+# masks target key the OD path never supplies); its dump is likewise orphaned.
+MIGRATED_TEMPLATE_CENSUS = 49
 
 
 def test_the_real_zoo_classifies_every_migrated_template(tmp_path):
