@@ -291,7 +291,10 @@ def test_an_empty_zoo_is_an_error_not_a_green(tmp_path):
 # head with Adaptive Training Sample Selection replacing the fixed-IoU matcher.
 # NO_SEED for the same reason.
 #
-# 60 -> 62: backend#2982 Tier 2 also added the two hand-written real-time
+# 60 -> 61: backend#2982 Tier 2 added gfl_resnet — Generalized Focal Loss over
+# that same ATSS-assigned skeleton. NO_SEED for the same reason.
+#
+# 61 -> 63: backend#2982 Tier 2 also added the two hand-written real-time
 # detectors, yolox_s and rtmdet_s — CSPDarknet/PAFPN with SimOTA and
 # CSPNeXt/PAFPN with a dynamic soft-label assigner, written from scratch rather
 # than assembled from torchvision builders. NO_SEED for the same reason.
@@ -300,9 +303,11 @@ def test_an_empty_zoo_is_an_error_not_a_green(tmp_path):
 # had to unlearn a plausible-looking `57 + 6 = 63` — wrong by the eight
 # templates #2973 and #2988 deleted. Whoever rebases onto a moved develop takes
 # what `tools/check_dump_coverage.py --zoo .` reports against the merged tree.
-# gfl_resnet (model-zoo#235, +1) is also in flight; whichever lands after this
-# becomes 63 — re-read the tool, do not add.
-MIGRATED_TEMPLATE_CENSUS = 62
+# centernet_resnet (model-zoo#236, +1) is also in flight; whichever lands after
+# this becomes 64 — re-read the tool, do not add. This branch has already had
+# to re-read it three times (#231, #232, #235 each landed mid-flight), and each
+# time the arithmetic-from-my-own-branch answer was wrong.
+MIGRATED_TEMPLATE_CENSUS = 63
 
 
 def test_the_real_zoo_classifies_every_migrated_template(tmp_path):

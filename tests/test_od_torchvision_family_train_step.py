@@ -225,9 +225,10 @@ def test_family_templates_were_found() -> None:
     )
     # 3 -> 9 with backend#2982's Tier 0 (six torchvision builders), 9 -> 13
     # with its Tier 1 (four modern-backbone detectors), 13 -> 14 with
-    # atss_resnet and 14 -> 16 with yolox_s and rtmdet_s. A RUNNING TOTAL: a
-    # rebase re-counts the tree rather than keeping this branch's literal.
-    assert len(FAMILY_TEMPLATES) >= 16, (
+    # atss_resnet, 14 -> 15 with gfl_resnet and 15 -> 17 with yolox_s and
+    # rtmdet_s. A RUNNING TOTAL: a rebase re-counts the tree rather than
+    # keeping this branch's literal.
+    assert len(FAMILY_TEMPLATES) >= 17, (
         f"expected the {FAMILY} roster under {OD_ROOT}, found "
         f"{[p.name for p in FAMILY_TEMPLATES]} — did the tree move? The floor "
         f"tracks the live roster: raise it as the roster grows."

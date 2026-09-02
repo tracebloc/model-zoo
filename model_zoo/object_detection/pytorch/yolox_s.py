@@ -65,8 +65,12 @@ and the head's three levels are at strides 8/16/32.
 the previously shipped non-yolo OD templates declared ``image_size = 448``
 while their builders resized to ``min_size=800`` (backend#3058): the declared
 edge was decorative. Here it is the edge, and
-``tests/test_od_declared_image_size.py`` measures it off the built model with
-a forward hook rather than trusting this docstring.
+two tests measure it off the built model rather than trusting this docstring:
+``tests/test_od_declared_resolution.py`` compares declared against the
+transform's configured resolution family-wide (backend#3058), and
+``test_od_hand_written_detectors.py``'s ``declared_size_measured`` guard hooks
+the transform to check the tensor the backbone is actually handed is square at
+exactly this edge.
 
 Label space
 -----------

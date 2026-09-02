@@ -410,6 +410,64 @@ def guard_overfits_a_single_object(module) -> None:
     )
 
 
+def guard_declared_image_size_is_the_measured_edge(module) -> None:
+    """The declared ``image_size`` must be the resolution the backbone receives.
+
+    Scoped to these two templates on purpose. The **family-wide** version of
+    this check is ``tests/test_od_declared_resolution.py`` (backend#3058,
+    model-zoo#234), which reads the effective resolution off the transform's
+    ``min_size`` / ``fixed_size`` and carries a shrink-only ratchet on its
+    known-mismatch list. That file owns the family; a second scan over the same
+    seventeen templates here would be duplication, not defence.
+
+    What this adds for the two hand-written detectors, and only them, is a
+    stronger measurement: a forward hook on the transform reports the spatial
+    size of the tensor the backbone is **actually handed**, rather than the
+    resize target the transform was configured with. The two can differ — the
+    batch is padded to ``size_divisible=32`` after the resize — and these are
+    the templates where that padding is load-bearing (YOLOX's ``Focus`` stem
+    slices on even rows/columns; both heads sit at strides 8/16/32). It also
+    asserts the result is **square**, which the family guard does not: that one
+    compares a single edge, so a template resizing only its short side passes
+    there.
+
+    Measured off the built model, never read from the source text.
+    """
+    import torch
+
+    declared = module.image_size
+    assert isinstance(declared, int) and declared > 0, (
+        f"{module.__name__}: image_size must be a positive int, got {declared!r}"
+    )
+    model = _build(module, 3)
+
+    seen: list[tuple[int, int]] = []
+
+    def record(_module, _inputs, output):
+        tensors = output[0].tensors
+        seen.append((int(tensors.shape[-2]), int(tensors.shape[-1])))
+
+    handle = model.transform.register_forward_hook(record)
+    try:
+        model.eval()
+        with torch.no_grad():
+            model([torch.rand(3, declared, declared)])
+    finally:
+        handle.remove()
+
+    assert seen, f"{module.__name__}: the transform hook never fired"
+    height, width = seen[0]
+    assert (height, width) == (declared, declared), (
+        f"{module.__name__}: declares image_size={declared} but the backbone "
+        f"receives {height}x{width} for a square input at the declared edge. "
+        f"The SDK hands image_size to the edge to size the dataset, so a "
+        f"template that then rescales trains on the declared resolution "
+        f"stretched to another one — paying the resize twice and losing the "
+        f"detail it could have had (backend#3058). Build the transform with "
+        f"min_size == max_size == image_size, or declare {height}."
+    )
+
+
 def guard_predictions_are_in_original_image_coordinates(module) -> None:
     """Eval predictions must be mapped back to each input image's own frame.
 
@@ -1395,6 +1453,7 @@ YOLOX_GUARDS = {
     "tie_break": guard_yolox_breaks_ties_between_ground_truths,
     "positives_reach_box_branch": guard_positives_reach_the_box_regression_branch,
     "original_coordinates": guard_predictions_are_in_original_image_coordinates,
+    "declared_size_measured": guard_declared_image_size_is_the_measured_edge,
     "no_network": guard_constructs_with_no_network,
     "overfits_one_object": guard_overfits_a_single_object,
 }
@@ -1412,6 +1471,7 @@ RTMDET_GUARDS = {
     "tie_break": guard_rtmdet_breaks_ties_between_ground_truths,
     "positives_reach_box_branch": guard_positives_reach_the_box_regression_branch,
     "original_coordinates": guard_predictions_are_in_original_image_coordinates,
+    "declared_size_measured": guard_declared_image_size_is_the_measured_edge,
     "no_network": guard_constructs_with_no_network,
     "overfits_one_object": guard_overfits_a_single_object,
 }
@@ -1553,6 +1613,14 @@ MUTATIONS = [
         ("yolox", "overfits_one_object"),
     ),
     (
+        "yolox/transform_runs_at_800",
+        YOLOX_PATH,
+        "            min_size=self.input_size,\n"
+        "            max_size=self.input_size,",
+        "            min_size=800,\n            max_size=1333,",
+        ("yolox", "declared_size_measured"),
+    ),
+    (
         "yolox/no_postprocess",
         YOLOX_PATH,
         """        detections = self._predictions(raw, grids, image_list.image_sizes)
@@ -1680,6 +1748,14 @@ MUTATIONS = [
         '        __import__("socket").getaddrinfo("download.pytorch.org", 443)\n'
         "        self.backbone = CSPNeXt()",
         ("rtmdet", "no_network"),
+    ),
+    (
+        "rtmdet/transform_runs_at_800",
+        RTMDET_PATH,
+        "            min_size=self.input_size,\n"
+        "            max_size=self.input_size,",
+        "            min_size=800,\n            max_size=1333,",
+        ("rtmdet", "declared_size_measured"),
     ),
     (
         "rtmdet/no_postprocess",

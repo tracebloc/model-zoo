@@ -60,8 +60,12 @@ head's three levels sit at strides 8/16/32.
 1.0 and the backbone sees ``image_size x image_size``. Stated explicitly
 because the previously shipped non-yolo OD templates declared
 ``image_size = 448`` while their builders resized to ``min_size=800``
-(backend#3058). ``tests/test_od_declared_image_size.py`` measures this off the
-built model with a forward hook instead of trusting the docstring.
+(backend#3058). Measured off the built model, not trusted from here:
+``tests/test_od_declared_resolution.py`` covers the whole family against the
+transform's configured resolution, and
+``test_od_hand_written_detectors.py``'s ``declared_size_measured`` guard hooks
+the transform to check the tensor the backbone is actually handed is square at
+exactly this edge.
 
 Label space
 -----------
