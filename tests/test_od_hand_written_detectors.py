@@ -468,6 +468,115 @@ def guard_declared_image_size_is_the_measured_edge(module) -> None:
     )
 
 
+#: Exact parameter/buffer/tensor totals at the templates' declared
+#: ``output_classes``, pinned because NOTHING ELSE HERE PINS A WIDTH.
+#:
+#: This table exists because of a real escape. ``yolox_s``'s ``CSPLayer`` built
+#: its inner ``Bottleneck`` at the bottleneck's own ``expansion=0.5`` instead of
+#: the 1.0 upstream passes, so channels the CSP split had already halved were
+#: squeezed again and the backbone and neck ran ~1.15M parameters narrower than
+#: YOLOX-S all the way through (7,788,886 instead of 8,942,326). Thirty guards
+#: and thirty-three mutations did not notice: ``decoupled_head`` checks ``id()``
+#: disjointness and ``shared_conv_separate_bn`` checks ``data_ptr`` identity,
+#: and both hold at ANY width. The evidence that the architecture was the right
+#: size lived only in the PR description, where no check can reach it.
+#:
+#: A total is a blunt instrument, and deliberately so: it is one number that
+#: moves if any channel count, block count, kernel size or head shape moves. It
+#: is paired with the two ``csp_bottleneck_width`` guards, which name the
+#: specific ratio that was wrong — so a failure here says "something resized"
+#: and a failure there says exactly what.
+#:
+#: Updating these numbers is a legitimate edit when the architecture changes on
+#: purpose. Doing it to make a red go away is the failure this table exists to
+#: prevent, so state the intended change in the commit message.
+_PINNED_TOTALS = {
+    "YOLOXS": {"parameters": 8_942_326, "buffers": 23_178, "tensors": 462},
+    "RTMDetS": {"parameters": 9_271_747, "buffers": 24_978, "tensors": 520},
+}
+
+
+def guard_module_tree_size_is_pinned(module) -> None:
+    """The built model's parameter, buffer and tensor totals are exact.
+
+    Measured at the template's declared ``output_classes`` so the number is
+    reproducible from the file alone, with no argument to get wrong.
+    """
+    entry_name = getattr(module, "main_class", None) or getattr(
+        module, "main_method", None
+    )
+    expected = _PINNED_TOTALS.get(entry_name)
+    assert expected is not None, (
+        f"{module.__name__}: entry point {entry_name!r} has no row in "
+        f"_PINNED_TOTALS. A new hand-written detector must pin its totals, or "
+        f"it ships at whatever width a typo leaves it."
+    )
+
+    model = _build(module, module.output_classes)
+    actual = {
+        "parameters": sum(p.numel() for p in model.parameters()),
+        "buffers": sum(b.numel() for b in model.buffers()),
+        "tensors": len(model.state_dict()),
+    }
+    assert actual == expected, (
+        f"{module.__name__}: module tree is {actual}, pinned at {expected} "
+        f"(at output_classes={module.output_classes}). Some channel count, "
+        f"block count, kernel size or head shape moved. Nothing else in this "
+        f"file pins a width — that is why this row exists. If the change was "
+        f"deliberate, update the row and say so in the commit; if it was not, "
+        f"the delta is "
+        f"{actual['parameters'] - expected['parameters']:+,} parameters."
+    )
+
+
+def guard_yolox_csp_bottleneck_runs_at_full_branch_width(module) -> None:
+    """A ``CSPLayer``'s inner bottleneck must not squeeze the CSP branch again.
+
+    The precise statement of the defect the totals table was added for. A
+    ``CSPLayer`` splits its channels in half; the ``Bottleneck`` inside that
+    half runs at ``expansion=1.0`` upstream, so its inner 1x1 is full branch
+    width. Passing the bottleneck's own 0.5 there halves it a second time —
+    every stage of the backbone and neck comes out narrower, the model trains
+    perfectly well, and no official checkpoint will ever strict-load against
+    it.
+
+    Checked as a RATIO off a small hand-built stage, so it holds at any width
+    multiplier and says what is wrong rather than just that a total moved.
+    """
+    layer = module.CSPLayer(64, 64, n=1)
+    branch = layer.conv1.conv.out_channels
+    inner = layer.m[0].conv1.conv.out_channels
+    assert inner == branch, (
+        f"yolox_s: CSPLayer's branch is {branch} channels but its inner "
+        f"Bottleneck squeezes to {inner}. The CSP split already halved the "
+        f"channels; upstream YOLOX (and YOLOv5's C3) pass expansion=1.0 to the "
+        f"bottleneck so it runs at full branch width. Squeezing twice narrows "
+        f"the entire backbone and neck — it trains fine and no COCO YOLOX-S "
+        f"checkpoint will load against it. rtmdet_s.py's CSPNeXtBlock in this "
+        f"same PR gets this right, which is the tell."
+    )
+
+
+def guard_rtmdet_csp_block_runs_at_full_branch_width(module) -> None:
+    """The mirror of the YOLOX guard, on the duplicated CSP stage.
+
+    ``rtmdet_s.py``'s ``CSPLayer`` is a separate implementation of the same
+    idea, and mmdet likewise passes ``expansion=1.0`` to ``CSPNeXtBlock``. This
+    file was the one that got it right, which is how the YOLOX slip was
+    identified — so it gets the guard too, or the next edit can silently move
+    the asymmetry to this side instead.
+    """
+    layer = module.CSPLayer(64, 64, n=1)
+    branch = layer.main_conv.conv.out_channels
+    inner = layer.blocks[0].conv1.conv.out_channels
+    assert inner == branch, (
+        f"rtmdet_s: CSPLayer's branch is {branch} channels but its inner "
+        f"CSPNeXtBlock squeezes to {inner}. mmdet passes expansion=1.0 to the "
+        f"block, so its 3x3 runs at full branch width. Squeezing again narrows "
+        f"the whole backbone and neck, silently."
+    )
+
+
 def guard_predictions_are_in_original_image_coordinates(module) -> None:
     """Eval predictions must be mapped back to each input image's own frame.
 
@@ -1446,6 +1555,7 @@ YOLOX_GUARDS = {
     "dynamic_k": guard_yolox_dynamic_k_is_dynamic,
     "centre_region_candidates": guard_yolox_centre_region_creates_candidates,
     "in_box_candidates": guard_yolox_in_box_rule_admits_distant_candidates,
+    "csp_bottleneck_width": guard_yolox_csp_bottleneck_runs_at_full_branch_width,
     "prefers_better_iou": guard_yolox_prefers_the_better_localised_anchor,
     "iou_scaled_class_target": guard_yolox_class_target_is_scaled_by_the_matched_iou,
     "outside_box_penalty": guard_yolox_penalises_candidates_outside_the_box,
@@ -1454,6 +1564,7 @@ YOLOX_GUARDS = {
     "positives_reach_box_branch": guard_positives_reach_the_box_regression_branch,
     "original_coordinates": guard_predictions_are_in_original_image_coordinates,
     "declared_size_measured": guard_declared_image_size_is_the_measured_edge,
+    "module_tree_size": guard_module_tree_size_is_pinned,
     "no_network": guard_constructs_with_no_network,
     "overfits_one_object": guard_overfits_a_single_object,
 }
@@ -1461,6 +1572,7 @@ YOLOX_GUARDS = {
 RTMDET_GUARDS = {
     "shared_conv_separate_bn": guard_rtmdet_head_shares_convs_and_separates_bns,
     "soft_quality_target": guard_rtmdet_quality_focal_loss_targets_the_matched_iou,
+    "csp_bottleneck_width": guard_rtmdet_csp_block_runs_at_full_branch_width,
     "head_flatten_order": guard_rtmdet_head_flatten_order_matches_the_priors,
     "decode_per_image": guard_rtmdet_decode_is_per_image_and_aligned,
     "dynamic_k": guard_rtmdet_dynamic_k_is_dynamic,
@@ -1472,6 +1584,7 @@ RTMDET_GUARDS = {
     "positives_reach_box_branch": guard_positives_reach_the_box_regression_branch,
     "original_coordinates": guard_predictions_are_in_original_image_coordinates,
     "declared_size_measured": guard_declared_image_size_is_the_measured_edge,
+    "module_tree_size": guard_module_tree_size_is_pinned,
     "no_network": guard_constructs_with_no_network,
     "overfits_one_object": guard_overfits_a_single_object,
 }
@@ -1613,6 +1726,20 @@ MUTATIONS = [
         ("yolox", "overfits_one_object"),
     ),
     (
+        "yolox/csp_bottleneck_squeezed",
+        YOLOX_PATH,
+        "            *[Bottleneck(hidden, hidden, 1.0, shortcut) for _ in range(n)]",
+        "            *[Bottleneck(hidden, hidden, 0.5, shortcut) for _ in range(n)]",
+        ("yolox", "csp_bottleneck_width"),
+    ),
+    (
+        "yolox/width_multiplier_moved",
+        YOLOX_PATH,
+        "WIDTH_MULT = 0.50",
+        "WIDTH_MULT = 0.75",
+        ("yolox", "module_tree_size"),
+    ),
+    (
         "yolox/transform_runs_at_800",
         YOLOX_PATH,
         "            min_size=self.input_size,\n"
@@ -1748,6 +1875,20 @@ MUTATIONS = [
         '        __import__("socket").getaddrinfo("download.pytorch.org", 443)\n'
         "        self.backbone = CSPNeXt()",
         ("rtmdet", "no_network"),
+    ),
+    (
+        "rtmdet/csp_block_squeezed",
+        RTMDET_PATH,
+        "            *[CSPNeXtBlock(mid, mid, add_identity) for _ in range(n)]",
+        "            *[CSPNeXtBlock(mid, max(2, mid // 2), add_identity) for _ in range(n)]",
+        ("rtmdet", "csp_bottleneck_width"),
+    ),
+    (
+        "rtmdet/width_multiplier_moved",
+        RTMDET_PATH,
+        "WIDEN_FACTOR = 0.50",
+        "WIDEN_FACTOR = 0.75",
+        ("rtmdet", "module_tree_size"),
     ),
     (
         "rtmdet/transform_runs_at_800",

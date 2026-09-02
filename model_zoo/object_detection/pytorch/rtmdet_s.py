@@ -88,6 +88,15 @@ positive), and the family contract requires ``x2 >= x1``; the alternative is a
 clamp at decode time that silently kills the gradient on the clamped side. It
 changes no parameter shape.
 
+⚠️ It does, however, interact with the seed story above, and in the one way a
+strict load cannot catch. An upstream RTMDet-S checkpoint was trained with
+``exp_on_reg`` OFF, so its regression head predicts distances directly. Every
+shape matches, the load succeeds, and the boxes come out exponentiated —
+garbage, with no error anywhere. If a COCO seed is ever prepped for this
+template it must be prepped against **this** build, or this flag flipped to
+match the checkpoint and the decode re-verified. Shape compatibility is not
+semantic compatibility here.
+
 Federated note (BatchNorm)
 --------------------------
 Norm layers are BatchNorm, as upstream has them (SyncBN in distributed

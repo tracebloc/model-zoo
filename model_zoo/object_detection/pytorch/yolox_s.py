@@ -216,9 +216,19 @@ class Focus(nn.Module):
 
 
 class Bottleneck(nn.Module):
-    """1x1 squeeze -> 3x3 expand, with an optional identity branch."""
+    """1x1 -> 3x3, with an optional identity branch.
 
-    def __init__(self, in_ch, out_ch, shortcut=True, expansion=0.5):
+    ``expansion`` has NO DEFAULT on purpose. Inside a ``CSPLayer`` it must be
+    ``1.0``: the CSP split has already halved the channel count, and squeezing
+    again there narrows the whole backbone and neck (measured: 7,788,886
+    parameters instead of 8,942,326, so ~1.15M missing at every stage, and no
+    official YOLOX-S checkpoint would strict-load). A default invited exactly
+    that slip and it shipped past thirty guards — see
+    ``tests/test_od_hand_written_detectors.py``'s ``csp_bottleneck_width``
+    guard, added with the fix.
+    """
+
+    def __init__(self, in_ch, out_ch, expansion, shortcut=True):
         super().__init__()
         hidden = max(2, int(out_ch * expansion))
         self.conv1 = ConvBNAct(in_ch, hidden, 1, stride=1)
@@ -240,8 +250,12 @@ class CSPLayer(nn.Module):
         self.conv1 = ConvBNAct(in_ch, hidden, 1, stride=1)
         self.conv2 = ConvBNAct(in_ch, hidden, 1, stride=1)
         self.conv3 = ConvBNAct(2 * hidden, out_ch, 1, stride=1)
+        # expansion=1.0, NOT the bottleneck's own 0.5: `hidden` is already the
+        # halved CSP branch, so the inner 1x1 runs at full branch width. This is
+        # what upstream YOLOX (and YOLOv5's C3) do, and what rtmdet_s.py's
+        # CSPNeXtBlock does in this same PR.
         self.m = nn.Sequential(
-            *[Bottleneck(hidden, hidden, shortcut) for _ in range(n)]
+            *[Bottleneck(hidden, hidden, 1.0, shortcut) for _ in range(n)]
         )
 
     def forward(self, x):
