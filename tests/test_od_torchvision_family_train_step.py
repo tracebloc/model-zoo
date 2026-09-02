@@ -223,11 +223,11 @@ def test_family_templates_were_found() -> None:
         f"engine really dropped it, update FAMILY_VALUES' users; if not, this "
         f"scan just stopped covering every template declaring it"
     )
-    # 3 -> 9 with backend#2982's Tier 0 (six torchvision builders), 9 -> 11
-    # with its Tier 2 (yolox_s, rtmdet_s). A RUNNING TOTAL: model-zoo#231 and
-    # #232 are in flight with their own increments, so a rebase re-counts the
-    # tree rather than keeping this branch's literal.
-    assert len(FAMILY_TEMPLATES) >= 11, (
+    # 3 -> 9 with backend#2982's Tier 0 (six torchvision builders), 9 -> 13
+    # with its Tier 1 (four modern-backbone detectors) and 13 -> 15 with its
+    # Tier 2 (yolox_s, rtmdet_s). A RUNNING TOTAL: a rebase re-counts the tree
+    # rather than keeping this branch's literal.
+    assert len(FAMILY_TEMPLATES) >= 15, (
         f"expected the {FAMILY} roster under {OD_ROOT}, found "
         f"{[p.name for p in FAMILY_TEMPLATES]} — did the tree move? The floor "
         f"tracks the live roster: raise it as the roster grows."

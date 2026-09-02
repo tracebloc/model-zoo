@@ -170,10 +170,9 @@ def test_family_templates_were_found() -> None:
         f"{_schema_path().name}: {FAMILY!r} lost its legacy 'rcnn' alias — the "
         f"scan just stopped covering every template declaring it"
     )
-    # A RUNNING TOTAL, like the census in test_check_dump_coverage.py:
-    # model-zoo#231 and #232 are in flight with their own increments, so a
+    # A RUNNING TOTAL, like the census in test_check_dump_coverage.py: a
     # rebase re-counts the tree rather than keeping this branch's literal.
-    assert len(FAMILY_TEMPLATES) >= 11, (
+    assert len(FAMILY_TEMPLATES) >= 15, (
         f"expected the {FAMILY} roster under {OD_ROOT}, found "
         f"{[p.name for p in FAMILY_TEMPLATES]} — did the tree move? The floor "
         f"tracks the live roster; raise it as the roster grows."
