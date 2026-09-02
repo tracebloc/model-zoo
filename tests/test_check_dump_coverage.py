@@ -255,13 +255,25 @@ def test_an_empty_zoo_is_an_error_not_a_green(tmp_path):
 # (detr, rt_detr, rt_detr_v2, deformable_detr, d_fine, owlv2, grounding_dino)
 # when the hf_transformer family was retired — the platform stopped supporting
 # HuggingFace models and the engine handler those templates routed to never
-# trained anything. Their seven hosted dumps are NOT deleted by that change and
-# are now orphaned in the model store; the orphan half of this gate is unarmed
-# (CI passes no --manifest / --dumps-dir), so it will surface them by name on
-# the day hosting arms it, which is the correct alarm rather than a silent loss.
+# trained anything. Their seven dumps are NOT deleted by that change: under
+# backend#2985 they are RETAINED and marked `"status": "retired"` in the
+# manifest, because they were prepped under the stack pinned at
+# `scripts/.tracebloc-engine-ref` and a deletion is irreversible in practice
+# while a flag is one line. The orphan half of this gate is now armed (the CI
+# job passes --manifest, pinned by the tests at the bottom of this file) and
+# reports them as RETIRED rather than failing on them.
+#
+# This paragraph previously said the orphan half was "unarmed (CI passes no
+# --manifest / --dumps-dir), so it will surface them by name on the day hosting
+# arms it". Both halves of that are now false, and the second was never right:
+# hosting (backend#2659) does not supply the manifest — a cross-repo read does.
 #
 # 50 -> 49: backend#2988 deleted mask_rcnn (unusable — its mask head needs a
-# masks target key the OD path never supplies); its dump is likewise orphaned.
+# masks target key the OD path never supplies). Its dump was the one deletion
+# taken under #2985: trivially regenerable from torchvision, and re-homing Mask
+# R-CNN under backend#795 would need a seed built against a different module
+# tree, so retaining it pre-paid for nothing. Manifest entry removed by
+# backend#2996, blob deleted under #2985 — gone from both sides.
 MIGRATED_TEMPLATE_CENSUS = 49
 
 
@@ -445,6 +457,179 @@ def test_a_colliding_stem_in_the_prefixed_category_still_uses_the_prefix(tmp_pat
     assert found["text_classification/bert_base_uncased"]["candidates"] == [
         "bert_base_uncased"
     ]
+
+
+# --- a retirement is a decision, not an orphan (backend#2985) --------------
+#
+# The seven DETR seeds are RETAINED rather than deleted: they were prepped under
+# the stack pinned at `scripts/.tracebloc-engine-ref` and regenerating them
+# means standing that environment back up, so a deletion is irreversible in
+# practice while a status flag is one line. That makes "no template claims this
+# dump" two findings — a drift nobody noticed, and a decision somebody took —
+# and this gate has to tell them apart without becoming a way to switch itself
+# off. Each narrowing below is a test, and each was seen to fail before it
+# passed.
+
+
+def _manifest(tmp_path, entries, shape="entries"):
+    """A schema-2 manifest in either of the two shapes that call themselves 2."""
+    path = tmp_path / "manifest.json"
+    if shape == "entries":
+        body = {"schema": 2, "prefix": "zoo-weights", "entries": entries}
+    else:
+        body = {
+            "schema": 2,
+            "dumps": [{"name": name, **record} for name, record in entries.items()],
+        }
+    path.write_text(json.dumps(body), "utf-8")
+    return path
+
+
+LIVE = {"file": "x_weights.pkl", "sha256": "a" * 64, "size_bytes": 1}
+RETIRED_ENTRY = {**LIVE, "status": "retired"}
+
+
+def test_a_retired_dump_no_template_claims_is_not_an_orphan(tmp_path):
+    """The state backend#2985 settles: seven kept dumps, zero live templates for
+    them, and a gate that stays usable instead of permanently red."""
+    zoo = _zoo(tmp_path, {"object_detection/fcos": SEED_EXPECTING})
+    manifest = _manifest(tmp_path, {"fcos": LIVE, "detr": RETIRED_ENTRY})
+    assert _tool().main(["--zoo", str(zoo), "--manifest", str(manifest)]) == 0
+
+
+def test_a_retired_dump_is_still_reported_every_run(tmp_path, capsys):
+    """Retaining them visibly is the point. A retirement nobody is reminded of
+    is a deletion with extra steps, so this must not go quiet."""
+    zoo = _zoo(tmp_path, {"object_detection/fcos": SEED_EXPECTING})
+    manifest = _manifest(tmp_path, {"fcos": LIVE, "detr": RETIRED_ENTRY})
+    _tool().main(["--zoo", str(zoo), "--manifest", str(manifest)])
+    out = capsys.readouterr().out
+    assert "RETIRED DUMP  detr" in out
+    assert "1 retired" in out
+
+
+def test_an_orphan_with_no_status_is_STILL_RED(tmp_path):
+    """THE TEST THAT KEEPS THE EXEMPTION HONEST. If `retired` were read
+    permissively — any status, or a missing one — this gate would go green over
+    the exact eight dumps it failed to catch, and #2985 would recur silently."""
+    zoo = _zoo(tmp_path, {"object_detection/fcos": SEED_EXPECTING})
+    manifest = _manifest(tmp_path, {"fcos": LIVE, "stranded": LIVE})
+    assert _tool().main(["--zoo", str(zoo), "--manifest", str(manifest)]) == 1
+
+
+def test_an_unknown_status_is_named_rather_than_assumed_live(tmp_path, capsys):
+    """A typo'd `retried` must not send someone hunting for a stranded blob that
+    is really a misspelling — the same refusal-to-guess as UNCLASSIFIED.
+
+    The bad entry is one a template DOES claim, on purpose: an unclaimed one
+    goes red as an orphan anyway, so it would pass this test with the
+    unknown-status verdict deleted. Here the verdict is the only thing red."""
+    zoo = _zoo(tmp_path, {"object_detection/fcos": SEED_EXPECTING})
+    manifest = _manifest(tmp_path, {"fcos": {**LIVE, "status": "retried"}})
+    assert _tool().main(["--zoo", str(zoo), "--manifest", str(manifest)]) == 1
+    assert "BAD STATUS    fcos: 'retried'" in capsys.readouterr().out
+
+
+def test_a_retired_dump_a_template_still_claims_is_red(tmp_path, capsys):
+    """The direction that would ship a retired seed into a live training run.
+    Two unrelated edits produce it — retiring an entry whose template is still
+    there, or re-adding a template whose seed was retired — and neither author
+    is looking at the other half.
+
+    A second, live template is present so that the inventory still holds a live
+    dump. Without it the all-retired fail-closed guard goes red too, and this
+    test would pass with the retired-in-use verdict deleted."""
+    zoo = _zoo(
+        tmp_path,
+        {
+            "object_detection/fcos": SEED_EXPECTING,
+            "object_detection/retinanet": SEED_EXPECTING,
+        },
+    )
+    manifest = _manifest(tmp_path, {"fcos": RETIRED_ENTRY, "retinanet": LIVE})
+    assert _tool().main(["--zoo", str(zoo), "--manifest", str(manifest)]) == 1
+    assert "RETIRED IN USE fcos" in capsys.readouterr().out
+
+
+def test_a_manifest_of_only_retired_dumps_fails_closed(tmp_path, capsys):
+    """"Every dump is exempt" must not be the quiet way to switch this gate off.
+    An all-retired inventory protects exactly as little as an empty one, which
+    the gate already refuses. No template is missing a seed here and nothing is
+    orphaned, so this guard is the only thing standing between the arrangement
+    and a green run."""
+    zoo = _zoo(tmp_path, {"image_classification/vit": NO_SEED})
+    manifest = _manifest(tmp_path, {"detr": RETIRED_ENTRY})
+    assert _tool().main(["--zoo", str(zoo), "--manifest", str(manifest)]) == 1
+    assert "names no live dumps" in capsys.readouterr().out
+
+
+def test_retirement_is_honoured_in_the_dumps_list_shape_too(tmp_path):
+    """Two shapes both call themselves schema 2. Wiring the exemption to the
+    `entries` dict alone would mean a later switch to the `dumps` list silently
+    un-retires all seven — a green gate over a decision it had stopped
+    honouring."""
+    zoo = _zoo(tmp_path, {"object_detection/fcos": SEED_EXPECTING})
+    manifest = _manifest(
+        tmp_path, {"fcos": LIVE, "detr": RETIRED_ENTRY}, shape="dumps"
+    )
+    assert _tool().main(["--zoo", str(zoo), "--manifest", str(manifest)]) == 0
+
+
+def test_a_staging_dir_cannot_launder_an_unlisted_blob_into_a_retired_one(tmp_path):
+    """Only the manifest grants the exemption. A staging directory is a listing
+    of folders with no statuses in it, so a blob present there and absent from
+    the manifest is an orphan — which is precisely the direction backend#2996
+    created for `mask_rcnn` and the reason store state cannot be inferred from
+    manifest state."""
+    zoo = _zoo(tmp_path, {"object_detection/fcos": SEED_EXPECTING})
+    dumps = _dumps(tmp_path, ["fcos", "detr", "unlisted"])
+    manifest = _manifest(tmp_path, {"fcos": LIVE, "detr": RETIRED_ENTRY})
+    assert (
+        _tool().main(
+            ["--zoo", str(zoo), "--manifest", str(manifest), "--dumps-dir", str(dumps)]
+        )
+        == 1
+    )
+
+
+def test_the_survey_json_records_the_retirements(tmp_path):
+    """`--out` is what a human reads after a red run; a retirement invisible in
+    it would look like a dump that had simply vanished from the report."""
+    zoo = _zoo(tmp_path, {"object_detection/fcos": SEED_EXPECTING})
+    manifest = _manifest(tmp_path, {"fcos": LIVE, "detr": RETIRED_ENTRY})
+    out = tmp_path / "survey.json"
+    _tool().main(
+        ["--zoo", str(zoo), "--manifest", str(manifest), "--out", str(out)]
+    )
+    survey = json.loads(out.read_text())
+    assert survey["retired"] == ["detr"]
+    assert survey["orphans"] == []
+
+
+def test_the_real_manifest_shape_is_read_by_status(tmp_path):
+    """Against the real entry shape, not a reduced fixture: the seven retired
+    DETR seeds carry `file`/`sha256`/`size_bytes` alongside their status, and a
+    reader that only tolerated a two-key record would pass this suite and fail
+    on the artifact."""
+    tool = _tool()
+    inventory = tool.manifest_names(
+        {
+            "schema": 2,
+            "prefix": "zoo-weights",
+            "entries": {
+                "detr": {
+                    "file": "detr_weights.pkl",
+                    "sha256": "be50c162032ad57c17ca28285029a0f1c4ac6784e1716b69b5bf8d8317e2ffcb",
+                    "size_bytes": 166639507,
+                    "status": "retired",
+                },
+                "fcos": {"file": "fcos_weights.pkl", "sha256": "b" * 64, "size_bytes": 2},
+            },
+        }
+    )
+    assert inventory.retired == {"detr"}
+    assert inventory.names == {"detr", "fcos"}
+    assert inventory.bad_status == []
 
 
 # --------------------------------------------------------------------------
