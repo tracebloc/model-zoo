@@ -63,15 +63,29 @@ KNOWN_MISMATCHES = {
     "retinanet": (448, 800),
 }
 
-#: The list is a RATCHET: it may only ever shrink.
+#: The list is a RATCHET: it may only ever shrink, and its length is pinned by
+#: EQUALITY rather than by an upper bound.
 #:
-#: Added after a fail-ability sweep. Three scenarios were checked and caught —
-#: a new template acquiring the defect, a listed one being fixed but left on the
-#: list, and a listed one changing to a different wrong value. The fourth
-#: SURVIVED: adding a row for the new template silenced it completely. An
-#: exception list that can grow is not a guard, it is a habit, so the count is
-#: pinned. Fixing one of the three means deleting its row AND lowering this
-#: number; nothing else is a legal edit.
+#: Added after a fail-ability sweep, then tightened after review. Four scenarios
+#: were checked first: a new template acquiring the defect, a listed one being
+#: fixed but left on the list, a listed one changing to a different wrong value
+#: (all caught), and adding a row for a newly-broken template (SURVIVED). An
+#: exception list that can grow is not a guard, it is a habit, so the count was
+#: pinned.
+#:
+#: ⚠️ Pinning it with `<=` was NOT sufficient, and the hole is worth naming
+#: because the weaker version reads as correct. `<=` blocks growth above the
+#: high-water mark but not RE-GROWTH after a fix: fix a template, delete its row,
+#: and the length drops to 2 while the cap stays 3 — both assertions still pass,
+#: and a later commit can drop a brand-new mismatch into the freed slot and stay
+#: green. That is exactly the evasion the ratchet exists to stop. The sweep
+#: missed it because it tested ADDING a row above the cap and never
+#: DELETE-then-RE-ADD.
+#:
+#: With equality, deleting a row forces this number down in the same commit, and
+#: the `MAX_KNOWN_MISMATCHES == <n>` pin below keeps that a conscious,
+#: reviewable edit rather than a silent one. The legal edit is therefore
+#: *enforced* rather than merely documented.
 MAX_KNOWN_MISMATCHES = 3
 
 
@@ -249,16 +263,27 @@ def test_the_known_mismatch_list_only_ever_shrinks():
     by mutation: adding a row for a newly-broken template silenced every other
     assertion in this file.
 
-    Legal edits are: delete a row and lower ``MAX_KNOWN_MISMATCHES``. Adding a
-    row fails here, so a new mismatch has to be argued for rather than absorbed.
+    Asserted by EQUALITY rather than ``<=``. The weaker form reads as correct
+    and is not: it blocks growth above the high-water mark but not *re-growth
+    after a fix*. Fix a template, delete its row, and the length drops below the
+    cap — both a ``<=`` bound and the ``MAX == n`` pin still pass, leaving a free
+    slot a later commit can refill with a brand-new mismatch and stay green.
+
+    Legal edits are: delete a row, lower ``MAX_KNOWN_MISMATCHES``, and update
+    the pin below — all in one commit. Adding a row fails here, so a new
+    mismatch has to be argued for rather than absorbed.
     """
-    assert len(KNOWN_MISMATCHES) <= MAX_KNOWN_MISMATCHES, (
-        f"KNOWN_MISMATCHES has grown to {len(KNOWN_MISMATCHES)} entries "
-        f"({sorted(KNOWN_MISMATCHES)}), above the ratchet of "
-        f"{MAX_KNOWN_MISMATCHES}. A declared/effective mismatch in a NEW "
-        f"template is a bug in that template — fix its image_size instead of "
-        f"listing it. This number may only go DOWN, as backend#3058 fixes the "
-        f"three shipped ones."
+    assert len(KNOWN_MISMATCHES) == MAX_KNOWN_MISMATCHES, (
+        f"KNOWN_MISMATCHES holds {len(KNOWN_MISMATCHES)} entries "
+        f"({sorted(KNOWN_MISMATCHES)}) against a pinned {MAX_KNOWN_MISMATCHES}.\n"
+        f"  - GREW? A declared/effective mismatch in a NEW template is a bug in "
+        f"that template — fix its image_size instead of listing it.\n"
+        f"  - SHRANK? Good: backend#3058 fixed one. Lower MAX_KNOWN_MISMATCHES "
+        f"to {len(KNOWN_MISMATCHES)} in this same commit, and update the "
+        f"equality pin below.\n"
+        f"This is asserted by EQUALITY, not `<=`, on purpose: an upper bound "
+        f"would let a fix free a slot that a later commit could quietly refill "
+        f"with a brand-new mismatch."
     )
     assert MAX_KNOWN_MISMATCHES == 3, (
         f"MAX_KNOWN_MISMATCHES is {MAX_KNOWN_MISMATCHES}, not the 3 recorded "
