@@ -287,11 +287,17 @@ def test_an_empty_zoo_is_an_error_not_a_green(tmp_path):
 # fcos_swin_t — assembled via detection.backbone_utils.BackboneWithFPN. All
 # four classify NO_SEED for the same reason.
 #
+# 59 -> 60: backend#2982 Tier 2 added atss_resnet — RetinaNet's backbone and
+# head with Adaptive Training Sample Selection replacing the fixed-IoU matcher.
+# NO_SEED for the same reason.
+#
 # ⚠️ EACH NUMBER HERE IS A RUNNING TOTAL, NOT ITS BRANCH'S ARITHMETIC. Tier 0
 # had to unlearn a plausible-looking `57 + 6 = 63` — wrong by the eight
 # templates #2973 and #2988 deleted. Whoever rebases onto a moved develop takes
 # what `tools/check_dump_coverage.py --zoo .` reports against the merged tree.
-MIGRATED_TEMPLATE_CENSUS = 59
+# gfl_resnet (model-zoo#235, +1) is also in flight; whichever of the two lands
+# second becomes 61 — re-read the tool, do not add.
+MIGRATED_TEMPLATE_CENSUS = 60
 
 
 def test_the_real_zoo_classifies_every_migrated_template(tmp_path):
