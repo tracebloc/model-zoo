@@ -212,28 +212,57 @@ def test_peak_extraction_suppresses_non_maxima(cn, model):
     heatmap[0, 0, 5, 5] = 0.5
 
     peaks = model._peaks(heatmap)
-    surviving = (peaks > 0).nonzero()
-    assert [4, 4] in surviving[:, 2:].tolist(), "the true maximum was suppressed"
-    assert [4, 3] not in surviving[:, 2:].tolist(), (
-        "a neighbour lower than the local maximum survived — the 3x3 max-pool "
-        "peak filter is not being applied, so every Gaussian shoulder becomes a "
-        "duplicate detection"
+    surviving = [tuple(position) for position in (peaks > 0).nonzero()[:, 2:].tolist()]
+
+    assert (4, 4) in surviving, "the true maximum was suppressed"
+    # Every non-maximum in the ridge must be gone. (4, 3) and (3, 4) are direct
+    # neighbours; (5, 5) is diagonally adjacent, so its own 3x3 window also
+    # contains the 0.9 peak and it is suppressed for the same reason.
+    #
+    # An earlier version of this test ended with `assert ... or True`, which
+    # made the expression unconditionally true — it asserted NOTHING and would
+    # have passed against a peak filter that suppressed nothing at all. Caught
+    # in review on model-zoo#236. Restated as a positive claim about the
+    # complete survivor set, which cannot be satisfied vacuously.
+    assert surviving == [(4, 4)], (
+        f"the peak filter left {sorted(surviving)}, expected exactly [(4, 4)]. "
+        f"Every other cell in this ridge has the 0.9 peak inside its own 3x3 "
+        f"window, so a correct filter removes all of them; anything extra means "
+        f"the max-pool comparison is not being applied and every Gaussian "
+        f"shoulder becomes a duplicate detection"
     )
-    # An isolated lower peak two cells away IS a local maximum and must survive.
-    assert [5, 5] not in surviving[:, 2:].tolist() or True
 
 
-def test_an_isolated_secondary_peak_survives(cn, model):
-    """Peak filtering must not degenerate into "keep one box per image"."""
+def test_a_nearby_secondary_peak_survives(cn, model):
+    """Peak filtering must not degenerate into "keep one box per image", and the
+    window must be exactly 3x3.
+
+    The separation is deliberately **2 cells**, which is what makes this
+    discriminating. A 3x3 window centred on the weaker peak spans columns 5-7
+    and so does not contain the stronger one at column 4 — it survives, which is
+    correct: two distinct objects two feature cells apart are two detections. A
+    5x5 window spans columns 4-8, reaches the 0.9 peak, and wrongly suppresses
+    it.
+
+    An earlier version placed the peaks 11 cells apart, where every plausible
+    window size behaves identically, so a 5x5 mutation survived the whole file.
+    """
     import torch
 
-    heatmap = torch.zeros(1, 1, 20, 20)
+    heatmap = torch.zeros(1, 1, 12, 12)
     heatmap[0, 0, 4, 4] = 0.9
-    heatmap[0, 0, 15, 15] = 0.4   # far away, genuinely a local maximum
+    heatmap[0, 0, 4, 6] = 0.4   # two cells away: inside a 5x5 window, outside 3x3
+
     peaks = model._peaks(heatmap)
-    positions = peaks[0, 0].nonzero().tolist()
-    assert [4, 4] in positions and [15, 15] in positions, (
-        f"expected both isolated peaks to survive, got {positions}"
+    surviving = [tuple(position) for position in (peaks > 0).nonzero()[:, 2:].tolist()]
+    assert (4, 4) in surviving, "the stronger peak was suppressed"
+    assert (4, 6) in surviving, (
+        f"a peak two cells from a stronger one was suppressed; survivors were "
+        f"{sorted(surviving)}. The window must be exactly 3x3 — anything wider "
+        f"merges genuinely distinct nearby objects into one detection"
+    )
+    assert len(surviving) == 2, (
+        f"expected exactly the two peaks, got {sorted(surviving)}"
     )
 
 
