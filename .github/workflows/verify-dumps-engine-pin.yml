@@ -309,14 +309,53 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.11"
-      # No --dumps-dir / --manifest yet: the seeds are not hosted (backend#2659),
-      # so today this enforces the CLASSIFICATION half — every migrated template
-      # must say whether it needs a seed, and a docstring edit that leaves one
-      # silent goes red by name instead of being read as "needs no dump".
+      # backend#2985 — THE ORPHAN HALF IS NOW ARMED, and the reason it had to be
+      # is that eight orphans accumulated while it was not. `check_dump_coverage`
+      # is fail-closed BOTH ways by its own docstring, but this step passed no
+      # `--manifest`, so `have_inventory` was false and the orphan branch never
+      # executed. THAT IS WHY A HUMAN HAD TO NOTICE the seven retired DETR seeds
+      # and `mask_rcnn`: the guard written to catch exactly this was here, green,
+      # and running only half of itself.
       #
-      # ON HOSTING, add `--manifest` (or `--dumps-dir`) here and the coverage
-      # half arms itself. That is the same shape as the sweep above, which is an
-      # armed no-op until a manifest exists — with the same reason: red on a
-      # state nobody can fix yet is red people learn to skip.
-      - name: Every migrated template accounts for its seed
-        run: python3 tools/check_dump_coverage.py --zoo .
+      # The manifest lives in `backend`, not here, which is the whole reason it
+      # was left out: the previous comment said "on hosting, add --manifest",
+      # and hosting (backend#2659) is not what supplies it — a cross-repo read
+      # is. This job now performs one, with the same App-token pattern
+      # `fetch-engine-pin` above already uses for tracebloc-engine, scoped to
+      # `backend` and contents:read only.
+      #
+      # STILL NO `--dumps-dir`: the store's blobs are not reachable from CI
+      # (backend#2659 is open — TRACEBLOC_ZOO_WEIGHTS_URI is unset). The
+      # manifest is the right inventory to gate on anyway. It is the artifact a
+      # PR review can see, and backend#2985 is what happens when it and the
+      # store disagree: gate the reviewable side, and the store is reconciled to
+      # it by `tools/offline_weights/prune_dumps.py`.
+      - name: Mint a backend-read token
+        id: backend-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.RELEASE_TRAIN_APP_ID }}
+          private-key: ${{ secrets.RELEASE_TRAIN_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: backend
+          permission-contents: read
+      - name: Check out the dump manifest
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.repository_owner }}/backend
+          ref: develop
+          token: ${{ steps.backend-token.outputs.token }}
+          path: _backend
+          persist-credentials: false
+          sparse-checkout: tools/offline_weights/manifest.json
+          sparse-checkout-cone-mode: false
+      # FAIL IF THE MANIFEST IS NOT THERE, rather than falling through to the
+      # classification-only run. A sparse checkout that silently matched nothing
+      # would restore the exact unarmed state this step exists to end, and it
+      # would read as green — which is the defect, not a degraded mode of it.
+      - name: The manifest must actually be present
+        run: test -s _backend/tools/offline_weights/manifest.json
+      - name: Every migrated template accounts for its seed, and every dump a template
+        run: |
+          python3 tools/check_dump_coverage.py --zoo . \
+            --manifest _backend/tools/offline_weights/manifest.json

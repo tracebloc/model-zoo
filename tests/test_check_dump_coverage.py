@@ -444,3 +444,78 @@ def test_a_colliding_stem_in_the_prefixed_category_still_uses_the_prefix(tmp_pat
     assert found["text_classification/bert_base_uncased"]["candidates"] == [
         "bert_base_uncased"
     ]
+
+
+# --------------------------------------------------------------------------
+# backend#2985 — the orphan half must STAY armed in CI.
+#
+# The gate was fail-closed both ways in code and half-executed in practice: the
+# workflow passed neither `--manifest` nor `--dumps-dir`, so `have_inventory`
+# was false and the orphan branch was dead. Eight orphaned dumps accumulated
+# behind a green check, and a person found them, not the guard.
+#
+# So the arming itself now has a test. Dropping the flag again is a one-line
+# YAML edit that changes no Python, breaks no other test, and leaves this
+# workflow green — which is exactly the class of regression that produced #2985.
+# --------------------------------------------------------------------------
+
+WORKFLOW = ROOT / ".github/workflows/verify-dumps-engine-pin.yml"
+
+
+def _coverage_job():
+    import yaml
+
+    return yaml.safe_load(WORKFLOW.read_text())["jobs"]["dump-coverage"]
+
+
+def _coverage_invocation():
+    return "\n".join(
+        step["run"]
+        for step in _coverage_job()["steps"]
+        if "run" in step and "check_dump_coverage.py" in step["run"]
+    )
+
+
+def test_ci_invokes_the_coverage_tool_at_all():
+    assert "check_dump_coverage.py" in _coverage_invocation()
+
+
+def test_CI_ARMS_AN_INVENTORY_SO_THE_ORPHAN_BRANCH_EXECUTES():
+    """Without one of these flags the orphan half is dead code in CI."""
+    invocation = _coverage_invocation()
+    assert (
+        "--manifest" in invocation or "--dumps-dir" in invocation
+    ), "the coverage job passes no inventory: the orphan half is unarmed again"
+
+
+def test_the_manifest_it_arms_is_the_one_it_checks_out():
+    """The path passed to `--manifest` must be the one a step actually fetches.
+
+    A stale path would make the tool exit 1 on `--manifest does not exist` —
+    loud, so survivable — but a path under a directory NOTHING checks out is
+    how a cross-repo read rots silently when the sibling repo moves its file.
+    """
+    job = _coverage_job()
+    checkouts = [
+        step["with"]["path"]
+        for step in job["steps"]
+        if "with" in step and step["with"].get("path")
+    ]
+    invocation = _coverage_invocation()
+    assert checkouts, "no step checks out a sibling repo to read a manifest from"
+    assert any(
+        f"{path}/" in invocation for path in checkouts
+    ), f"--manifest path is not under any checked-out path {checkouts}"
+
+
+def test_the_manifest_presence_is_asserted_rather_than_assumed():
+    """A sparse checkout that matches nothing must fail, not fall through.
+
+    `check_dump_coverage.py` exits 1 on a missing `--manifest`, so this is
+    belt-and-braces — but the braces are what stop a silent revert to the
+    classification-only run that #2985 was invisible behind.
+    """
+    runs = "\n".join(
+        step["run"] for step in _coverage_job()["steps"] if "run" in step
+    )
+    assert "manifest.json" in runs and ("test -s" in runs or "test -f" in runs)
