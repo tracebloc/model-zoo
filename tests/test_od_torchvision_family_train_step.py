@@ -120,6 +120,48 @@ def _read_model_type(path: pathlib.Path) -> str | None:
     return match.group(1) if match else None
 
 
+def _other_family_values() -> frozenset[str]:
+    """Accepted values routing to a family that is NOT this one.
+
+    The schema says object detection has exactly two families, so this plus
+    ``FAMILY_VALUES`` partitions the vocabulary — which is what lets the guard
+    below check COVERAGE without a hand-recomputed floor. Derived from the same
+    vendored file, so a third family appearing there widens this automatically
+    instead of quietly making the partition a lie.
+    """
+    schema = json.loads(_schema_path().read_text(encoding="utf-8"))
+    values: set[str] = set()
+    for entry in schema["families"]:
+        if entry["family"] == FAMILY:
+            continue
+        values |= {entry["family"], *entry.get("aliases", [])}
+    return frozenset(v.strip().lower() for v in values)
+
+
+OTHER_FAMILY_VALUES = _other_family_values()
+
+
+def _declares_framework(path: pathlib.Path) -> str | None:
+    """The module-level ``framework``, or ``None``.
+
+    This is what separates a TEMPLATE ENTRY POINT from a support module: the
+    metadata contract in CLAUDE.md requires it of every model file, and the
+    ``yolo_*/loss.py`` helpers declare none. Read with a second, independent
+    regex rather than inferred from ``model_type`` — a broken ``_read_model_type``
+    must not be able to shrink the roster and the expected roster together.
+    """
+    try:
+        text = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return None
+    match = re.search(r'^\s*framework\s*=\s*["\'](\w*)["\']', text, re.MULTILINE)
+    return match.group(1) if match else None
+
+
+def _od_templates() -> list[pathlib.Path]:
+    return [p for p in sorted(OD_ROOT.rglob("*.py")) if _declares_framework(p)]
+
+
 def _family_templates() -> list[pathlib.Path]:
     return [
         p
@@ -217,17 +259,74 @@ def test_family_templates_were_found() -> None:
     """Guard the guard: the parametrized test below is driven by a file scan, so
     an empty scan would make the whole file pass by checking nothing — the
     silent-green shape of backend#1859. Also asserts the alias is in play, since
-    dropping it is what would silently narrow the scan to nothing useful."""
+    dropping it is what would silently narrow the scan to nothing useful.
+
+    THIS USED TO BE A FLOOR (``len(FAMILY_TEMPLATES) >= 3``) whose comment told
+    the next author to "raise it with backend#2982's Tier 0". A floor that every
+    roster PR is invited to raise is a shared literal, and it has the same
+    serialisation cost as the census did: with several roster PRs open, all of
+    them edit this line and all of them conflict (see the write-up on
+    backend#2982). It is now a PARTITION instead, derived from the vendored
+    schema: object detection has exactly two families, so every OD template
+    belongs to this one or to the other, and this file must cover all of the
+    former. Adding a template moves both sides at once — nothing to raise.
+    """
     assert "rcnn" in FAMILY_VALUES, (
         f"{_schema_path().name}: {FAMILY!r} lost its legacy 'rcnn' alias — if the "
         f"engine really dropped it, update FAMILY_VALUES' users; if not, this "
         f"scan just stopped covering every template declaring it"
     )
-    assert len(FAMILY_TEMPLATES) >= 3, (
-        f"expected the {FAMILY} roster under {OD_ROOT}, found "
-        f"{[p.name for p in FAMILY_TEMPLATES]} — did the tree move? The floor "
-        f"tracks the live roster: raise it with backend#2982's Tier 0."
+    templates = _od_templates()
+    assert templates, (
+        f"no file under {OD_ROOT} declares `framework` — the scan lost the tree, "
+        f"and everything below would pass by checking nothing"
     )
+    other = {
+        p
+        for p in templates
+        if (_read_model_type(p) or "").strip().lower() in OTHER_FAMILY_VALUES
+    }
+    assert other, (
+        f"no OD template routes to a family other than {FAMILY!r}; the yolo "
+        f"roster is part of the tree, so this means model_type reading broke"
+    )
+    expected = set(templates) - other
+    uncovered = sorted(str(p.relative_to(ROOT)) for p in expected - set(FAMILY_TEMPLATES))
+    unexpected = sorted(str(p.relative_to(ROOT)) for p in set(FAMILY_TEMPLATES) - expected)
+    assert not uncovered, (
+        f"OD template(s) that are not in the {FAMILY!r} roster this file trains, "
+        f"and not in any other family either — they declare a model_type outside "
+        f"the schema's vocabulary, or none at all, and so are covered by nothing: "
+        f"{uncovered}"
+    )
+    assert not unexpected, (
+        f"the {FAMILY!r} roster contains files that do not declare `framework` — "
+        f"a support module cannot be a template: {unexpected}"
+    )
+    assert FAMILY_TEMPLATES, (
+        f"the {FAMILY!r} roster is empty; every OD template routed elsewhere"
+    )
+
+
+def test_the_two_readers_are_independent_and_discriminate(tmp_path) -> None:
+    """The partition above is only non-vacuous while its two readers disagree.
+
+    If ``_declares_framework`` and ``_read_model_type`` both collapsed to
+    "always None", the roster and the expected roster would both go empty and the
+    set comparison would pass on nothing. Assert each says NO to a file lacking
+    its own declaration and YES to one carrying it.
+    """
+    support = tmp_path / "loss.py"
+    support.write_text("import torch\n\n\ndef loss(a, b):\n    return a - b\n", "utf-8")
+    assert _declares_framework(support) is None
+    assert _read_model_type(support) is None
+
+    template = tmp_path / "model.py"
+    template.write_text(
+        'framework = "pytorch"\nmodel_type = "torchvision_detection"\n', "utf-8"
+    )
+    assert _declares_framework(template) == "pytorch"
+    assert _read_model_type(template) == "torchvision_detection"
 
 
 @pytest.mark.parametrize(
