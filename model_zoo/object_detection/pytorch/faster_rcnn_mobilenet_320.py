@@ -2,19 +2,22 @@
 
 Offline variant: the architecture is built with ``weights=None``, so nothing
 is fetched from ``download.pytorch.org`` — the #199 egress lockdown blocks it
-— and the template constructs anywhere, network or not. No seed is hosted for
-this template yet, so it random-initialises and there is no weight file:
-upload with ``weights=False``::
+— and the template constructs anywhere, network or not. The pretrained COCO
+tensors are delivered from the tracebloc model store as the training seed:
+upload the matched ``faster_rcnn_mobilenet_320_weights.pkl`` sitting next to this file via
+``upload_model(..., weights=True)``, and the platform loads it after
+``MyModel()`` has built this architecture::
 
-    user.upload_model("faster_rcnn_mobilenet_320", weights=False)
+    user.upload_model("faster_rcnn_mobilenet_320", weights=True)
 
-Hosting the torchvision COCO tensors as a tracebloc model-store seed (the
-#1499 pattern: a matched ``<stem>_weights.pkl`` prepped by
-``tools/prep_offline_weights.py`` and strict-loaded after ``MyModel()`` has
-built the architecture) is follow-up work, not part of this roster addition.
-What makes it possible is the key-exactness recorded below — until a dump is
-staged, ``tools/check_dump_coverage.py`` classifies this file NO_SEED and the
-statement above is what keeps that classification honest.
+The seed carries the BACKBONE ALONE (backend#2642). The keys under
+``SEED_EXCLUDED_PREFIXES`` below are stripped from the dump by
+``tools/seed_contract.py strip``, so the class head initialises fresh from
+whatever ``output_classes`` the linked dataset decides and ONE dump serves
+every class count — checked by ``tools/verify_backbone_seeds.py``, which
+builds this template at a count no dump was ever made at. What makes the
+dump key-exact with the COCO checkpoint in the first place is the
+architectural agreement recorded below.
 
 The 320 variant differs from ``faster_rcnn_mobilenet.py`` ONLY in
 ``GeneralizedRCNNTransform`` and RPN inference knobs — none of which are

@@ -265,8 +265,18 @@ def test_an_empty_zoo_is_an_error_not_a_green(tmp_path):
 # 49 -> 55: backend#2982 Tier 0 added the six torchvision_detection roster
 # templates the zoo never wrapped (faster_rcnn_resnet_v2, retinanet_v2,
 # faster_rcnn_mobilenet, faster_rcnn_mobilenet_320, ssd_vgg16,
-# ssdlite_mobilenet). All six classify NO_SEED — they build with weights=None,
-# so they genuinely random-initialise and stage no dump.
+# ssdlite_mobilenet). They landed classifying NO_SEED — `weights=None`
+# genuinely random-initialises, and saying so is what made that green honest.
+#
+# backend#3055 FLIPS ALL SIX TO EXPECTS_SEED. The COCO tensors are prepped and
+# verified (573.8 MB of backbone-only seed across the six; 6/6 OK under
+# `tools/verify_backbone_seeds.py` at output_classes=7), so the truthful
+# classification is now that each names its `<stem>_weights.pkl`. THE CENSUS IS
+# UNCHANGED AT 55 — a flip moves a template between the two classified buckets
+# and adds none. What it does change is coverage: with the orphan half armed
+# (model-zoo#230) these six are red until backend's manifest carries their
+# entries, which is exactly the fail-closed behaviour and the reason this must
+# not land before the blobs are hosted (backend#2659).
 #
 # ⚠️ 55 is a RUNNING TOTAL, not this branch's arithmetic. 57 + 6 = 63 is what a
 # calculation from the pre-#2973 zoo produces and it is wrong by two deletions;
