@@ -710,3 +710,155 @@ def test_the_template_declares_the_family_contract():
     assert "weights=None" in source
     for banned in ("import timm", "from timm", "transformers", "from_pretrained"):
         assert banned not in source, f"{banned!r} is not permitted in a cv template"
+
+
+# --- review findings on model-zoo#238 ---------------------------------------
+#
+# Two real defects, both found by review and by Bugbot independently, and both
+# quiet: they degrade supervision rather than breaking training. The gap that
+# let the first through was named in the review and is worth stating plainly:
+# NOTHING in the suite exercised a non-unit `scales[level]`.
+
+
+def test_a_negative_per_level_scale_cannot_invert_the_boxes(vf_unused=None):
+    """The per-level scale must not be able to make distances negative.
+
+    ``scales[level]`` is an unconstrained ``Parameter`` taking gradient from the
+    GIoU loss, so it can cross zero. With the scale applied AFTER the ReLU it
+    was the final operation and nothing clamped the result: measured, a scale of
+    -1 inverted **every** box on that level (428 of 428 with ``x2 < x1``).
+    ``generalized_box_iou_loss`` does not assert on degenerate boxes the way
+    ``generalized_box_iou`` does, so training just continued on inverted boxes.
+
+    ``test_predicted_distances_are_never_negative`` could not catch it — it
+    drives the conv bias to -50 and leaves the scale at 1. This drives the
+    scale, which is the axis that was untested.
+    """
+    import torch
+
+    module = _load()
+    model = module.MyModel(3)
+    model.eval()
+    image = torch.rand(1, 3, 128, 160)
+    with torch.no_grad():
+        features = list(model.backbone(image).values())
+        for scale in model.head.scales:
+            torch.nn.init.constant_(scale, -1.0)
+        outputs = model.head(features)
+
+    distances = outputs["bbox_regression"]
+    assert float(distances.min()) >= 0.0, (
+        f"with every per-level scale at -1 the distances reached "
+        f"{float(distances.min()):.4f}. The scale must be applied INSIDE the "
+        f"ReLU so the clamp is the last word whatever the scale does"
+    )
+
+
+def test_a_negative_scale_also_leaves_the_decoded_boxes_valid(vf_unused=None):
+    """The consequence, end to end: the decode must still emit valid xyxy.
+
+    Asserted separately from the distances because this is the property the
+    engine's torchmetrics actually depend on, and they read boxes as xyxy pixels
+    without validating them.
+    """
+    import torch
+    from torchvision.models.detection.image_list import ImageList
+
+    module = _load()
+    model = module.MyModel(3)
+    model.eval()
+    image = torch.rand(1, 3, 128, 160)
+    with torch.no_grad():
+        features = list(model.backbone(image).values())
+        for scale in model.head.scales:
+            torch.nn.init.constant_(scale, -2.5)
+        outputs = model.head(features)
+        anchors = model.anchor_generator(ImageList(image, [(128, 160)]), features)[0]
+
+    split = model.anchor_generator.num_anchors_per_level
+    strides = module._anchor_strides(split, anchors.device, anchors.dtype)
+    boxes = module._distance_to_box(
+        module._centres(anchors), outputs["bbox_regression"][0], strides
+    )
+    inverted = int(((boxes[:, 2] < boxes[:, 0]) | (boxes[:, 3] < boxes[:, 1])).sum())
+    assert inverted == 0, (
+        f"{inverted} of {boxes.shape[0]} decoded boxes are inverted with a "
+        f"negative per-level scale"
+    )
+
+
+def test_the_alignment_target_comes_from_the_matched_object(vf_unused=None):
+    """The soft label must come from the SAME object whose class channel it is
+    written into.
+
+    ``matched`` resolves a multi-claimed anchor by IoU. Taking
+    ``normalised.max(dim=0)`` for the alignment decouples the two, so an anchor
+    selected by both a well-predicted object and a degenerate one gets the
+    degenerate one's hard 1.0 written onto the *good* object's channel. Review
+    finding on model-zoo#238.
+
+    An earlier version of this test used the real model's anchors with two
+    overlapping objects and SURVIVED the mutation, because neither object ended
+    up degenerate — every anchor predicted both of them at least a little, so
+    both took the soft path and the max happened to be the matched one. The
+    scenario has to be constructed exactly.
+
+    This fixture is fully synthetic and pins the numbers:
+
+        gt0 = [0, 0, 100, 100]      gt1 = [90, 0, 200, 100]   (overlap: x 90-100)
+        anchor A centred (95, 50)   -> inside BOTH
+        anchor B centred (150, 50)  -> inside gt1 only
+        anchor C centred (50, 50)   -> inside gt0 only
+
+        A predicts [0, 0, 70, 71]   -> IoU 0.497 with gt0, EXACTLY 0 with gt1
+        B predicts a zero-area point -> IoU 0 with both
+        C predicts [0, 0, 50, 50]   -> IoU 0.25 with gt0
+
+    So gt1's metric is zero for every eligible anchor and it is DEGENERATE,
+    giving its positives the hard target 1.0 — while gt0 is not, and A is gt0's
+    best candidate, so A's own target is gt0's best achieved IoU, 0.497.
+
+    A is matched to gt0 (0.497 > 0). Gathering from the matched object gives
+    0.497; a max over all objects gives gt1's 1.0.
+    """
+    import torch
+
+    module = _load()
+    gt = torch.tensor([[0.0, 0.0, 100.0, 100.0], [90.0, 0.0, 200.0, 100.0]])
+    labels = torch.tensor([1, 2])
+    anchors = torch.tensor([
+        [91.0, 46.0, 99.0, 54.0],      # A, centre (95, 50)
+        [146.0, 46.0, 154.0, 54.0],    # B, centre (150, 50)
+        [46.0, 46.0, 54.0, 54.0],      # C, centre (50, 50)
+    ])
+    predicted = torch.tensor([
+        [0.0, 0.0, 70.0, 71.0],        # IoU 0.497 with gt0, 0 with gt1
+        [150.0, 50.0, 150.0, 50.0],    # zero area: 0 with both
+        [0.0, 0.0, 50.0, 50.0],        # IoU 0.25 with gt0
+    ])
+    scores = torch.full((3, 4), 0.6)
+
+    matched, alignment = module._tal_assign(
+        anchors, gt, labels, scores, predicted, [3], topk=3, pool_topk=3
+    )
+
+    assert int(matched[0]) == 0, (
+        f"anchor A was matched to object {int(matched[0])}, expected 0 — it has "
+        f"IoU 0.497 with gt0 and 0 with gt1, so the fixture is not set up as "
+        f"described"
+    )
+    assert float(alignment[1]) == pytest.approx(1.0, abs=1e-6), (
+        f"anchor B's target is {float(alignment[1]):.6f}, expected the hard 1.0 "
+        f"— gt1 is meant to be degenerate here, or the fixture no longer "
+        f"exercises the leak"
+    )
+    assert float(alignment[0]) == pytest.approx(0.497, abs=0.01), (
+        f"anchor A carries an alignment of {float(alignment[0]):.6f}, expected "
+        f"~0.497 — gt0's best achieved IoU, which is A's own target. A value of "
+        f"1.0 is gt1's hard cold-start target leaking across, which means the "
+        f"alignment is taken as a max over all objects rather than gathered "
+        f"from the matched one"
+    )
+    assert float(alignment[0]) < 1.0 - 1e-6, (
+        "anchor A's target reached the hard 1.0 belonging to a different object"
+    )

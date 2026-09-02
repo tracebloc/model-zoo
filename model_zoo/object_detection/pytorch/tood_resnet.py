@@ -260,8 +260,30 @@ class _TOODHead(nn.Module):
             reg_feature = self.reg_reduce(self.reg_attention(stacked))
 
             cls_logits = self.cls_logits(F.relu(cls_feature))
-            # Distances must be non-negative; the scale is per level.
-            distances = F.relu(self.bbox_regression(F.relu(reg_feature))) * self.scales[level]
+            # ⚠️ The per-level scale is applied INSIDE the ReLU, not after it.
+            #
+            # `scales[level]` is an unconstrained Parameter taking gradient from
+            # the GIoU loss, so it can cross zero. With the scale applied last
+            # it is the final operation and nothing keeps distances
+            # non-negative: measured, a scale of -1 makes EVERY box on that
+            # level inverted (428 of 428 with x2 < x1).
+            #
+            # And NOTHING WOULD NOTICE. Measured across the torchvision box
+            # path: neither `generalized_box_iou` nor `generalized_box_iou_loss`
+            # nor `box_iou` validates corner ordering at all — the only `raise`
+            # in either loss guards an invalid `reduction` argument, and
+            # `box_iou`'s guards an unsupported format. On an inverted target
+            # `[[10, 10, 5, 5]]` against `[[0, 0, 10, 10]]` the loss returns a
+            # finite 0.75, and `generalized_box_iou` returns 0.25, neither
+            # raising. So this does not fail loudly anywhere downstream; it
+            # trains forever on inverted boxes producing plausible,
+            # differentiable numbers.
+            #
+            # Inside the ReLU the clamp is the last word, whatever the scale
+            # does. (gfl_resnet is immune by construction rather than by care —
+            # its scale sits in front of the softmax integral, so the decoded
+            # distance stays in [0, reg_max]; verified, not assumed.)
+            distances = F.relu(self.bbox_regression(F.relu(reg_feature)) * self.scales[level])
 
             all_cls.append(self._flatten(cls_logits, self.num_classes))
             all_reg.append(self._flatten(distances, 4))
@@ -425,7 +447,17 @@ def _tal_assign(anchors, gt_boxes, gt_labels, scores, predicted_boxes,
         degenerate & selected, torch.ones_like(normalised), normalised
     )
 
-    anchor_alignment = normalised.max(dim=0).values
+    # ⚠️ Gathered from `best_gt`, NOT `max(dim=0)`.
+    #
+    # `matched` resolves a multi-claimed anchor by IoU, so the soft label has to
+    # come from the SAME object whose class channel it is written into. Taking
+    # the maximum across every ground truth decouples the two: an anchor
+    # selected by both a well-predicted object and a degenerate one would get
+    # the degenerate one's hard 1.0 written onto the good object's channel. The
+    # cold-start branch above makes that concrete rather than hypothetical.
+    # mmdet's TaskAlignedAssigner gathers from the same argmax, for this reason.
+    safe_gt = best_gt.clamp(min=0).unsqueeze(0)
+    anchor_alignment = normalised.gather(0, safe_gt).squeeze(0)
     alignment[assigned] = anchor_alignment[assigned]
     return matched, alignment
 
