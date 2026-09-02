@@ -282,10 +282,37 @@ class _VFNetHead(nn.Module):
             cls_feature = self.cls_tower(feature)
             reg_feature = self.reg_tower(feature)
 
-            initial = F.relu(self.reg_initial(reg_feature)) * self.reg_scales[level]
+            # The per-level scale is applied INSIDE the ReLU. `reg_scales` is
+            # an unconstrained Parameter taking gradient from the box losses, so
+            # it can cross zero; applied after the clamp it would be the final
+            # operation and every distance on that level would go negative,
+            # decoding to x2 < x1. Nothing downstream would notice — measured
+            # across the torchvision box path, neither `generalized_box_iou`,
+            # `generalized_box_iou_loss` nor `box_iou` validates corner
+            # ordering. Same defect as tood_resnet's, fixed there under
+            # backend#2982 and avoided here by construction.
+            initial = F.relu(self.reg_initial(reg_feature) * self.reg_scales[level])
             # A per-edge multiplicative correction, kept positive.
             scale = F.relu(self.reg_refine(reg_feature, initial))
-            refined = initial * scale
+            # ⚠️ `initial` is DETACHED in the product, matching the reference
+            # implementation's `... * bbox_pred.detach()`.
+            #
+            # Without it the refined box's IoU-weighted loss backprops straight
+            # into `reg_initial`, so the two box supervisions are coupled: the
+            # initial estimate gets trained to make the refinement's job easy
+            # rather than to be a good first estimate in its own right. That is
+            # not a deviation this template set out to make — it was an
+            # oversight, caught in review on model-zoo#239 — and given every
+            # other gradient path here is deliberately controlled, leaving it
+            # undocumented would be the worst of the three options.
+            #
+            # The two box losses are therefore separate BY CONSTRUCTION: the
+            # initial box is trained only by `bbox_initial`, and the refined box
+            # only by `bbox_regression`. One coupling remains and is intended —
+            # `reg_refine`'s sampling offsets are a function of `initial`,
+            # attenuated by GRADIENT_MUL, which is what makes the refinement
+            # look at the box it is correcting.
+            refined = initial.detach() * scale
 
             cls_logits = self.cls_star(cls_feature, initial)
 

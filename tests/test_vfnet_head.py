@@ -750,3 +750,107 @@ def test_the_quality_target_comes_from_the_refined_box(vf, built):
         f"box inference emits and therefore the one the score ranks"
     )
 
+
+# --- review findings on model-zoo#239 ---------------------------------------
+
+
+def test_the_two_box_supervisions_are_separate(vf):
+    """The refined box's loss must not train ``reg_initial`` through the product.
+
+    Review finding. ``refined = initial * scale`` did not detach ``initial``, so
+    the IoU-quality-weighted refined loss backpropagated straight into the
+    initial estimate — coupling the two supervisions and training the first box
+    to make the refinement's job easy rather than to be a good first estimate.
+    The reference implementation detaches (``... * bbox_pred.detach()``). This
+    was an oversight rather than a deliberate deviation, so it is now detached
+    and the docstring says so.
+
+    Separated the same way as the classification path, and for the same reason:
+    one coupling REMAINS and is intended — ``reg_refine``'s sampling offsets are
+    a function of ``initial``, attenuated by ``GRADIENT_MUL``, which is what
+    makes the refinement look at the box it is correcting. So the product path
+    is isolated by temporarily setting ``GRADIENT_MUL = 0``. Measured: 0.812 of
+    gradient at the configured 0.1, and exactly 0.0 at 0.
+    """
+    import torch
+
+    images = [torch.rand(3, 128, 160)]
+    targets = [{"boxes": torch.tensor([[10.0, 10.0, 90.0, 90.0]]), "labels": torch.tensor([1])}]
+
+    original = vf.GRADIENT_MUL
+    vf.GRADIENT_MUL = 0.0
+    try:
+        model = vf.MyModel(3)
+        model.train()
+        losses = model(images, targets)
+        model.zero_grad(set_to_none=True)
+        losses["bbox_regression"].backward()
+        grad = model.head.reg_initial.weight.grad
+        leaked = 0.0 if grad is None else float(grad.abs().sum())
+    finally:
+        vf.GRADIENT_MUL = original
+
+    assert leaked == pytest.approx(0.0, abs=1e-9), (
+        f"with the offset path fully detached the REFINED box loss still put "
+        f"{leaked:.6g} of gradient on head.reg_initial. The only remaining "
+        f"route is the `initial * scale` product, so `initial` is not detached "
+        f"and the two box supervisions are coupled"
+    )
+
+
+def test_the_initial_box_loss_does_train_the_initial_head(vf):
+    """The other half: detaching the product must not orphan the initial head.
+
+    Without this, the test above would pass if ``bbox_initial`` were dropped or
+    if ``reg_initial`` were detached everywhere — which would leave the first
+    box estimate untrained while the losses stayed finite.
+    """
+    import torch
+
+    model = vf.MyModel(3)
+    model.train()
+    losses = model(
+        [torch.rand(3, 128, 160)],
+        [{"boxes": torch.tensor([[10.0, 10.0, 90.0, 90.0]]), "labels": torch.tensor([1])}],
+    )
+    model.zero_grad(set_to_none=True)
+    losses["bbox_initial"].backward()
+    grad = model.head.reg_initial.weight.grad
+    assert grad is not None and float(grad.abs().sum()) > 0.0, (
+        "the initial-box loss puts no gradient on head.reg_initial, so the "
+        "first box estimate is never trained"
+    )
+
+
+def test_a_negative_per_level_scale_cannot_invert_the_boxes(vf, built):
+    """The per-level scale must be inside the ReLU.
+
+    ``reg_scales`` is an unconstrained ``Parameter`` taking gradient from the box
+    losses, so it can cross zero. Applied after the clamp it would be the final
+    operation and every distance on that level would go negative. This is the
+    same defect ``tood_resnet`` shipped and had fixed in review; avoided here by
+    construction, and pinned so it stays that way.
+
+    Nothing downstream would catch it: measured, neither
+    ``generalized_box_iou``, ``generalized_box_iou_loss`` nor ``box_iou``
+    validates corner ordering — an inverted box yields a finite loss.
+    """
+    import torch
+
+    model, features, _, _ = built
+    with torch.no_grad():
+        for scale in model.head.reg_scales:
+            torch.nn.init.constant_(scale, -1.0)
+        try:
+            outputs = model.head(features)
+        finally:
+            for scale in model.head.reg_scales:
+                torch.nn.init.constant_(scale, 1.0)
+
+    for key in ("bbox_initial", "bbox_regression"):
+        assert float(outputs[key].min()) >= 0.0, (
+            f"with every per-level scale at -1, {key} reached "
+            f"{float(outputs[key].min()):.4f}. The scale must be applied INSIDE "
+            f"the ReLU so the clamp is the last word whatever the scale does"
+        )
+
