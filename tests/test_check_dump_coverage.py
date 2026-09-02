@@ -19,6 +19,7 @@ name a template that has gone silent rather than guess on its behalf.
 import importlib.util
 import json
 import pathlib
+import re
 import sys
 
 ROOT = pathlib.Path(__file__).parent.parent
@@ -462,18 +463,52 @@ def test_a_colliding_stem_in_the_prefixed_category_still_uses_the_prefix(tmp_pat
 WORKFLOW = ROOT / ".github/workflows/verify-dumps-engine-pin.yml"
 
 
-def _coverage_job():
-    import yaml
+def _coverage_job_block():
+    """The `dump-coverage:` job's YAML, as text. NO PyYAML.
 
-    return yaml.safe_load(WORKFLOW.read_text())["jobs"]["dump-coverage"]
+    This suite runs in the template test environments (`test-sklearn`,
+    `test-survival`, ...), and PyYAML is not installed in them -- the first
+    version of these four tests imported it and failed two jobs on exactly
+    that. The assertions here are about text a YAML parser would only
+    round-trip anyway, so the parser was never earning its dependency.
+
+    Sliced from the job key to the next top-level key at the same indent, so a
+    job added after it cannot leak into the block.
+    """
+    text = WORKFLOW.read_text()
+    start = text.index("\n  dump-coverage:\n") + 1
+    rest = text[start + len("  dump-coverage:\n") :]
+    end = len(rest)
+    for line_start, line in _lines_with_offsets(rest):
+        if line.strip() and not line.startswith("   ") and not line.startswith("\t"):
+            end = line_start
+            break
+    block = rest[:end]
+    # Join shell line continuations so a wrapped invocation reads as one line.
+    return block.replace("\\\n", " ")
+
+
+def _lines_with_offsets(text):
+    offset = 0
+    for line in text.splitlines(keepends=True):
+        yield offset, line
+        offset += len(line)
 
 
 def _coverage_invocation():
     return "\n".join(
-        step["run"]
-        for step in _coverage_job()["steps"]
-        if "run" in step and "check_dump_coverage.py" in step["run"]
+        line
+        for line in _coverage_job_block().splitlines()
+        if "check_dump_coverage.py" in line
     )
+
+
+def test_the_block_slicer_finds_the_job_and_stops_at_the_next_one():
+    """The extractor itself, because every test below trusts its boundaries."""
+    block = _coverage_job_block()
+    assert "check_dump_coverage.py" in block
+    assert "dump-coverage" not in block, "the slice re-included its own job key"
+    assert "\n  verify-dumps:" not in block, "the slice ran into a sibling job"
 
 
 def test_ci_invokes_the_coverage_tool_at_all():
@@ -491,16 +526,12 @@ def test_CI_ARMS_AN_INVENTORY_SO_THE_ORPHAN_BRANCH_EXECUTES():
 def test_the_manifest_it_arms_is_the_one_it_checks_out():
     """The path passed to `--manifest` must be the one a step actually fetches.
 
-    A stale path would make the tool exit 1 on `--manifest does not exist` —
-    loud, so survivable — but a path under a directory NOTHING checks out is
+    A stale path would make the tool exit 1 on `--manifest does not exist` --
+    loud, so survivable -- but a path under a directory NOTHING checks out is
     how a cross-repo read rots silently when the sibling repo moves its file.
     """
-    job = _coverage_job()
-    checkouts = [
-        step["with"]["path"]
-        for step in job["steps"]
-        if "with" in step and step["with"].get("path")
-    ]
+    block = _coverage_job_block()
+    checkouts = re.findall(r"^\s*path:\s*(\S+)\s*$", block, re.MULTILINE)
     invocation = _coverage_invocation()
     assert checkouts, "no step checks out a sibling repo to read a manifest from"
     assert any(
@@ -512,10 +543,8 @@ def test_the_manifest_presence_is_asserted_rather_than_assumed():
     """A sparse checkout that matches nothing must fail, not fall through.
 
     `check_dump_coverage.py` exits 1 on a missing `--manifest`, so this is
-    belt-and-braces — but the braces are what stop a silent revert to the
+    belt-and-braces -- but the braces are what stop a silent revert to the
     classification-only run that #2985 was invisible behind.
     """
-    runs = "\n".join(
-        step["run"] for step in _coverage_job()["steps"] if "run" in step
-    )
-    assert "manifest.json" in runs and ("test -s" in runs or "test -f" in runs)
+    block = _coverage_job_block()
+    assert "manifest.json" in block and ("test -s" in block or "test -f" in block)
