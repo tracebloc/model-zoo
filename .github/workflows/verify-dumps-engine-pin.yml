@@ -296,12 +296,77 @@ jobs:
   # through exactly this way: `faster_rcnn_resnet` and, found by this gate,
   # `text_classification/bert_base_uncased`.
   #
-  # DELIBERATELY INDEPENDENT of the engine pin and of every other job here. The
-  # check is template text and set arithmetic — no torch, no transformers, no
-  # build — so it runs in seconds on stdlib alone. Giving it `needs:` would make
-  # a slow or red pin guard hide a coverage answer that does not depend on the
-  # pin at all.
+  # DELIBERATELY INDEPENDENT OF THE ENGINE PIN, and of every other job here bar
+  # its own manifest fetch. The check is template text and set arithmetic — no
+  # torch, no transformers, no build — so it runs in seconds on stdlib alone.
+  # Making it `needs:` a pin guard would let a slow or red pin hide a coverage
+  # answer that does not depend on the pin at all.
+  #
+  # It DOES now `needs:` job 4a below, and that is not a walk-back of the line
+  # above: 4a is a 10-second sparse checkout of one 9 KB JSON file, it carries
+  # no torch and no pin, and the dependency exists to keep the `backend` token
+  # out of this job rather than to order any work. The property being protected
+  # is which job the token lives in, not how fast the answer arrives.
+  # 4a) THE TOKEN LIVES IN ITS OWN JOB, and that split is the security boundary,
+  #     not a tidiness preference. This job mints a `backend`-scoped App token
+  #     and runs NO PR-controlled code; the coverage job below runs the
+  #     PR-controlled checker and holds NO token. Collapsing the two lets a PR
+  #     that edits `tools/check_dump_coverage.py` read private `backend`:
+  #     `persist-credentials: false` keeps the token out of `_backend/.git/config`
+  #     but NOT out of the runner's step-output files, so it is reachable from
+  #     any code running in the same job.
+  #
+  #     This is exactly the `fetch-engine-pin` / `engine-pin-drift-guard` pair
+  #     above, for the same reason and with the same shape — "the real isolation
+  #     is that no PR code runs in this job". The first revision of backend#2985
+  #     armed the manifest read inside the coverage job and reintroduced the
+  #     hazard that pattern exists to prevent; Cursor Bugbot caught it on a
+  #     learned rule naming this repo's own token-split convention.
+  fetch-dump-manifest:
+    timeout-minutes: 10
+    runs-on: ubuntu-latest
+    steps:
+      - name: Mint a backend-read token
+        id: backend-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.RELEASE_TRAIN_APP_ID }}
+          private-key: ${{ secrets.RELEASE_TRAIN_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: backend
+          permission-contents: read
+      - name: Check out the dump manifest
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.repository_owner }}/backend
+          ref: develop
+          token: ${{ steps.backend-token.outputs.token }}
+          path: _backend
+          # Belt and braces: don't persist the token into _backend/.git/config
+          # either. The real isolation is that no PR code runs in this job.
+          persist-credentials: false
+          sparse-checkout: tools/offline_weights/manifest.json
+          sparse-checkout-cone-mode: false
+      # FAIL IF THE SPARSE CHECKOUT MATCHED NOTHING, here as well as in the
+      # consumer. A miss would otherwise upload an empty artifact and the
+      # failure would surface one job later as a confusing download error.
+      - name: The manifest must actually be present
+        run: test -s _backend/tools/offline_weights/manifest.json
+      - name: Upload the dump manifest
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: dump-manifest
+          # Only manifest.json — never _backend/.git — crosses to the
+          # PR-controlled job.
+          path: _backend/tools/offline_weights/manifest.json
+          if-no-files-found: error
+          retention-days: 1
+
+  # 4b) The coverage answer itself. Runs the PR-controlled checker with NO token
+  #     of any kind: the manifest arrives as an artifact from 4a, so even
+  #     PR-modified code here has nothing to reach private `backend` with.
   dump-coverage:
+    needs: fetch-dump-manifest
     timeout-minutes: 5
     runs-on: ubuntu-latest
     steps:
@@ -320,9 +385,7 @@ jobs:
       # The manifest lives in `backend`, not here, which is the whole reason it
       # was left out: the previous comment said "on hosting, add --manifest",
       # and hosting (backend#2659) is not what supplies it — a cross-repo read
-      # is. This job now performs one, with the same App-token pattern
-      # `fetch-engine-pin` above already uses for tracebloc-engine, scoped to
-      # `backend` and contents:read only.
+      # is. Job 4a performs that read; this job only consumes its artifact.
       #
       # STILL NO `--dumps-dir`: the store's blobs are not reachable from CI
       # (backend#2659 is open — TRACEBLOC_ZOO_WEIGHTS_URI is unset). The
@@ -330,32 +393,18 @@ jobs:
       # PR review can see, and backend#2985 is what happens when it and the
       # store disagree: gate the reviewable side, and the store is reconciled to
       # it by `tools/offline_weights/prune_dumps.py`.
-      - name: Mint a backend-read token
-        id: backend-token
-        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+      - name: Download the dump manifest
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
-          app-id: ${{ secrets.RELEASE_TRAIN_APP_ID }}
-          private-key: ${{ secrets.RELEASE_TRAIN_APP_PRIVATE_KEY }}
-          owner: ${{ github.repository_owner }}
-          repositories: backend
-          permission-contents: read
-      - name: Check out the dump manifest
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          repository: ${{ github.repository_owner }}/backend
-          ref: develop
-          token: ${{ steps.backend-token.outputs.token }}
-          path: _backend
-          persist-credentials: false
-          sparse-checkout: tools/offline_weights/manifest.json
-          sparse-checkout-cone-mode: false
+          name: dump-manifest
+          path: _manifest
       # FAIL IF THE MANIFEST IS NOT THERE, rather than falling through to the
-      # classification-only run. A sparse checkout that silently matched nothing
-      # would restore the exact unarmed state this step exists to end, and it
-      # would read as green — which is the defect, not a degraded mode of it.
+      # classification-only run. An artifact that silently arrived empty would
+      # restore the exact unarmed state this step exists to end, and it would
+      # read as green — which is the defect, not a degraded mode of it.
       - name: The manifest must actually be present
-        run: test -s _backend/tools/offline_weights/manifest.json
+        run: test -s _manifest/manifest.json
       - name: Every migrated template accounts for its seed, and every dump a template
         run: |
           python3 tools/check_dump_coverage.py --zoo . \
-            --manifest _backend/tools/offline_weights/manifest.json
+            --manifest _manifest/manifest.json
