@@ -261,7 +261,17 @@ def test_an_empty_zoo_is_an_error_not_a_green(tmp_path):
 #
 # 50 -> 49: backend#2988 deleted mask_rcnn (unusable — its mask head needs a
 # masks target key the OD path never supplies); its dump is likewise orphaned.
-MIGRATED_TEMPLATE_CENSUS = 49
+#
+# 49 -> 55: backend#2982 Tier 0 added the six torchvision_detection roster
+# templates the zoo never wrapped (faster_rcnn_resnet_v2, retinanet_v2,
+# faster_rcnn_mobilenet, faster_rcnn_mobilenet_320, ssd_vgg16,
+# ssdlite_mobilenet). All six classify NO_SEED — they build with weights=None,
+# so they genuinely random-initialise and stage no dump.
+#
+# ⚠️ 55 is a RUNNING TOTAL, not this branch's arithmetic. 57 + 6 = 63 is what a
+# calculation from the pre-#2973 zoo produces and it is wrong by two deletions;
+# whoever rebases onto a moved develop takes the count the tree actually has.
+MIGRATED_TEMPLATE_CENSUS = 55
 
 
 def test_the_real_zoo_classifies_every_migrated_template(tmp_path):
