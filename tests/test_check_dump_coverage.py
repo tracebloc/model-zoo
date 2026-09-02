@@ -246,20 +246,22 @@ def test_an_empty_zoo_is_an_error_not_a_green(tmp_path):
 
 # --- against the real zoo --------------------------------------------------
 
-# The census both tests below pin. It is an EXACT count, not a floor: a template
-# appearing or disappearing should be a deliberate edit here, not silent drift in
-# what the gate surveys.
+# The census both tests below pin. It is an EXACT count, not a floor: the point
+# is that a template appearing or disappearing is a deliberate edit here, not a
+# silent drift in what the gate surveys.
 #
-# 57 (#1499's migrated set) -> 56: backend#2988 deleted
-# object_detection/pytorch/mask_rcnn.py. It could never train — torchvision's
-# RoIHeads requires a `masks` target key that no object-detection producer emits
-# (see tests/test_od_torchvision_family_train_step.py, which now holds that line
-# for the whole torchvision_detection roster). Its hosted dump
-# (mask_rcnn_weights.pkl, backend tools/offline_weights/manifest.json) is NOT
-# deleted here and is now orphaned in the model store; the orphan half of this
-# gate is unarmed in CI (no --manifest / --dumps-dir), so it will name the dump
-# on the day hosting arms it, which is the correct alarm rather than a silent loss.
-MIGRATED_TEMPLATE_CENSUS = 56
+# 57 (#1499's migrated set) -> 50: backend#2973 deleted the seven DETR templates
+# (detr, rt_detr, rt_detr_v2, deformable_detr, d_fine, owlv2, grounding_dino)
+# when the hf_transformer family was retired — the platform stopped supporting
+# HuggingFace models and the engine handler those templates routed to never
+# trained anything. Their seven hosted dumps are NOT deleted by that change and
+# are now orphaned in the model store; the orphan half of this gate is unarmed
+# (CI passes no --manifest / --dumps-dir), so it will surface them by name on
+# the day hosting arms it, which is the correct alarm rather than a silent loss.
+#
+# 50 -> 49: backend#2988 deleted mask_rcnn (unusable — its mask head needs a
+# masks target key the OD path never supplies); its dump is likewise orphaned.
+MIGRATED_TEMPLATE_CENSUS = 49
 
 
 def test_the_real_zoo_classifies_every_migrated_template(tmp_path):

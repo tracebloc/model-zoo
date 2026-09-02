@@ -1,0 +1,54 @@
+{
+  "version": "2",
+  "description": "The object-detection model_type vocabulary this engine accepts. A training run's model_type arrives in experiment_parameters and is resolved by core.utils.object_detection_utils.resolve_family; anything outside accepted_model_type_values raises ValueError before training starts. Published so a producer (the model-zoo's per-file model_type declaration, the backend's MODEL_TYPE_CHOICES, the SDK) can assert in its own CI that what it emits this engine can actually route, instead of the two sides discovering a disagreement when a user's experiment fails (backend#1829). Object detection has exactly TWO families: torchvision_detection (alias rcnn) and yolo — both trainable. v2 NARROWS v1 by retiring the hf_transformer (DETR) family (backend#2973); narrowing an accepted set is a breaking change for a consumer, which is why this is a new version rather than an edit to v1.",
+  "owner": "tracebloc-engine — core/utils/object_detection_utils.py (@register_handler)",
+  "supersedes": "object_detection_families.v1.json — retired by backend#2973, which removed hf_transformer from accepted_model_type_values.",
+  "families": [
+    {
+      "family": "torchvision_detection",
+      "aliases": [
+        "rcnn"
+      ],
+      "training_supported": true,
+      "handler": "TorchvisionDetectionHandler",
+      "notes": "The torchvision detection-API contract (model returns a loss dict in train mode). 'rcnn' is a legacy alias kept for already-deployed experiments and is the value the backend actually stores today."
+    },
+    {
+      "family": "yolo",
+      "aliases": [],
+      "training_supported": true,
+      "handler": "YoloHandler",
+      "notes": "Grid-tensor output + external loss, fixed 448 input. The family name equals the declared value, so it needs no alias."
+    }
+  ],
+  "accepted_model_type_values": [
+    "rcnn",
+    "torchvision_detection",
+    "yolo"
+  ],
+  "not_accepted": {
+    "description": "Two kinds of value are NOT accepted. (1) Architecture-level names — a producer declares the FAMILY, not the architecture; listed explicitly because the model-zoo once shipped files declaring these strings (backend#1829), so a consumer's check must treat them as failures rather than assume they resolve. (2) RETIRED family names — 'hf_transformer' was an accepted value in v1 and is not one here: the platform stopped supporting HuggingFace models, the DETR family it named was never wired for training, and its placeholder handler is gone (backend#2973). A producer that still emits it now gets the same refusal as any unknown value, from the generic unknown-model_type path.",
+    "examples": [
+      "hf_transformer",
+      "detr",
+      "rt_detr",
+      "rt_detr_v2",
+      "deformable_detr",
+      "d_fine",
+      "owlv2",
+      "grounding_dino",
+      "retinanet",
+      "fcos",
+      "ssd",
+      "faster_rcnn",
+      "mask_rcnn",
+      "yolo_v8",
+      "transformer"
+    ]
+  },
+  "matching": {
+    "case_insensitive": true,
+    "whitespace_stripped": true,
+    "empty_or_absent": "Defaulted upstream by use_cases/object_detection/main.py::_infer_model_type (to the rcnn family, or yolo when the model id / class name contains 'yolo') before it ever reaches resolve_family. An empty value is therefore NOT rejected — only an explicit unrecognised one is."
+  }
+}
