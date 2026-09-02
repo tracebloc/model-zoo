@@ -246,6 +246,21 @@ def test_an_empty_zoo_is_an_error_not_a_green(tmp_path):
 
 # --- against the real zoo --------------------------------------------------
 
+# The census both tests below pin. It is an EXACT count, not a floor: the point
+# is that a template appearing or disappearing is a deliberate edit here, not a
+# silent drift in what the gate surveys.
+#
+# 57 (#1499's migrated set) -> 50: backend#2973 deleted the seven DETR templates
+# (detr, rt_detr, rt_detr_v2, deformable_detr, d_fine, owlv2, grounding_dino)
+# when the hf_transformer family was retired — the platform stopped supporting
+# HuggingFace models and the engine handler those templates routed to never
+# trained anything. Their seven hosted dumps are NOT deleted by that change and
+# are now orphaned in the model store; the orphan half of this gate is unarmed
+# (CI passes no --manifest / --dumps-dir), so it will surface them by name on
+# the day hosting arms it, which is the correct alarm rather than a silent loss.
+MIGRATED_TEMPLATE_CENSUS = 50
+
+
 def test_the_real_zoo_classifies_every_migrated_template(tmp_path):
     """No template in the shipped zoo may be UNCLASSIFIED. This is the test that
     keeps the derivation honest as templates are edited."""
@@ -254,7 +269,9 @@ def test_the_real_zoo_classifies_every_migrated_template(tmp_path):
     unclassified = {k: v["detail"] for k, v in found.items()
                     if v["status"] == tool.UNCLASSIFIED}
     assert not unclassified, f"unclassified migrated templates: {unclassified}"
-    assert len(found) == 57, f"expected #1499's 57 migrated templates, got {len(found)}"
+    assert len(found) == MIGRATED_TEMPLATE_CENSUS, (
+        f"expected {MIGRATED_TEMPLATE_CENSUS} migrated templates, got {len(found)}"
+    )
 
 
 def test_the_real_zoo_writes_a_survey(tmp_path):
@@ -262,7 +279,7 @@ def test_the_real_zoo_writes_a_survey(tmp_path):
     assert _tool().main(["--zoo", str(ROOT), "--out", str(out)]) == 0
     survey = json.loads(out.read_text("utf-8"))
     assert survey["inventory_checked"] is False
-    assert len(survey["templates"]) == 57
+    assert len(survey["templates"]) == MIGRATED_TEMPLATE_CENSUS
 
 
 # --- unmapped collisions ----------------------------------------------------

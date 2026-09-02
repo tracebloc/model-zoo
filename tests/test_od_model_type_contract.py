@@ -6,18 +6,28 @@ Background (backend#1829)
 An OD experiment's ``model_type`` is resolved by the engine's
 ``resolve_family()`` (tracebloc-engine ``core/utils/object_detection_utils.py``),
 which accepts exactly the family vocabulary published in
-``object_detection_families.v1.json`` — ``torchvision_detection`` (+ its legacy
-alias ``rcnn``), ``yolo``, ``hf_transformer`` — and raises ``ValueError`` on
-anything else *before training starts*. Architecture-level names
+``object_detection_families.v2.json`` — ``torchvision_detection`` (+ its legacy
+alias ``rcnn``) and ``yolo`` — and raises ``ValueError`` on anything else
+*before training starts*. Architecture-level names
 (``detr``/``retinanet``/``fcos``/…) are NOT accepted: a template declares the
 FAMILY, not the architecture.
 
 Nothing crossed the repo boundary, so the zoo drifted: nine OD templates
-declared architecture names (seven ``detr``, plus ``retinanet`` and ``fcos``)
-that ``resolve_family`` rejects. Because the engine reads ``model_type`` from the
-experiment parameters (the backend field), not from the model file, such a model
-could only run mislabelled — routed onto the torchvision path where a DETR
-forward dies opaquely inside ``_rcnn_loss_forward``.
+declared architecture names that ``resolve_family`` rejects. Because the engine
+reads ``model_type`` from the experiment parameters (the backend field), not from
+the model file, such a model could only run mislabelled — routed onto the
+torchvision path whose loss-dict contract it does not speak.
+
+SCHEMA v2 — the DETR templates are GONE (backend#2973)
+-------------------------------------------------------
+The seven templates that declared ``hf_transformer`` (``detr``, ``rt_detr``,
+``rt_detr_v2``, ``deformable_detr``, ``d_fine``, ``owlv2``, ``grounding_dino``)
+were deleted with the family. The platform stopped supporting HuggingFace
+models, and the engine handler that value routed to never trained anything — it
+raised ``NotImplementedError`` at every entry point. This repo adopts the
+narrowed vocabulary by bumping the vendored schema to v2, in the same commit as
+the deletions: v2 lists ``hf_transformer`` under ``not_accepted.examples``, so a
+surviving template declaring it would now fail here by name.
 
 What this test pins
 -------------------
@@ -52,7 +62,7 @@ SCHEMA_PATH = (
     pathlib.Path(__file__).parent
     / "contracts"
     / "tracebloc_engine"
-    / "object_detection_families.v1.json"
+    / "object_detection_families.v2.json"
 )
 
 _SCHEMA = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
@@ -93,7 +103,15 @@ def test_od_templates_declaring_model_type_were_found() -> None:
     declared = [
         p for p in _od_model_files() if (_read_model_type(p) or "") != ""
     ]
-    assert len(declared) >= 10, (
+    # Floor lowered 10 -> 7 by backend#2973: deleting the seven DETR templates
+    # left seven declaring templates (faster_rcnn_resnet, mask_rcnn, fcos,
+    # retinanet, and the three yolo model.py entry points). The floor tracks the
+    # live tree, not a historical high-water mark — left at 10 it would have
+    # failed on a deletion that is the point of the change, which teaches people
+    # to lower it reflexively and defeats the guard. It rises again when
+    # backend#2982 Tier 0 wraps the torchvision builders the zoo never shipped;
+    # raise it with that roster, do not leave it trailing.
+    assert len(declared) >= 7, (
         f"expected the OD templates to declare model_type, found {len(declared)} "
         f"under {OD_ROOT} — did the tree move?"
     )
@@ -116,9 +134,10 @@ def test_od_model_type_resolves_in_engine_registry(path: pathlib.Path) -> None:
     hint = ""
     if normalized in NOT_ACCEPTED_EXAMPLES:
         hint = (
-            " — this is an ARCHITECTURE name the engine explicitly rejects; "
-            "declare the FAMILY instead (e.g. detr-family -> hf_transformer, "
-            "retinanet/fcos -> torchvision_detection)"
+            " — the engine explicitly rejects this value; a template declares "
+            "the FAMILY, not the architecture (retinanet/fcos -> "
+            "torchvision_detection). Note hf_transformer is NOT a way out: the "
+            "DETR family was retired in backend#2973 and is itself rejected."
         )
     assert normalized in ACCEPTED, (
         f"{path.relative_to(ROOT)}: model_type {model_type!r} is not in the "
