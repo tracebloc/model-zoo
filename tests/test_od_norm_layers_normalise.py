@@ -111,14 +111,9 @@ its own BatchNorm trunk and passes, so there is no reason to narrow this to
 """
 
 import gc
-import importlib.util
-import pathlib
-import re
 
 import pytest
-
-ROOT = pathlib.Path(__file__).parent.parent
-OD_ROOT = ROOT / "model_zoo" / "object_detection"
+from _od import OD_ROOT, ROOT, build_template, od_templates, template_key
 
 #: The two constants fed through every norm layer. Deliberately far apart and
 #: far from the zero-mean / unit-variance a normaliser produces.
@@ -187,44 +182,20 @@ NORM_FREE_BY_DESIGN = {
 }
 
 
-def _declares_framework(path: pathlib.Path) -> str | None:
-    """The module-level ``framework``, or ``None`` for a support module.
-
-    This is what separates a TEMPLATE ENTRY POINT from a helper: the metadata
-    contract in CLAUDE.md requires it of every model file, and the
-    ``yolo_*/loss.py`` helpers declare none. Read statically so file SELECTION
-    costs nothing in the CI jobs that cannot import torch.
-    """
-    try:
-        text = path.read_text(encoding="utf-8")
-    except (OSError, UnicodeDecodeError):
-        return None
-    match = re.search(r'^\s*framework\s*=\s*["\'](\w*)["\']', text, re.MULTILINE)
-    return match.group(1) if match else None
+#: The roster, the ``framework`` reader and the import-and-construct all come
+#: from ``tests/_od.py`` rather than being re-typed here. They were
+#: byte-identical in three OD test files and had already drifted in two ways
+#: (the build-module-name prefix and whether ``output_classes`` was consulted)
+#: — see model-zoo#251. The per-file "second independent reader" argument still
+#: holds where it was made: it is about comparing ``framework`` against
+#: ``model_type`` WITHIN one file, which this file does not do.
+OD_TEMPLATES = od_templates()
+_stem = template_key
 
 
-OD_TEMPLATES = [p for p in sorted(OD_ROOT.rglob("*.py")) if _declares_framework(p)]
-
-
-def _stem(path: pathlib.Path) -> str:
-    """Row key for a template.
-
-    The yolo templates are all named ``model.py`` under a versioned directory,
-    so a bare ``path.stem`` would collide three ways. Use the directory name
-    for those, the file stem otherwise.
-    """
-    return path.parent.name if path.stem == "model" else path.stem
-
-
-def _build(path: pathlib.Path):
-    module_name = re.sub(r"\W", "_", f"norm_probe_{_stem(path)}")
-    spec = importlib.util.spec_from_file_location(module_name, path)
-    assert spec and spec.loader, f"{path}: importlib could not build a spec"
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    entry = getattr(module, "main_class", None) or getattr(module, "main_method", None)
-    assert entry, f"{path}: neither main_class nor main_method is defined"
-    return module, getattr(module, entry)(int(getattr(module, "output_classes", 3)))
+def _build(path):
+    """Construct a template at its own declared ``output_classes``."""
+    return build_template(path, prefix="norm_probe")
 
 
 def _norm_types(torch):
@@ -275,21 +246,40 @@ def _candidate_shapes(torch, module):
         channels = weight.numel()
     elif running_mean is not None:
         channels = running_mean.numel()
+    elif getattr(module, "num_features", None) is not None:
+        # A ``_NormBase`` with neither affine parameters nor tracked stats —
+        # ``nn.InstanceNorm2d(C)`` at its defaults is exactly that — still
+        # carries ``num_features``. Without this branch such a module yields
+        # no candidate shape and is then hard-failed as unprobeable, which is
+        # the opposite of what this file wants for a valid normaliser.
+        # Observed before the fallback was added (model-zoo#251 review):
+        #   AssertionError: norm module InstanceNorm2d could not be probed
+        #   with any candidate input shape ... Attempts: []
+        channels = int(module.num_features)
     if channels is None:
         return []
     return [(2, channels, 4, 4)]
 
 
-def _leak(torch, module) -> float:
+def _leak(torch, module, shapes=None) -> float:
     """How much of a constant input shift ``module`` passes through.
 
     ``0`` for a layer that normalises the constant away, ``1`` for one that
     hands its input back. Raises if the module cannot be probed at all — an
-    unprobeable norm is an open question, not a pass.
+    unprobeable norm is an open question, not a pass, and that raise is the
+    single place this file refuses a module (``_leaky_norms`` used to
+    pre-check the same condition, deriving the shapes a second time for every
+    one of the several hundred modules in a detector).
+
+    ``shapes`` lets a caller that already derived the candidates hand them
+    over; ``None`` derives them here, which is what the hand-built control
+    layers want.
     """
     low, high = _PROBE_CONSTANTS
     errors = []
-    for shape in _candidate_shapes(torch, module):
+    if shapes is None:
+        shapes = _candidate_shapes(torch, module)
+    for shape in shapes:
         try:
             with torch.no_grad():
                 out_low = module(torch.full(shape, low))
@@ -313,19 +303,17 @@ def _leaky_norms(torch, model) -> tuple[list[tuple[str, str, float]], int]:
     1.0 in ``eval()`` and 0.0 while training, and training is the regime this
     defect breaks.
     """
+    # Loop-invariant: one tuple for the whole model, not one per module. A
+    # from-scratch ResNet-50 detector has several hundred modules and this
+    # runs across the whole roster.
+    norm_types = _norm_types(torch)
     model.train()
     leaky: list[tuple[str, str, float]] = []
     probed = 0
     for name, module in model.named_modules():
-        if not isinstance(module, _norm_types(torch)):
+        if not isinstance(module, norm_types):
             continue
-        if not _candidate_shapes(torch, module):
-            raise AssertionError(
-                f"norm module {name!r} ({type(module).__name__}) exposes no "
-                f"channel count to build a probe input from — teach "
-                f"_candidate_shapes about it rather than skipping it"
-            )
-        leak = _leak(torch, module)
+        leak = _leak(torch, module, _candidate_shapes(torch, module))
         probed += 1
         if leak > _MAX_LEAK:
             leaky.append((name, type(module).__name__, leak))
@@ -513,6 +501,11 @@ def test_the_probe_discriminates_between_the_norm_kinds():
 
     # --- must NOT be flagged: normalises the constant away -----------------
     clean = {
+        # nn.InstanceNorm2d at ITS DEFAULTS: affine=False, so no `weight`,
+        # and track_running_stats=False, so no `running_mean` either. A
+        # perfectly valid normaliser that exposes its channel count only as
+        # `num_features` — the latent gap review on model-zoo#251.
+        "InstanceNorm2d(defaults)": nn.InstanceNorm2d(64),
         "BatchNorm2d": nn.BatchNorm2d(64),
         "BatchNorm2d(eps=1e-3)": nn.BatchNorm2d(64, eps=1e-3),
         "GroupNorm(32,64)": nn.GroupNorm(32, 64),
