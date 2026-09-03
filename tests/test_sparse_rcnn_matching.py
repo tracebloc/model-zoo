@@ -1058,15 +1058,30 @@ def test_the_giou_term_decides_the_match_where_l1_cannot():
 
         ground truth  [40, 40, 60, 60]
         proposal 0    [ 0,  0, 40, 40]   L1 1.200,  GIoU -0.444,  logit 0.0
-        proposal 1    [10, 20, 18, 28]   L1 1.240,  GIoU -0.768,  logit 1.0
+        proposal 1    [16, 16, 19, 19]   L1 1.300,  GIoU -0.789,  logit 1.0
 
     Proposal 1 has the better class score. With GIoU in the cost, proposal 0
-    wins by 0.357; with it removed, proposal 1 wins by 0.290. Deterministic
+    wins by 0.320; with it removed, proposal 1 wins by 0.368. Deterministic
     arithmetic, so those margins are enormous next to float error.
+
+    ⚠️ THIS FIXTURE WAS RETUNED, and the reason is a third failure mode worth
+    naming. Its earlier proposal 1 was [10, 20, 18, 28], and the margins held
+    only because the focal matching cost had its alpha SWAPPED -- FOCAL_ALPHA
+    on the negative term instead of the positive. That made the class term
+    1.77x weaker than the loss it is supposed to mirror (measured: class delta
+    0.245 swapped vs 0.434 correct), which is what let a 0.324 GIoU gap
+    outweigh it. Correcting the alpha (model-zoo#246, Bugbot) flipped this test
+    to proposal 1.
+    
+    So the assertion was right and the MARGIN depended on the bug: not a
+    degenerate fixture in the usual sense -- it could fail -- but one calibrated
+    against wrong behaviour, so fixing the behaviour broke it. When a
+    weight-correction breaks a passing test, check whether the test was tuned
+    to the old weight before concluding the correction is wrong.
     """
     model = _small_model()
     ground_truth = torch.tensor([[40.0, 40.0, 60.0, 60.0]])
-    proposals = torch.tensor([[[0.0, 0.0, 40.0, 40.0], [10.0, 20.0, 18.0, 28.0]]])
+    proposals = torch.tensor([[[0.0, 0.0, 40.0, 40.0], [16.0, 16.0, 19.0, 19.0]]])
     logits = torch.full((1, 2, SMALL_CLASSES), -6.0)
     logits[0, 0, 1] = 0.0
     logits[0, 1, 1] = 1.0
@@ -1134,4 +1149,81 @@ def test_the_giou_loss_term_responds_to_overlap():
     assert float(remote["giou"]) > float(apart["giou"]), (
         "moving the box further gave no more GIoU loss — the term saturated "
         "before its ceiling"
+    )
+
+
+def test_matcher_cost_weights_match_the_loss():
+    """The focal matching cost must weight positives and negatives the way
+    ``sigmoid_focal_loss`` does — asserted against torchvision's own formula,
+    not against a value copied out of this template.
+
+    ⚠️ WHY THIS EXISTS AND WHY NOTHING ELSE HERE COULD CATCH IT. Every other
+    matcher test in this file asserts CARDINALITY — how many proposals are
+    selected, or that the selection is optimal for a *given* cost matrix. All
+    of that is invariant to any reweighting of the cost, so a swapped alpha
+    changes which proposal wins on a close call while every assertion stays
+    green. It shipped to review that way: FOCAL_ALPHA on the negative term and
+    (1 - FOCAL_ALPHA) on the positive, i.e. 0.75/0.25 instead of 0.25/0.75.
+
+    torchvision computes ``alpha_t = alpha * targets + (1 - alpha) * (1 -
+    targets)``, so a POSITIVE is weighted ``alpha`` and a NEGATIVE
+    ``1 - alpha``. The oracle below is that formula evaluated directly — an
+    independent source rather than a restatement of the module's constants.
+    """
+    from torchvision.ops import sigmoid_focal_loss
+
+    module = _module()
+    alpha, gamma = module.FOCAL_ALPHA, module.FOCAL_GAMMA
+
+    # A single logit, and the two terms the matcher builds from it.
+    logit = torch.tensor([[0.7]])
+    probability = logit.sigmoid()
+
+    # torchvision's loss for this logit as a positive and as a negative. Ratio
+    # of the two isolates alpha_t, since the focal modulation and the log term
+    # are identical between the matcher and the loss.
+    pos_loss = float(sigmoid_focal_loss(logit, torch.ones_like(logit),
+                                        alpha=alpha, gamma=gamma, reduction="sum"))
+    neg_loss = float(sigmoid_focal_loss(logit, torch.zeros_like(logit),
+                                        alpha=alpha, gamma=gamma, reduction="sum"))
+
+    # The same two quantities, unweighted, so the expected weights can be
+    # recovered from torchvision without assuming them.
+    pos_unweighted = float((1 - probability).pow(gamma) * -probability.clamp(min=1e-8).log())
+    neg_unweighted = float(probability.pow(gamma) * -(1 - probability).clamp(min=1e-8).log())
+
+    expected_pos_weight = pos_loss / pos_unweighted
+    expected_neg_weight = neg_loss / neg_unweighted
+
+    assert abs(expected_pos_weight - alpha) < 1e-5, (
+        f"the oracle disagrees with the module's own alpha ({alpha}); "
+        f"torchvision weights a positive by {expected_pos_weight:.6f}. If this "
+        f"fires, the oracle is wrong, not the template."
+    )
+    assert abs(expected_neg_weight - (1 - alpha)) < 1e-5, (
+        f"torchvision weights a negative by {expected_neg_weight:.6f}, not "
+        f"{1 - alpha}"
+    )
+
+    # Now the template's own cost terms, read off the source it actually runs.
+    source = pathlib.Path(module.__file__).read_text(encoding="utf-8")
+    positive_block = re.search(
+        r"positive_cost = \(\s*(.+?)\s*\*", source, re.DOTALL)
+    negative_block = re.search(
+        r"negative_cost = \(\s*(.+?)\s*\*", source, re.DOTALL)
+    assert positive_block and negative_block, (
+        "could not locate the matcher's positive/negative cost terms — the "
+        "shape of this function changed and this guard stopped reaching it"
+    )
+    positive_weight, negative_weight = positive_block.group(1), negative_block.group(1)
+
+    assert positive_weight.strip() == "FOCAL_ALPHA", (
+        f"the POSITIVE matching term is weighted {positive_weight.strip()!r}; "
+        f"torchvision weights a positive by alpha, so it must be FOCAL_ALPHA. "
+        f"Swapping these makes the assignment minimise a different objective "
+        f"than the loss that trains the matched pair."
+    )
+    assert negative_weight.strip() == "(1 - FOCAL_ALPHA)", (
+        f"the NEGATIVE matching term is weighted {negative_weight.strip()!r}; "
+        f"torchvision weights a negative by (1 - alpha)."
     )

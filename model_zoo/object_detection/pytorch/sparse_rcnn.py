@@ -580,13 +580,28 @@ class _SparseRCNN(nn.Module):
             # DIFFERENCE between what a positive and a negative would cost, so
             # a confident wrong class is penalised rather than merely not
             # rewarded.
+            # ⚠️ ALPHA GOES ON THE POSITIVE TERM. torchvision's
+            # `sigmoid_focal_loss` computes
+            #   alpha_t = alpha * targets + (1 - alpha) * (1 - targets)
+            # so a positive is weighted `alpha` and a negative `1 - alpha`.
+            # An earlier revision of this file had them swapped -- FOCAL_ALPHA
+            # on the negative and (1 - FOCAL_ALPHA) on the positive -- which at
+            # the standard 0.25 means 0.75/0.25 instead of 0.25/0.75. The
+            # assignment then minimised a different objective than the loss
+            # training the matched pair, so a close geometry-versus-class call
+            # picked the wrong proposal. Caught in review on model-zoo#246.
+            #
+            # Nothing here could see it: every matcher test asserted
+            # CARDINALITY, which is invariant to any reweighting of the cost.
+            # `matcher_cost_weights_match_the_loss` below asserts the weights
+            # against torchvision's own formula instead.
             negative_cost = (
-                FOCAL_ALPHA
+                (1 - FOCAL_ALPHA)
                 * probabilities.pow(FOCAL_GAMMA)
                 * -(1 - probabilities).clamp(min=1e-8).log()
             )
             positive_cost = (
-                (1 - FOCAL_ALPHA)
+                FOCAL_ALPHA
                 * (1 - probabilities).pow(FOCAL_GAMMA)
                 * -probabilities.clamp(min=1e-8).log()
             )
