@@ -85,14 +85,32 @@ folded into a background slot — worth stating, because the two-stage
 torchvision templates in this family add their ``+1`` for a softmax background
 class and so learn a 0-labelled object as background.
 
-Federated note (BatchNorm)
---------------------------
-The norm layers are BatchNorm, as upstream YOLOX has them, which keeps this a
-faithful YOLOX and keeps a future COCO seed loadable. BN running statistics
-average poorly across non-IID clients (see CLAUDE.md); the mitigation is a
-training-plan choice (freeze BN, or fewer local steps per round), not a change
-to the architecture, and it is the same trade every torchvision detector in
-this family already carries.
+Federated note (GroupNorm, not BatchNorm)
+-----------------------------------------
+The norm layers are GroupNorm. Upstream YOLOX uses BatchNorm, and an earlier
+revision of this file did too, defending it as "the same trade every
+torchvision detector in this family already carries". That claim was FALSE and
+was caught in review: every shipped template in this family builds its
+backbone with ``norm_layer=misc_nn_ops.FrozenBatchNorm``, i.e. FROZEN -- the
+running statistics never update, so there is nothing to average. This template
+carried 21,738 live buffer elements against ``efficientdet_d0``'s 0.
+
+BN's ``running_mean``/``running_var`` are buffers the averaging service ships
+and averages every round, and they average badly across non-IID clients (see
+CLAUDE.md). GroupNorm is preferred here over FrozenBatchNorm2d for a specific
+reason: Frozen BN registers ``weight``/``bias`` as BUFFERS, which changes the
+parameter count and would silently invalidate
+``guard_matches_the_published_architecture`` -- the check that compares this
+model against the published YOLOX-S table, and which exists because a
+self-measured parameter count already hid a ~1.15M-parameter width error here.
+GroupNorm keeps ``weight``/``bias`` as parameters (identical count to BN) and
+carries no running statistics, so the reference guard stays valid AND the
+averaged buffers go to zero.
+
+The COCO-seed argument does not rescue BN either: the seed for this template is
+prepped by us, backbone-only, under whatever norm the template declares
+(backend#3055), so there is no official checkpoint whose running statistics
+must be accommodated.
 
 Verified against torch 2.11.0 / torchvision 0.26.0 (the engine pin,
 ``tools/requirements-engine-pin.txt``).
@@ -162,6 +180,26 @@ IMAGE_STD = [0.229, 0.224, 0.225]
 _EPS = 1e-8
 
 
+def _norm_groups(channels, maximum=32):
+    """Largest group count ``<= maximum`` that divides ``channels``.
+
+    GroupNorm requires ``channels % num_groups == 0``, and a hardcoded 32
+    crashes on this roster: ``rtmdet_s`` builds a 16-channel width. Deriving
+    the count keeps the norm valid at any width the depth/width multipliers
+    produce, not only the ones built today.
+
+    DUPLICATED between the two templates on purpose -- zoo templates cannot
+    import siblings (zero relative imports repo-wide). Its test is duplicated
+    alongside it for the same reason: copied code that leaves its guard behind
+    is how a duplicated assigner silently lost its centre-inside rule earlier
+    in this roster.
+    """
+    for groups in range(min(maximum, channels), 0, -1):
+        if channels % groups == 0:
+            return groups
+    return 1
+
+
 def _round_channels(channels: int) -> int:
     """Width-scale a channel count, kept a multiple of 2 so ``Focus``'s
     4x-concatenation and the CSP half-splits stay integral."""
@@ -188,11 +226,20 @@ class ConvBNAct(nn.Module):
         )
         # eps/momentum as upstream YOLOX sets them; the defaults train more
         # slowly at this batch size.
-        self.bn = nn.BatchNorm2d(out_ch, eps=1e-3, momentum=0.03)
+        # GroupNorm, NOT BatchNorm. BN's running_mean/running_var are
+        # buffers the averaging service ships and averages every round,
+        # and they average badly across non-IID clients. The shipped
+        # family avoids this with FrozenBatchNorm2d; GroupNorm is used
+        # here instead because Frozen BN moves weight/bias into buffers
+        # and would change the parameter count, silently invalidating
+        # the published-architecture guard. GroupNorm keeps weight+bias
+        # as parameters (identical count to BN) and has no running
+        # statistics at all.
+        self.norm = nn.GroupNorm(_norm_groups(out_ch), out_ch, eps=1e-3)
         self.act = nn.SiLU(inplace=True) if act else nn.Identity()
 
     def forward(self, x):
-        return self.act(self.bn(self.conv(x)))
+        return self.act(self.norm(self.conv(x)))
 
 
 class Focus(nn.Module):

@@ -491,8 +491,13 @@ def guard_declared_image_size_is_the_measured_edge(module) -> None:
 #: Updating these is legitimate when the architecture changes on purpose; state
 #: the intended change in the commit message.
 _PINNED_TOTALS = {
-    "YOLOXS": {"buffers": 23_178, "tensors": 462},
-    "RTMDetS": {"buffers": 24_978, "tensors": 520},
+    # buffers are 0 by construction now: GroupNorm carries no running
+    # statistics. That zero is the whole point of the norm choice -- BN's
+    # running_mean/running_var are buffers the averaging service ships and
+    # averages every round. A non-zero reading here means a BatchNorm (or
+    # another stateful norm) came back.
+    "YOLOXS": {"buffers": 0, "tensors": 240},
+    "RTMDetS": {"buffers": 0, "tensors": 274},
 }
 
 
@@ -1434,10 +1439,10 @@ def guard_rtmdet_head_shares_convs_and_separates_bns(module) -> None:
     for group in ("cls_convs", "reg_convs"):
         for index in range(len(getattr(model.head, group)[0])):
             base_conv = _rtmdet_tower_tensor(model, group, 0, index, "conv")
-            base_bn = _rtmdet_tower_tensor(model, group, 0, index, "bn")
+            base_bn = _rtmdet_tower_tensor(model, group, 0, index, "norm")
             for level in range(1, levels):
                 conv = _rtmdet_tower_tensor(model, group, level, index, "conv")
-                bn = _rtmdet_tower_tensor(model, group, level, index, "bn")
+                bn = _rtmdet_tower_tensor(model, group, level, index, "norm")
                 assert conv.data_ptr() == base_conv.data_ptr(), (
                     f"rtmdet_s: {group}[{level}][{index}].conv is a SEPARATE "
                     f"tensor from level 0's. The head is not weight-shared "
@@ -1445,10 +1450,13 @@ def guard_rtmdet_head_shares_convs_and_separates_bns(module) -> None:
                     f"an un-shared head trains fine and is a different model."
                 )
                 assert bn.data_ptr() != base_bn.data_ptr(), (
-                    f"rtmdet_s: {group}[{level}][{index}].bn SHARES storage "
-                    f"with level 0's. The BatchNorms must be per-level — that "
-                    f"is the 'SepBN' in the head's name, and sharing them "
-                    f"forces three levels' activation statistics into one."
+                    f"rtmdet_s: {group}[{level}][{index}].norm SHARES storage "
+                    f"with level 0's. The norm layers must be per-level — "
+                    f"that is the 'SepBN' in the head's published name, and "
+                    f"sharing them forces three levels' statistics into one. "
+                    f"(They are GroupNorm rather than BatchNorm here: BN's "
+                    f"running stats are averaged buffers. The per-level "
+                    f"SEPARATION is the design; the norm TYPE is not.)"
                 )
 
     # named_parameters() de-duplicates by object identity, so the shared tower
@@ -2031,11 +2039,37 @@ MUTATIONS = [
         ("yolox", "published_architecture"),
     ),
     (
+        "yolox/stateful_norm_returned",
+        YOLOX_PATH,
+        "self.norm = nn.GroupNorm(_norm_groups(out_ch), out_ch, eps=1e-3)",
+        "self.norm = nn.BatchNorm2d(out_ch, eps=1e-3, momentum=0.03)",
+        # The mutation for `module_tree_size` now that the pin carries buffers
+        # and tensor counts rather than parameters. It is the RIGHT mutation for
+        # that pin: BatchNorm's running_mean/running_var/num_batches_tracked are
+        # exactly the buffers the pin exists to hold at zero, because the
+        # averaging service ships and averages every buffer each federated
+        # round. GroupNorm has none, so a stateful norm coming back moves the
+        # pinned reading and nothing else does.
+        #
+        # Observed red: buffers 23,178 vs pinned 0 (tensors 462 vs 240).
+        # Parameters are UNCHANGED by this swap -- GroupNorm and BatchNorm both
+        # carry weight+bias -- which is why `published_architecture` stays green
+        # under it and this pin is the only thing that can see it.
+        ("yolox", "module_tree_size"),
+    ),
+    (
         "yolox/width_multiplier_moved",
         YOLOX_PATH,
         "WIDTH_MULT = 0.50",
         "WIDTH_MULT = 0.75",
-        ("yolox", "module_tree_size"),
+        # Re-pointed from `module_tree_size` to `published_architecture` when
+        # the norm became GroupNorm. The pinned block no longer carries the
+        # parameter total -- parameters are asserted against the PUBLISHED
+        # spec instead, because a self-measured count cannot tell a wrong
+        # architecture from a right one. A moved width multiplier is exactly a
+        # wrong architecture, so the reference guard is where it belongs; the
+        # pinned block would only have caught it by coincidence of arithmetic.
+        ("yolox", "published_architecture"),
     ),
     (
         "yolox/transform_runs_at_800",
@@ -2070,8 +2104,8 @@ MUTATIONS = [
                 self.reg_convs[level][index].conv = self.reg_convs[0][index].conv""",
         """                self.cls_convs[level][index].conv = self.cls_convs[0][index].conv
                 self.reg_convs[level][index].conv = self.reg_convs[0][index].conv
-                self.cls_convs[level][index].bn = self.cls_convs[0][index].bn
-                self.reg_convs[level][index].bn = self.reg_convs[0][index].bn""",
+                self.cls_convs[level][index].norm = self.cls_convs[0][index].norm
+                self.reg_convs[level][index].norm = self.reg_convs[0][index].norm""",
         ("rtmdet", "shared_conv_separate_bn"),
     ),
     (
@@ -2196,11 +2230,33 @@ MUTATIONS = [
         ("rtmdet", "published_architecture"),
     ),
     (
+        "rtmdet/stateful_norm_returned",
+        RTMDET_PATH,
+        "self.norm = nn.GroupNorm(_norm_groups(out_ch), out_ch, eps=1e-3)",
+        "self.norm = nn.BatchNorm2d(out_ch, eps=1e-3, momentum=0.03)",
+        # The mutation for `module_tree_size` now that the pin carries buffers
+        # and tensor counts rather than parameters. It is the RIGHT mutation for
+        # that pin: BatchNorm's running_mean/running_var/num_batches_tracked are
+        # exactly the buffers the pin exists to hold at zero, because the
+        # averaging service ships and averages every buffer each federated
+        # round. GroupNorm has none, so a stateful norm coming back moves the
+        # pinned reading and nothing else does.
+        #
+        # Observed red: buffers 23,178 vs pinned 0 (tensors 462 vs 240).
+        # Parameters are UNCHANGED by this swap -- GroupNorm and BatchNorm both
+        # carry weight+bias -- which is why `published_architecture` stays green
+        # under it and this pin is the only thing that can see it.
+        ("rtmdet", "module_tree_size"),
+    ),
+    (
         "rtmdet/width_multiplier_moved",
         RTMDET_PATH,
         "WIDEN_FACTOR = 0.50",
         "WIDEN_FACTOR = 0.75",
-        ("rtmdet", "module_tree_size"),
+        # See the yolox note: parameters are asserted against the published
+        # spec, not against a self-measured pin, so a moved width multiplier
+        # is the reference guard's to catch.
+        ("rtmdet", "published_architecture"),
     ),
     (
         "rtmdet/transform_runs_at_800",

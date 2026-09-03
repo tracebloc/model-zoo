@@ -97,15 +97,25 @@ template it must be prepped against **this** build, or this flag flipped to
 match the checkpoint and the decode re-verified. Shape compatibility is not
 semantic compatibility here.
 
-Federated note (BatchNorm)
---------------------------
-Norm layers are BatchNorm, as upstream has them (SyncBN in distributed
-training), which keeps this a faithful RTMDet. BN running statistics average
-poorly across non-IID clients (see CLAUDE.md); the mitigation is a
-training-plan choice, not an architecture change, and it is the same trade
-every torchvision detector in this family already carries. Note the head's
-BatchNorms are the **only** per-level parameters in its conv towers — see
-``RTMDetSepBNHead`` — so freezing them changes more here than elsewhere.
+Federated note (GroupNorm, not BatchNorm)
+-----------------------------------------
+Norm layers are GroupNorm. Upstream uses BatchNorm (SyncBN when distributed),
+and an earlier revision defended that as "the same trade every torchvision
+detector in this family already carries" -- FALSE, and caught in review: the
+shipped family uses ``norm_layer=misc_nn_ops.FrozenBatchNorm``, whose running
+statistics never update. This template carried 24,978 live buffer elements,
+each shipped and averaged every federated round.
+
+GroupNorm rather than FrozenBatchNorm2d because Frozen BN moves
+``weight``/``bias`` into buffers and would change the parameter count,
+invalidating the published-architecture guard. GroupNorm keeps them as
+parameters and carries no running statistics.
+
+The head's per-level norms remain per-level, which is the point of RTMDet's
+"SepBN" head: one conv tower's weights serving three levels, each level
+keeping its own normalisation. The SEPARATION is the published design; the
+norm TYPE is not. ``guard_rtmdet_head_shares_convs_and_separates_bns`` checks
+the separation by storage identity and is unaffected by the type change.
 
 Verified against torch 2.11.0 / torchvision 0.26.0 (the engine pin,
 ``tools/requirements-engine-pin.txt``).
@@ -181,6 +191,26 @@ IMAGE_STD = [0.229, 0.224, 0.225]
 _EPS = 1e-12
 
 
+def _norm_groups(channels, maximum=32):
+    """Largest group count ``<= maximum`` that divides ``channels``.
+
+    GroupNorm requires ``channels % num_groups == 0``, and a hardcoded 32
+    crashes on this roster: ``rtmdet_s`` builds a 16-channel width. Deriving
+    the count keeps the norm valid at any width the depth/width multipliers
+    produce, not only the ones built today.
+
+    DUPLICATED between the two templates on purpose -- zoo templates cannot
+    import siblings (zero relative imports repo-wide). Its test is duplicated
+    alongside it for the same reason: copied code that leaves its guard behind
+    is how a duplicated assigner silently lost its centre-inside rule earlier
+    in this roster.
+    """
+    for groups in range(min(maximum, channels), 0, -1):
+        if channels % groups == 0:
+            return groups
+    return 1
+
+
 def _widen(channels: int) -> int:
     return max(2, int(round(channels * WIDEN_FACTOR / 2) * 2))
 
@@ -203,11 +233,20 @@ class ConvBNAct(nn.Module):
             groups=groups,
             bias=False,
         )
-        self.bn = nn.BatchNorm2d(out_ch, eps=1e-3, momentum=0.03)
+        # GroupNorm, NOT BatchNorm. BN's running_mean/running_var are
+        # buffers the averaging service ships and averages every round,
+        # and they average badly across non-IID clients. The shipped
+        # family avoids this with FrozenBatchNorm2d; GroupNorm is used
+        # here instead because Frozen BN moves weight/bias into buffers
+        # and would change the parameter count, silently invalidating
+        # the published-architecture guard. GroupNorm keeps weight+bias
+        # as parameters (identical count to BN) and has no running
+        # statistics at all.
+        self.norm = nn.GroupNorm(_norm_groups(out_ch), out_ch, eps=1e-3)
         self.act = nn.SiLU(inplace=True) if act else nn.Identity()
 
     def forward(self, x):
-        return self.act(self.bn(self.conv(x)))
+        return self.act(self.norm(self.conv(x)))
 
 
 class DepthwiseSeparableConv(nn.Module):
