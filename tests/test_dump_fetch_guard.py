@@ -207,7 +207,8 @@ def checkout(tmp_path: Path, guard_script: str) -> Checkout:
 
 
 def test_no_manifest_says_no_manifest(checkout: Checkout):
-    """Nothing staged: armed, and NOT attributed to hosting or to the tool."""
+    """Nothing staged: NOT attributed to hosting, NOT attributed to the tool,
+    and honest that nothing in this job would ever put a manifest here."""
     checkout.install_real_tool()
     proc = checkout.run(store_uri=STORE_URI)
     assert proc.returncode == 0, proc.stderr
@@ -218,6 +219,17 @@ def test_no_manifest_says_no_manifest(checkout: Checkout):
     assert "backend#2659" not in proc.stdout, (
         "an absent manifest is not the hosting decision — that attribution is "
         f"the bug this branch exists to fix:\n{proc.stdout}"
+    )
+    # …and the SAME failure mode one level up: no step in the verify-dumps job
+    # fetches a manifest (it lives in `backend` and reaches CI as an artifact
+    # only dump-coverage consumes), so "the gate activates when a manifest
+    # lands" would be as reassuring and as untrue as the message this replaced.
+    assert "STRUCTURAL" in proc.stdout, (
+        "this branch is taken on every run by construction; a message implying "
+        f"a manifest might arrive repeats the original bug:\n{proc.stdout}"
+    )
+    assert "dump-manifest" in proc.stdout, (
+        f"the message must name where the manifest actually is:\n{proc.stdout}"
     )
 
 
