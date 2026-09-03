@@ -296,6 +296,9 @@ def test_an_empty_zoo_is_an_error_not_a_green(tmp_path):
 #
 # 61 -> 62: backend#2982 Tier 2 added centernet_resnet — "Objects as Points",
 # the roster's only NMS-free detector. NO_SEED for the same reason.
+# 62 -> 63: backend#2982 Tier 2 added vfnet_resnet — VarifocalNet: the
+# asymmetric varifocal loss plus star-shaped deformable box refinement. NO_SEED
+# for the same reason.
 # 62 -> 64: backend#2982 Tier 2 also added the two hand-written real-time
 # detectors, yolox_s and rtmdet_s — CSPDarknet/PAFPN with SimOTA and
 # CSPNeXt/PAFPN with a dynamic soft-label assigner, written from scratch rather
@@ -305,6 +308,10 @@ def test_an_empty_zoo_is_an_error_not_a_green(tmp_path):
 # had to unlearn a plausible-looking `57 + 6 = 63` — wrong by the eight
 # templates #2973 and #2988 deleted. Whoever rebases onto a moved develop takes
 # what `tools/check_dump_coverage.py --zoo .` reports against the merged tree.
+# tood_resnet (model-zoo#238) is the remaining template in flight and
+# claims 62; it becomes 64 on rebase — re-read the tool, never add. That
+# this constant is hand-maintained in a shared file is why every merge
+# conflicts every other open template PR; raised on backend#2982.
 # tood_resnet (model-zoo#238) and vfnet_resnet (model-zoo#239) are still in
 # flight, each +1; whichever lands after this re-reads the tool. This branch
 # has now re-read it four times (#231, #232, #235, #236 each landed
@@ -315,7 +322,7 @@ def test_an_empty_zoo_is_an_error_not_a_green(tmp_path):
 # constant — the later definition silently wins and the census is whatever the
 # other branch said. That happened here: two definitions, 64 then 63, and the
 # tests failed against 63 while the tool reported 64. One definition only.
-MIGRATED_TEMPLATE_CENSUS = 64
+MIGRATED_TEMPLATE_CENSUS = 65
 
 
 def test_the_real_zoo_classifies_every_migrated_template(tmp_path):
