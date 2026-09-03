@@ -195,11 +195,28 @@ def _targets(torch, num_classes: int) -> list[dict]:
     mask a real failure behind an input error. The second entry is the engine's
     zero-object target for an unannotated image, shapes and dtypes matched to
     ``image_detection_dataset_pytorch``.
+
+    **Labels span the full model-space range, ``1`` to ``num_classes``.** The
+    engine's ``TorchvisionDetectionHandler`` shifts a dataset-space label
+    ``[0, C-1]`` up past torchvision's background index before the model sees it
+    (backend#3062), so a template in this family is handed ``[1, C]`` and must
+    allocate ``C + 1`` head channels — which every one of them does, as
+    ``num_classes = num_classes + 1  # 1 for background``.
+
+    These labels used to be ``[1, max(1, num_classes - 1)]``: already
+    background-avoiding, so this file would have been red on the pre-#3062
+    contract too, but spanning only ``[1, C-1]`` and never the top of the range.
+    A template that allocated ``num_classes`` channels instead of
+    ``num_classes + 1`` therefore passed here and then raised on the LAST class
+    at training time — the one class the old range could not reach. Using
+    ``num_classes`` itself makes the ``+ 1`` head width a required property
+    rather than an accident, which is what closes that hole for templates not
+    written yet and for customer-supplied models.
     """
     return [
         {
             "boxes": torch.tensor([[10.0, 10.0, 60.0, 60.0], [70.0, 70.0, 110.0, 120.0]]),
-            "labels": torch.tensor([1, max(1, num_classes - 1)], dtype=torch.int64),
+            "labels": torch.tensor([1, num_classes], dtype=torch.int64),
         },
         {
             "boxes": torch.zeros((0, 4), dtype=torch.float32),
@@ -372,4 +389,55 @@ def test_guard_rejects_a_mask_headed_model() -> None:
         f"a mask-headed detector failed the contract, but not on the masks key: "
         f"{excinfo.value!r} — if torchvision changed its message, update this "
         f"assertion; if it stopped requiring masks, see backend#795"
+    )
+
+
+def test_guard_rejects_a_head_that_omits_the_background_channel() -> None:
+    """The label-range half of the guard, shown going red (backend#3062).
+
+    Same convention as the mask-headed probe above: a check whose whole value is
+    going red has to be demonstrated going red, or widening ``_targets`` to
+    ``[1, num_classes]`` would be an untested edit that looks like a guard.
+
+    This builds the mistake the widened range exists to catch — a detector in
+    this family whose classification head has exactly ``num_classes`` channels
+    instead of ``num_classes + 1``, i.e. a template that forgot the
+    ``# 1 for background`` line. It must FAIL, and specifically on the top of
+    the label range: under the old ``[1, num_classes - 1]`` labels this same
+    model passed, which is exactly why the hole was invisible.
+
+    RetinaNet rather than Faster R-CNN on purpose: the sigmoid focal head
+    one-hots the label directly into its channel dimension, so the out-of-range
+    class raises in the loss itself rather than inside cross-entropy, which
+    keeps the failure legible.
+    """
+    torch = pytest.importorskip("torch", reason="pytorch not installed in this CI job")
+    pytest.importorskip("torchvision", reason="torchvision not installed in this CI job")
+
+    from torchvision.models import resnet18
+    from torchvision.models.detection.backbone_utils import _resnet_fpn_extractor
+    from torchvision.models.detection.retinanet import RetinaNet
+
+    num_classes = 3
+
+    # resnet18, not the templates' resnet50: this asserts a LIBRARY behaviour,
+    # so the smallest backbone that exercises it is the right one for CI.
+    def _under_allocated():
+        backbone = _resnet_fpn_extractor(resnet18(weights=None), trainable_layers=1)
+        # The bug: num_classes, NOT num_classes + 1.
+        return RetinaNet(backbone, num_classes=num_classes)
+
+    with pytest.raises((IndexError, RuntimeError)):
+        _assert_speaks_handler_contract(
+            torch, _under_allocated(), "RetinaNet(no-background-channel)", num_classes
+        )
+
+    # Positive control: the SAME model, the SAME assertions, with the label
+    # range this file used before backend#3062. It passes — so the red above is
+    # produced by the widened range and by nothing else.
+    _assert_speaks_handler_contract(
+        torch,
+        _under_allocated(),
+        "RetinaNet(no-background-channel, old label range)",
+        num_classes - 1,
     )
