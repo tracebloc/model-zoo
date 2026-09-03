@@ -153,19 +153,49 @@ jobs:
       # A failure here is a hard error, never a swallowed green (fail-closed).
       - run: pip install -r tools/requirements-engine-pin.txt
       # Obtain the staged dumps. They are NOT committed (served from the
-      # tracebloc model store; hosting is backend#2659). When a manifest.json
-      # and a store-sync tool land, fetch the <base>_weights.pkl files into
-      # ./dist here. Until then there is no manifest and the sweep is an armed
-      # no-op. tools/sync_zoo_weights.py is the fetch hook (backend#2658 refs);
-      # wire it in when #2659 hosts the dumps.
+      # tracebloc model store; hosting is backend#2659). tools/sync_zoo_weights.py
+      # is the fetch hook (backend#2658 refs) and fetches the
+      # <base>_weights.pkl files into ./dist.
+      #
+      # Each precondition is reported BY NAME. The previous guard was a single
+      # `[ -f manifest.json ] && [ -f tools/sync_zoo_weights.py ]`, which
+      # attributed every no-op to hosting — including the case where the fetch
+      # hook itself was not in the repo. It was: the tool existed only as an
+      # uncommitted file on one laptop, so `-f` selected the no-op branch on
+      # every run and printed a reassuring hosting message, which is why the
+      # gap survived unnoticed (backend#3060). A missing tool and an undecided
+      # bucket are different problems and now say so.
+      #
+      # Still exit 0 in every skip branch: verify_dumps_against_engine_pin.py
+      # owns the fail-closed decision (armed-green on an ABSENT manifest, red on
+      # a manifest present with dumps it cannot account for), and duplicating
+      # that judgement here is how the two drift apart.
       - name: Obtain staged dumps from the model store
+        env:
+          # The store URI is backend#2659's decision, so it is configuration and
+          # not a literal here. Unset resolves to the empty string and selects
+          # the "no store URI" branch below.
+          TRACEBLOC_ZOO_WEIGHTS_URI: ${{ vars.TRACEBLOC_ZOO_WEIGHTS_URI }}
         run: |
+          set -euo pipefail
           mkdir -p dist
-          if [ -f manifest.json ] && [ -f tools/sync_zoo_weights.py ]; then
-            python3 tools/sync_zoo_weights.py --manifest manifest.json --out dist
+          if [ ! -f manifest.json ]; then
+            echo "SKIP (no manifest): no manifest.json in the checkout, so no"
+            echo "  dumps are declared for verification. The gate is armed and"
+            echo "  activates when a manifest lands. Not a defect."
+          elif [ ! -f tools/sync_zoo_weights.py ]; then
+            echo "SKIP (no sync tool): manifest.json declares dumps, but the"
+            echo "  fetch hook tools/sync_zoo_weights.py is NOT in this checkout."
+            echo "  This is a DEFECT in the repo, not a pending decision — the"
+            echo "  hook is committed (backend#3060); restore it. The verifier"
+            echo "  below will report every declared dump as MISSING."
+          elif [ -z "${TRACEBLOC_ZOO_WEIGHTS_URI:-}" ]; then
+            echo "SKIP (no store URI): manifest.json and the fetch hook are both"
+            echo "  present, but TRACEBLOC_ZOO_WEIGHTS_URI is unset, so there is"
+            echo "  nowhere to fetch from. THIS is the hosting decision —"
+            echo "  backend#2659. Set the repo variable once the store exists."
           else
-            echo "No manifest.json / sync tool yet — dumps hosting is backend#2659."
-            echo "The verifier runs armed; it activates when a manifest lands."
+            python3 tools/sync_zoo_weights.py --staging . fetch-all --dest dist
           fi
       # The gate. Exits non-zero on any dump that cannot strict-load into its
       # template under the engine pin, or any built_with-vs-engine drift.
@@ -296,12 +326,77 @@ jobs:
   # through exactly this way: `faster_rcnn_resnet` and, found by this gate,
   # `text_classification/bert_base_uncased`.
   #
-  # DELIBERATELY INDEPENDENT of the engine pin and of every other job here. The
-  # check is template text and set arithmetic — no torch, no transformers, no
-  # build — so it runs in seconds on stdlib alone. Giving it `needs:` would make
-  # a slow or red pin guard hide a coverage answer that does not depend on the
-  # pin at all.
+  # DELIBERATELY INDEPENDENT OF THE ENGINE PIN, and of every other job here bar
+  # its own manifest fetch. The check is template text and set arithmetic — no
+  # torch, no transformers, no build — so it runs in seconds on stdlib alone.
+  # Making it `needs:` a pin guard would let a slow or red pin hide a coverage
+  # answer that does not depend on the pin at all.
+  #
+  # It DOES now `needs:` job 4a below, and that is not a walk-back of the line
+  # above: 4a is a 10-second sparse checkout of one 9 KB JSON file, it carries
+  # no torch and no pin, and the dependency exists to keep the `backend` token
+  # out of this job rather than to order any work. The property being protected
+  # is which job the token lives in, not how fast the answer arrives.
+  # 4a) THE TOKEN LIVES IN ITS OWN JOB, and that split is the security boundary,
+  #     not a tidiness preference. This job mints a `backend`-scoped App token
+  #     and runs NO PR-controlled code; the coverage job below runs the
+  #     PR-controlled checker and holds NO token. Collapsing the two lets a PR
+  #     that edits `tools/check_dump_coverage.py` read private `backend`:
+  #     `persist-credentials: false` keeps the token out of `_backend/.git/config`
+  #     but NOT out of the runner's step-output files, so it is reachable from
+  #     any code running in the same job.
+  #
+  #     This is exactly the `fetch-engine-pin` / `engine-pin-drift-guard` pair
+  #     above, for the same reason and with the same shape — "the real isolation
+  #     is that no PR code runs in this job". The first revision of backend#2985
+  #     armed the manifest read inside the coverage job and reintroduced the
+  #     hazard that pattern exists to prevent; Cursor Bugbot caught it on a
+  #     learned rule naming this repo's own token-split convention.
+  fetch-dump-manifest:
+    timeout-minutes: 10
+    runs-on: ubuntu-latest
+    steps:
+      - name: Mint a backend-read token
+        id: backend-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.RELEASE_TRAIN_APP_ID }}
+          private-key: ${{ secrets.RELEASE_TRAIN_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: backend
+          permission-contents: read
+      - name: Check out the dump manifest
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.repository_owner }}/backend
+          ref: develop
+          token: ${{ steps.backend-token.outputs.token }}
+          path: _backend
+          # Belt and braces: don't persist the token into _backend/.git/config
+          # either. The real isolation is that no PR code runs in this job.
+          persist-credentials: false
+          sparse-checkout: tools/offline_weights/manifest.json
+          sparse-checkout-cone-mode: false
+      # FAIL IF THE SPARSE CHECKOUT MATCHED NOTHING, here as well as in the
+      # consumer. A miss would otherwise upload an empty artifact and the
+      # failure would surface one job later as a confusing download error.
+      - name: The manifest must actually be present
+        run: test -s _backend/tools/offline_weights/manifest.json
+      - name: Upload the dump manifest
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: dump-manifest
+          # Only manifest.json — never _backend/.git — crosses to the
+          # PR-controlled job.
+          path: _backend/tools/offline_weights/manifest.json
+          if-no-files-found: error
+          retention-days: 1
+
+  # 4b) The coverage answer itself. Runs the PR-controlled checker with NO token
+  #     of any kind: the manifest arrives as an artifact from 4a, so even
+  #     PR-modified code here has nothing to reach private `backend` with.
   dump-coverage:
+    needs: fetch-dump-manifest
     timeout-minutes: 5
     runs-on: ubuntu-latest
     steps:
@@ -309,14 +404,37 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.11"
-      # No --dumps-dir / --manifest yet: the seeds are not hosted (backend#2659),
-      # so today this enforces the CLASSIFICATION half — every migrated template
-      # must say whether it needs a seed, and a docstring edit that leaves one
-      # silent goes red by name instead of being read as "needs no dump".
+      # backend#2985 — THE ORPHAN HALF IS NOW ARMED, and the reason it had to be
+      # is that eight orphans accumulated while it was not. `check_dump_coverage`
+      # is fail-closed BOTH ways by its own docstring, but this step passed no
+      # `--manifest`, so `have_inventory` was false and the orphan branch never
+      # executed. THAT IS WHY A HUMAN HAD TO NOTICE the seven retired DETR seeds
+      # and `mask_rcnn`: the guard written to catch exactly this was here, green,
+      # and running only half of itself.
       #
-      # ON HOSTING, add `--manifest` (or `--dumps-dir`) here and the coverage
-      # half arms itself. That is the same shape as the sweep above, which is an
-      # armed no-op until a manifest exists — with the same reason: red on a
-      # state nobody can fix yet is red people learn to skip.
-      - name: Every migrated template accounts for its seed
-        run: python3 tools/check_dump_coverage.py --zoo .
+      # The manifest lives in `backend`, not here, which is the whole reason it
+      # was left out: the previous comment said "on hosting, add --manifest",
+      # and hosting (backend#2659) is not what supplies it — a cross-repo read
+      # is. Job 4a performs that read; this job only consumes its artifact.
+      #
+      # STILL NO `--dumps-dir`: the store's blobs are not reachable from CI
+      # (backend#2659 is open — TRACEBLOC_ZOO_WEIGHTS_URI is unset). The
+      # manifest is the right inventory to gate on anyway. It is the artifact a
+      # PR review can see, and backend#2985 is what happens when it and the
+      # store disagree: gate the reviewable side, and the store is reconciled to
+      # it by `tools/offline_weights/prune_dumps.py`.
+      - name: Download the dump manifest
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: dump-manifest
+          path: _manifest
+      # FAIL IF THE MANIFEST IS NOT THERE, rather than falling through to the
+      # classification-only run. An artifact that silently arrived empty would
+      # restore the exact unarmed state this step exists to end, and it would
+      # read as green — which is the defect, not a degraded mode of it.
+      - name: The manifest must actually be present
+        run: test -s _manifest/manifest.json
+      - name: Every migrated template accounts for its seed, and every dump a template
+        run: |
+          python3 tools/check_dump_coverage.py --zoo . \
+            --manifest _manifest/manifest.json
