@@ -294,7 +294,9 @@ def test_an_empty_zoo_is_an_error_not_a_green(tmp_path):
 # 60 -> 61: backend#2982 Tier 2 added gfl_resnet — Generalized Focal Loss over
 # that same ATSS-assigned skeleton. NO_SEED for the same reason.
 #
-# 61 -> 63: backend#2982 Tier 2 also added the two hand-written real-time
+# 61 -> 62: backend#2982 Tier 2 added centernet_resnet — "Objects as Points",
+# the roster's only NMS-free detector. NO_SEED for the same reason.
+# 62 -> 64: backend#2982 Tier 2 also added the two hand-written real-time
 # detectors, yolox_s and rtmdet_s — CSPDarknet/PAFPN with SimOTA and
 # CSPNeXt/PAFPN with a dynamic soft-label assigner, written from scratch rather
 # than assembled from torchvision builders. NO_SEED for the same reason.
@@ -303,11 +305,17 @@ def test_an_empty_zoo_is_an_error_not_a_green(tmp_path):
 # had to unlearn a plausible-looking `57 + 6 = 63` — wrong by the eight
 # templates #2973 and #2988 deleted. Whoever rebases onto a moved develop takes
 # what `tools/check_dump_coverage.py --zoo .` reports against the merged tree.
-# centernet_resnet (model-zoo#236, +1) is also in flight; whichever lands after
-# this becomes 64 — re-read the tool, do not add. This branch has already had
-# to re-read it three times (#231, #232, #235 each landed mid-flight), and each
-# time the arithmetic-from-my-own-branch answer was wrong.
-MIGRATED_TEMPLATE_CENSUS = 63
+# tood_resnet (model-zoo#238) and vfnet_resnet (model-zoo#239) are still in
+# flight, each +1; whichever lands after this re-reads the tool. This branch
+# has now re-read it four times (#231, #232, #235, #236 each landed
+# mid-flight), and every time the arithmetic-from-my-own-branch answer was
+# wrong.
+#
+# ⚠️ Resolving this file's conflict by keeping BOTH sides duplicates this
+# constant — the later definition silently wins and the census is whatever the
+# other branch said. That happened here: two definitions, 64 then 63, and the
+# tests failed against 63 while the tool reported 64. One definition only.
+MIGRATED_TEMPLATE_CENSUS = 64
 
 
 def test_the_real_zoo_classifies_every_migrated_template(tmp_path):
