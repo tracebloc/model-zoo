@@ -572,11 +572,12 @@ class ELAN1(CSPELAN):
 
     @staticmethod
     def _branch(in_ch, out_ch, blocks):
-        if blocks:
-            raise ValueError(
-                f"yolov9_s: ELAN1's branch is a single 3x3 and takes no "
-                f"bottlenecks, got blocks={blocks}"
-            )
+        # `blocks` is accepted to match the overridden signature and ignored:
+        # ``__init__`` above always passes 0, so a guard here could never fire.
+        # The reachable check on the same rule -- an architecture table row
+        # declaring bottlenecks for an ``elan1`` stage -- lives in
+        # ``_build_stage``, which is where the row is read.
+        del blocks
         return ConvNormAct(in_ch, out_ch, 3, stride=1)
 
 
@@ -691,13 +692,18 @@ class GELANBackbone(nn.Module):
     """The GELAN backbone. Returns the stride-8/16/32 feature maps, with
     ``SPPELAN`` applied to the deepest one."""
 
-    def __init__(self, stem_channels=None, stages=None, sppelan_hidden=None,
-                 downsample=None):
+    def __init__(self):
         super().__init__()
-        stem_channels = STEM_CHANNELS if stem_channels is None else stem_channels
-        stages = BACKBONE_STAGES if stages is None else stages
-        sppelan_hidden = SPPELAN_HIDDEN if sppelan_hidden is None else sppelan_hidden
-        downsample = DOWNSAMPLE if downsample is None else downsample
+        # Read from the module tables at CONSTRUCTION time, not captured in a
+        # default argument -- a default is evaluated once at def time, which
+        # would pin the shipped scale into the signature and make the table
+        # unreachable. `guard_architecture_table_is_a_live_knob` rebuilds with
+        # the published YOLOv9-C and YOLOv9-T tables and checks the result
+        # against those scales' published parameter counts.
+        stem_channels = STEM_CHANNELS
+        stages = BACKBONE_STAGES
+        sppelan_hidden = SPPELAN_HIDDEN
+        downsample = DOWNSAMPLE
 
         first, second = stem_channels
         self.stem = nn.Sequential(
@@ -739,11 +745,12 @@ class GELANNeck(nn.Module):
     bottom-up pass, so the stride-8 map carries semantic context and the
     stride-32 map carries localisation detail."""
 
-    def __init__(self, in_channels, top_down=None, bottom_up=None, downsample=None):
+    def __init__(self, in_channels):
         super().__init__()
-        top_down = NECK_TOP_DOWN if top_down is None else top_down
-        bottom_up = NECK_BOTTOM_UP if bottom_up is None else bottom_up
-        downsample = DOWNSAMPLE if downsample is None else downsample
+        # Read at construction time, for the reason recorded on the backbone.
+        top_down = NECK_TOP_DOWN
+        bottom_up = NECK_BOTTOM_UP
+        downsample = DOWNSAMPLE
 
         c3, c4, c5 = in_channels
         self.upsample = nn.Upsample(scale_factor=2, mode="nearest")
