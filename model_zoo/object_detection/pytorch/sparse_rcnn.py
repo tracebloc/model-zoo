@@ -187,8 +187,6 @@ DIM_FEEDFORWARD = 2048
 #: what keeps the generated-parameter count (2 * 256 * 64 per proposal) small
 #: enough to predict from a 256-vector.
 DIM_DYNAMIC = 64
-#: Number of dynamically generated convolutions applied in sequence.
-NUM_DYNAMIC = 2
 #: Depth of each stage's classification and regression MLPs.
 NUM_CLS_LAYERS = 1
 NUM_REG_LAYERS = 3
@@ -321,7 +319,7 @@ class _DynamicConv(nn.Module):
     """Dynamic instance interaction — the proposal feature filters its own ROI.
 
     ``dynamic_layer`` maps a ``(d_model,)`` proposal feature to
-    ``num_dynamic * d_model * dim_dynamic`` numbers, which are *reshaped into
+    ``2 * d_model * dim_dynamic`` numbers, which are *reshaped into
     convolution parameters* and applied to the 49 ROI positions in sequence.
     So the filter is not learned once and shared: it is produced per proposal,
     per stage, per forward pass.
@@ -333,8 +331,22 @@ class _DynamicConv(nn.Module):
         self.d_model = d_model
         self.dim_dynamic = dim_dynamic
         self.num_params = d_model * dim_dynamic
-        # Two generated parameter blocks: d_model x dim_dynamic to project the
-        # ROI down, then dim_dynamic x d_model to project it back.
+        # TWO generated parameter blocks, and the 2 is STRUCTURAL rather than a
+        # count you may vary: `d_model x dim_dynamic` projects the ROI down and
+        # `dim_dynamic x d_model` projects it back. They are a down/up pair, not
+        # N interchangeable convolutions.
+        #
+        # There used to be a `NUM_DYNAMIC = 2` module constant and a
+        # `num_dynamic=NUM_DYNAMIC` parameter threaded to the stage. Neither
+        # reached here -- this `__init__` never accepted it and the 2 below was
+        # always literal -- so setting it to 3 changed nothing in the built
+        # model. Worse, it would not have reddened: the parameter oracle in
+        # `tests/test_sparse_rcnn_matching.py` derives its expectation from its
+        # own transcribed `PUBLISHED_NUM_DYNAMIC`, so the declared architecture
+        # and the real one could disagree while the test stayed green. Removed
+        # rather than generalised, because the pair is what the architecture is.
+        # Caught in review on model-zoo#246. See
+        # `test_the_dynamic_interaction_builds_exactly_two_blocks`.
         self.dynamic_layer = nn.Linear(d_model, 2 * self.num_params)
         self.down_norm = nn.LayerNorm(dim_dynamic)
         self.up_norm = nn.LayerNorm(d_model)
@@ -457,7 +469,6 @@ class _SparseRCNN(nn.Module):
         num_heads=NUM_HEADS,
         dim_feedforward=DIM_FEEDFORWARD,
         dim_dynamic=DIM_DYNAMIC,
-        num_dynamic=NUM_DYNAMIC,
         roi_output_size=ROI_OUTPUT_SIZE,
         detections_per_img=DETECTIONS_PER_IMG,
     ):

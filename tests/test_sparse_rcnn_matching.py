@@ -1227,3 +1227,53 @@ def test_matcher_cost_weights_match_the_loss():
         f"the NEGATIVE matching term is weighted {negative_weight.strip()!r}; "
         f"torchvision weights a negative by (1 - alpha)."
     )
+
+
+def test_the_dynamic_interaction_builds_exactly_two_blocks():
+    """The dynamic conv generates exactly two parameter blocks, asserted on the
+    BUILT module rather than on a constant.
+
+    ⚠️ WHY THIS IS NOT COVERED BY THE PARAMETER ORACLE. That oracle derives its
+    expectation from ``PUBLISHED_NUM_DYNAMIC``, transcribed in *this* file from
+    the paper. So it validates the template against the published spec — which
+    is the right thing — but it cannot notice the template *declaring* a
+    different number than it builds, because it never reads the template's own
+    constant. A `NUM_DYNAMIC = 2` module constant existed and reached nothing:
+    `_DynamicConv.__init__` never accepted it and used a literal 2, so setting
+    it to 3 changed neither the model nor any test. It has been removed; this
+    guard is what keeps the removal honest, by pinning the structural fact to
+    the built module instead of to a name.
+
+    Caught in review on model-zoo#246 as the "constant that lies" shape.
+    """
+    module = _module()
+    model = _small_model()
+
+    # Reach the first stage's dynamic interaction on the built model.
+    interaction = None
+    for candidate in model.modules():
+        if type(candidate).__name__ == "_DynamicConv":
+            interaction = candidate
+            break
+    assert interaction is not None, (
+        "no _DynamicConv in the built model — this guard stopped reaching the "
+        "module it names, so it would pass by checking nothing"
+    )
+
+    expected = 2 * interaction.num_params
+    assert interaction.dynamic_layer.out_features == expected, (
+        f"the dynamic layer generates {interaction.dynamic_layer.out_features} "
+        f"parameters; two blocks of num_params={interaction.num_params} is "
+        f"{expected}. The pair is down-project then up-project and is "
+        f"structural, not a configurable count."
+    )
+
+    # And no resurrected constant: a name implying configurability must not
+    # come back without actually reaching the module above.
+    assert not hasattr(module, "NUM_DYNAMIC"), (
+        "the template declares NUM_DYNAMIC again. If it is genuinely threaded "
+        "through to _DynamicConv now, assert that here instead of removing "
+        "this check — a constant that does not reach the model it describes is "
+        "documentation pretending to be configuration."
+    )
+
