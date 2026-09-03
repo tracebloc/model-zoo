@@ -720,7 +720,7 @@ def test_the_template_declares_the_family_contract():
 # NOTHING in the suite exercised a non-unit `scales[level]`.
 
 
-def test_a_negative_per_level_scale_cannot_invert_the_boxes(vf_unused=None):
+def test_a_negative_per_level_scale_cannot_invert_the_boxes(tood):
     """The per-level scale must not be able to make distances negative.
 
     ``scales[level]`` is an unconstrained ``Parameter`` taking gradient from the
@@ -736,8 +736,7 @@ def test_a_negative_per_level_scale_cannot_invert_the_boxes(vf_unused=None):
     """
     import torch
 
-    module = _load()
-    model = module.MyModel(3)
+    model = tood.MyModel(3)
     model.eval()
     image = torch.rand(1, 3, 128, 160)
     with torch.no_grad():
@@ -754,7 +753,7 @@ def test_a_negative_per_level_scale_cannot_invert_the_boxes(vf_unused=None):
     )
 
 
-def test_a_negative_scale_also_leaves_the_decoded_boxes_valid(vf_unused=None):
+def test_a_negative_scale_also_leaves_the_decoded_boxes_valid(tood):
     """The consequence, end to end: the decode must still emit valid xyxy.
 
     Asserted separately from the distances because this is the property the
@@ -764,8 +763,7 @@ def test_a_negative_scale_also_leaves_the_decoded_boxes_valid(vf_unused=None):
     import torch
     from torchvision.models.detection.image_list import ImageList
 
-    module = _load()
-    model = module.MyModel(3)
+    model = tood.MyModel(3)
     model.eval()
     image = torch.rand(1, 3, 128, 160)
     with torch.no_grad():
@@ -776,9 +774,9 @@ def test_a_negative_scale_also_leaves_the_decoded_boxes_valid(vf_unused=None):
         anchors = model.anchor_generator(ImageList(image, [(128, 160)]), features)[0]
 
     split = model.anchor_generator.num_anchors_per_level
-    strides = module._anchor_strides(split, anchors.device, anchors.dtype)
-    boxes = module._distance_to_box(
-        module._centres(anchors), outputs["bbox_regression"][0], strides
+    strides = tood._anchor_strides(split, anchors.device, anchors.dtype)
+    boxes = tood._distance_to_box(
+        tood._centres(anchors), outputs["bbox_regression"][0], strides
     )
     inverted = int(((boxes[:, 2] < boxes[:, 0]) | (boxes[:, 3] < boxes[:, 1])).sum())
     assert inverted == 0, (
@@ -787,7 +785,7 @@ def test_a_negative_scale_also_leaves_the_decoded_boxes_valid(vf_unused=None):
     )
 
 
-def test_the_alignment_target_comes_from_the_matched_object(vf_unused=None):
+def test_the_alignment_target_comes_from_the_matched_object(tood):
     """The soft label must come from the SAME object whose class channel it is
     written into.
 
@@ -823,7 +821,6 @@ def test_the_alignment_target_comes_from_the_matched_object(vf_unused=None):
     """
     import torch
 
-    module = _load()
     gt = torch.tensor([[0.0, 0.0, 100.0, 100.0], [90.0, 0.0, 200.0, 100.0]])
     labels = torch.tensor([1, 2])
     anchors = torch.tensor([
@@ -838,7 +835,7 @@ def test_the_alignment_target_comes_from_the_matched_object(vf_unused=None):
     ])
     scores = torch.full((3, 4), 0.6)
 
-    matched, alignment = module._tal_assign(
+    matched, alignment = tood._tal_assign(
         anchors, gt, labels, scores, predicted, [3], topk=3, pool_topk=3
     )
 
