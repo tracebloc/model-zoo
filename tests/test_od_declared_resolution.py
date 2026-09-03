@@ -243,6 +243,12 @@ PUBLISHED_RESOLUTION: dict[str, tuple[int, str, str]] = {
     # parameter summary is measured at. A row that read 448 here would be
     # describing the wrong architecture.
     "yolov8_s": (640, LITERAL, "YOLOv8 (Ultralytics 2023) default imgsz=640; the yolov8s.yaml scale the published 11,166,560-parameter summary is quoted at"),
+    # Same distinction as `yolov8_s` above: this is the GELAN YOLOv9-S
+    # (model-zoo#255), not a member of the engine's fixed-448 yolo contract.
+    # YOLOv9 (Wang et al. 2024) sec. 4.1 trains and evaluates on MS COCO at
+    # 640x640, and 640 is also the scale `yolov9s.yaml`'s own 7318368-parameter
+    # header is quoted at -- the anchor #255's count is verified against.
+    "yolov9_s": (640, LITERAL, "YOLOv9 (Wang et al. 2024) sec. 4.1 trains at 640x640 on MS COCO; the yolov9s.yaml scale its published 7,318,368-parameter header is quoted at"),
 }
 
 #: The rows whose expectation is a hand-written literal rather than re-derived.
@@ -265,6 +271,7 @@ UNVERIFIABLE_LITERALS = frozenset(
         "efficientdet_d0",
         "sparse_rcnn",
         "yolov8_s",
+        "yolov9_s",
     }
 )
 
@@ -813,15 +820,15 @@ def test_the_anchor_kinds_partition_the_roster():
         f"  - SHRANK? Good: a row became re-derivable. Update this set in the "
         f"same commit."
     )
-    assert len(UNVERIFIABLE_LITERALS) == 5, (
+    assert len(UNVERIFIABLE_LITERALS) == 6, (
         f"UNVERIFIABLE_LITERALS holds {len(UNVERIFIABLE_LITERALS)} rows, not "
-        f"the 5 recorded. Growing it weakens every claim in this file's "
+        f"the 6 recorded. Growing it weakens every claim in this file's "
         f"docstring about the table being independent, so each addition is a "
         f"deliberate edit here with a citation — which is what the pin is for.\n"
         f"\n"
-        f"3 -> 4 for `sparse_rcnn` (model-zoo#246) and 4 -> 5 for `yolov8_s` "
-        f"(model-zoo#253), both of which merged to develop while this branch "
-        f"was open. Neither has a torchvision builder or a class default to "
+        f"3 -> 4 `sparse_rcnn` (model-zoo#246), 4 -> 5 `yolov8_s` "
+        f"(model-zoo#253), 5 -> 6 `yolov9_s` (model-zoo#255). None has a "
+        f"torchvision builder or a class default to "
         f"re-derive against — each builds its own transform from its own "
         f"image_size, exactly like cascade_rcnn — so the citation is the only "
         f"thing standing between the row and the tautology this file removes.\n"
