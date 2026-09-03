@@ -468,39 +468,40 @@ def guard_declared_image_size_is_the_measured_edge(module) -> None:
     )
 
 
-#: Exact parameter/buffer/tensor totals at the templates' declared
-#: ``output_classes``, pinned because NOTHING ELSE HERE PINS A WIDTH.
+#: Buffer and tensor totals measured off this repo's own build, as a cheap
+#: regression tripwire.
 #:
-#: This table exists because of a real escape. ``yolox_s``'s ``CSPLayer`` built
-#: its inner ``Bottleneck`` at the bottleneck's own ``expansion=0.5`` instead of
-#: the 1.0 upstream passes, so channels the CSP split had already halved were
-#: squeezed again and the backbone and neck ran ~1.15M parameters narrower than
-#: YOLOX-S all the way through (7,788,886 instead of 8,942,326). Thirty guards
-#: and thirty-three mutations did not notice: ``decoupled_head`` checks ``id()``
-#: disjointness and ``shared_conv_separate_bn`` checks ``data_ptr`` identity,
-#: and both hold at ANY width. The evidence that the architecture was the right
-#: size lived only in the PR description, where no check can reach it.
+#: ⚠️ READ THIS BEFORE CITING THESE NUMBERS AS EVIDENCE. They are
+#: SELF-MEASURED: taken from the model under test, so they can only ever prove
+#: the code is consistent with itself. They cannot tell you the architecture is
+#: the right one — and that is not a theoretical caveat. ``yolox_s`` shipped for
+#: review with a self-measured 7,788,886-parameter count presented as proof
+#: that "the design is real", while the real YOLOX-S is 8,942,326 at this class
+#: count: its ``CSPLayer`` squeezed the already-halved CSP branch a second time
+#: and the whole backbone and neck ran ~1.15M narrower. The count agreed with
+#: the code perfectly, because it came from the code.
 #:
-#: A total is a blunt instrument, and deliberately so: it is one number that
-#: moves if any channel count, block count, kernel size or head shape moves. It
-#: is paired with the two ``csp_bottleneck_width`` guards, which name the
-#: specific ratio that was wrong — so a failure here says "something resized"
-#: and a failure there says exactly what.
+#: ``guard_matches_the_published_architecture`` is the check that can actually
+#: make that call: it re-derives the count from the published spec, with
+#: nothing from ``model_zoo/`` imported. Parameters are therefore asserted
+#: THERE, against the reference. What lives here is only what the reference
+#: derivation does not cover — buffer elements and state_dict tensor count —
+#: and its job is to notice an unintended change, not to certify a design.
 #:
-#: Updating these numbers is a legitimate edit when the architecture changes on
-#: purpose. Doing it to make a red go away is the failure this table exists to
-#: prevent, so state the intended change in the commit message.
+#: Updating these is legitimate when the architecture changes on purpose; state
+#: the intended change in the commit message.
 _PINNED_TOTALS = {
-    "YOLOXS": {"parameters": 8_942_326, "buffers": 23_178, "tensors": 462},
-    "RTMDetS": {"parameters": 9_271_747, "buffers": 24_978, "tensors": 520},
+    "YOLOXS": {"buffers": 23_178, "tensors": 462},
+    "RTMDetS": {"buffers": 24_978, "tensors": 520},
 }
 
 
 def guard_module_tree_size_is_pinned(module) -> None:
-    """The built model's parameter, buffer and tensor totals are exact.
+    """The built model's buffer and tensor totals are exact.
 
     Measured at the template's declared ``output_classes`` so the number is
-    reproducible from the file alone, with no argument to get wrong.
+    reproducible from the file alone. Self-measured, so a tripwire rather than
+    evidence — see the note on ``_PINNED_TOTALS``.
     """
     entry_name = getattr(module, "main_class", None) or getattr(
         module, "main_method", None
@@ -514,18 +515,17 @@ def guard_module_tree_size_is_pinned(module) -> None:
 
     model = _build(module, module.output_classes)
     actual = {
-        "parameters": sum(p.numel() for p in model.parameters()),
         "buffers": sum(b.numel() for b in model.buffers()),
         "tensors": len(model.state_dict()),
     }
     assert actual == expected, (
         f"{module.__name__}: module tree is {actual}, pinned at {expected} "
-        f"(at output_classes={module.output_classes}). Some channel count, "
-        f"block count, kernel size or head shape moved. Nothing else in this "
-        f"file pins a width — that is why this row exists. If the change was "
-        f"deliberate, update the row and say so in the commit; if it was not, "
-        f"the delta is "
-        f"{actual['parameters'] - expected['parameters']:+,} parameters."
+        f"(at output_classes={module.output_classes}). Some norm layer or head "
+        f"shape moved. This is a SELF-MEASURED tripwire, not evidence the "
+        f"architecture is right — parameters are checked against the "
+        f"re-derived published spec in "
+        f"guard_matches_the_published_architecture. If the change was "
+        f"deliberate, update the row and say so in the commit."
     )
 
 
@@ -574,6 +574,288 @@ def guard_rtmdet_csp_block_runs_at_full_branch_width(module) -> None:
         f"CSPNeXtBlock squeezes to {inner}. mmdet passes expansion=1.0 to the "
         f"block, so its 3x3 runs at full branch width. Squeezing again narrows "
         f"the whole backbone and neck, silently."
+    )
+
+
+# --------------------------------------------------------------------------
+# the independent reference — arithmetic from the PUBLISHED specs
+# --------------------------------------------------------------------------
+#
+# WHY THIS EXISTS, AND WHY IT IS NOT ANOTHER TOTAL.
+#
+# `yolox_s.py` shipped for review with its CSPLayer building the inner
+# Bottleneck at the bottleneck's own `expansion=0.5` instead of the 1.0 upstream
+# passes. Channels the CSP split had already halved were squeezed again, so the
+# backbone and neck ran ~1.15M parameters narrower than YOLOX-S at every stage:
+# 7,788,886 instead of 8,942,326. Thirty-six guards did not see it, and neither
+# did the parameter count reported as evidence that the architecture was right —
+# because that count was measured off the model under test. A number derived
+# from the code can only ever confirm the code is self-consistent; it cannot
+# tell you that you built the wrong model. Two reviewers caught it by counting
+# the PUBLISHED architecture analytically and comparing.
+#
+# So the reference is re-derived here, layer by layer, from the published arch
+# tables — and NOTHING under `model_zoo/` is imported to do it. The primitives
+# below are plain arithmetic on (in, out, kernel, groups); the specs are
+# transcribed from the papers and the reference configs. If a template's width,
+# depth, kernel, block count or head shape drifts from the published design,
+# the two numbers disagree and this file says so.
+#
+# The anchor matters as much as the arithmetic: `_PUBLISHED_YOLOX_S_PARAMETERS`
+# ties the derivation to a figure from outside this repo entirely (YOLOX paper
+# Table 2 / the official README, ~9.0M at 80 classes), so the transcription
+# cannot drift into agreeing with a wrong template. Three independent numbers
+# now agree for YOLOX-S: this derivation (8,968,255 at 80 class channels), the
+# reviewer's own analytical count, and the published figure.
+
+
+def _conv(in_ch, out_ch, kernel, groups=1, bias=False):
+    return (in_ch // groups) * out_ch * kernel * kernel + (out_ch if bias else 0)
+
+
+def _bn(channels):
+    return 2 * channels
+
+
+def _cba(in_ch, out_ch, kernel, groups=1):
+    """conv -> BatchNorm (affine); the activation has no parameters."""
+    return _conv(in_ch, out_ch, kernel, groups) + _bn(out_ch)
+
+
+def _dws(in_ch, out_ch, kernel):
+    """Depthwise kxk then pointwise 1x1, each with its own BatchNorm."""
+    return _cba(in_ch, in_ch, kernel, groups=in_ch) + _cba(in_ch, out_ch, 1)
+
+
+#: YOLOX (Ge et al. 2021) Table 2 / official README: YOLOX-S is ~9.0M
+#: parameters at 80 classes. From outside this repo — it is what stops the
+#: transcription below from drifting into agreement with a wrong template.
+_PUBLISHED_YOLOX_S_PARAMETERS = 9_000_000
+_PUBLISHED_TOLERANCE = 0.02
+
+
+def _reference_yolox_s_parameters(class_channels):
+    """YOLOX-S parameter count, derived from the published spec alone.
+
+    width 0.5, depth 0.33, base 32 channels, base depth 1; CSP stages at
+    depth/3·depth·3·depth blocks; decoupled head at 128 hidden channels.
+    """
+    base, depth = 32, 1
+
+    def bottleneck(channels):  # upstream expansion is 1.0 — the defect above
+        return _cba(channels, channels, 1) + _cba(channels, channels, 3)
+
+    def csp(in_ch, out_ch, blocks):
+        half = out_ch // 2
+        return (
+            _cba(in_ch, half, 1)
+            + _cba(in_ch, half, 1)
+            + _cba(2 * half, out_ch, 1)
+            + blocks * bottleneck(half)
+        )
+
+    def spp(channels, kernels=3):
+        half = channels // 2
+        return _cba(channels, half, 1) + _cba(half * (kernels + 1), channels, 1)
+
+    total = _cba(12, base, 3)  # Focus stem: 4 sliced phases of 3 channels
+    total += _cba(base, base * 2, 3) + csp(base * 2, base * 2, depth)
+    total += _cba(base * 2, base * 4, 3) + csp(base * 4, base * 4, depth * 3)
+    total += _cba(base * 4, base * 8, 3) + csp(base * 8, base * 8, depth * 3)
+    total += (
+        _cba(base * 8, base * 16, 3)
+        + spp(base * 16)
+        + csp(base * 16, base * 16, depth)
+    )
+
+    c3, c4, c5 = base * 4, base * 8, base * 16
+    total += _cba(c5, c4, 1) + csp(2 * c4, c4, depth)
+    total += _cba(c4, c3, 1) + csp(2 * c3, c3, depth)
+    total += _cba(c3, c3, 3) + csp(2 * c3, c4, depth)
+    total += _cba(c4, c4, 3) + csp(2 * c4, c5, depth)
+
+    hidden = 128
+    for in_ch in (c3, c4, c5):
+        total += _cba(in_ch, hidden, 1)                      # stem
+        total += 4 * _cba(hidden, hidden, 3)                 # decoupled towers
+        total += _conv(hidden, class_channels, 1, bias=True)
+        total += _conv(hidden, 4, 1, bias=True)
+        total += _conv(hidden, 1, 1, bias=True)
+    return total
+
+
+def _reference_rtmdet_s_parameters(class_channels):
+    """RTMDet-S parameter count, derived from the published spec alone.
+
+    CSPNeXt P5 arch table at widen 0.5 / deepen 0.33, CSPNeXt-PAFPN to 128
+    channels, RTMDetSepBNHead with share_conv=True.
+
+    NOTE — no published-total anchor for this one, deliberately. The YOLOX-S
+    figure above is one I can point at; for RTMDet-S I could not confirm a
+    published parameter count from a source independent of this session, so
+    asserting one would be exactly the mistake this whole block exists to
+    prevent — a number presented as evidence that is really just a guess. What
+    IS pinned is that this transcription of the arch table and the built module
+    tree agree to the parameter, plus the per-stage widths and block counts
+    below. If someone can anchor the published figure, add it here.
+    """
+    def block(channels):  # CSPNeXtBlock, mmdet expansion 1.0
+        return _cba(channels, channels, 3) + _dws(channels, channels, 5)
+
+    def attention(channels):
+        return _conv(channels, channels, 1, bias=True)
+
+    def csp(in_ch, out_ch, blocks):
+        mid = out_ch // 2
+        return (
+            _cba(in_ch, mid, 1)
+            + _cba(in_ch, mid, 1)
+            + blocks * block(mid)
+            + attention(2 * mid)
+            + _cba(2 * mid, out_ch, 1)
+        )
+
+    def sppf(channels, kernels=3):
+        mid = channels // 2
+        return _cba(channels, mid, 1) + _cba(mid * (kernels + 1), channels, 1)
+
+    #: (in, out, blocks, use_spp) at widen 0.5 / deepen 0.33.
+    stages = ((32, 64, 1, False), (64, 128, 2, False), (128, 256, 2, False), (256, 512, 1, True))
+    total = _cba(3, 16, 3) + _cba(16, 16, 3) + _cba(16, 32, 3)  # stem
+    for in_ch, out_ch, blocks, use_spp in stages:
+        total += _cba(in_ch, out_ch, 3)
+        if use_spp:
+            total += sppf(out_ch)
+        total += csp(out_ch, out_ch, blocks)
+
+    c3, c4, c5, blocks, out = 128, 256, 512, 1, 128
+    total += _cba(c5, c4, 1) + csp(2 * c4, c4, blocks)
+    total += _cba(c4, c3, 1) + csp(2 * c3, c3, blocks)
+    total += _cba(c3, c3, 3) + csp(2 * c3, c4, blocks)
+    total += _cba(c4, c4, 3) + csp(2 * c4, c5, blocks)
+    total += _cba(c3, out, 3) + _cba(c4, out, 3) + _cba(c5, out, 3)  # out_convs
+
+    # share_conv=True: the tower convs are ONE set of weights for all three
+    # levels (parameters() de-duplicates), while every level keeps its own BN.
+    feat, levels, stacked = 128, 3, 2
+    total += 2 * (_conv(out, feat, 3) + _conv(feat, feat, 3))
+    total += levels * stacked * 2 * _bn(feat)
+    total += levels * (
+        _conv(feat, class_channels, 1, bias=True) + _conv(feat, 4, 1, bias=True)
+    )
+    return total
+
+
+#: ``entry point -> (reference function, expected structure)``. The structure
+#: rows are the published per-stage widths and block counts; they say WHAT
+#: drifted when the total disagrees, and they hold independently of it.
+_REFERENCE = {
+    "YOLOXS": {
+        "parameters": _reference_yolox_s_parameters,
+        "backbone_out": (128, 256, 512),
+        "neck_out": (128, 256, 512),
+        "csp_blocks": (1, 3, 3, 1),
+        "published": _PUBLISHED_YOLOX_S_PARAMETERS,
+    },
+    "RTMDetS": {
+        "parameters": _reference_rtmdet_s_parameters,
+        "backbone_out": (128, 256, 512),
+        "neck_out": (128, 128, 128),
+        "csp_blocks": (1, 2, 2, 1),
+        "published": None,  # see the note in the reference function
+    },
+}
+
+
+def _built_csp_block_counts(model):
+    """Blocks per backbone CSP stage, read off the built model.
+
+    Both backbones expose their stages differently — YOLOX names them
+    ``dark2..dark5``, RTMDet holds a ``stages`` ModuleList — so this finds the
+    CSP stage inside each and counts its blocks, rather than assuming a layout.
+    """
+    backbone = model.backbone
+    if hasattr(backbone, "stages"):
+        stages = list(backbone.stages)
+    else:
+        stages = [getattr(backbone, f"dark{i}") for i in range(2, 6)]
+    counts = []
+    for stage in stages:
+        # Selected by CLASS NAME, not by "has an .m attribute": SPPBottleneck
+        # also holds its max-pools in an `m` ModuleList, so an attribute probe
+        # matches twice on the deepest stage and the count is meaningless.
+        inner = [m for m in stage if type(m).__name__ == "CSPLayer"]
+        assert len(inner) == 1, (
+            f"expected exactly one CSPLayer per backbone stage, found "
+            f"{len(inner)} in {[type(m).__name__ for m in stage]}"
+        )
+        blocks = getattr(inner[0], "m", None)
+        if blocks is None:
+            blocks = inner[0].blocks
+        counts.append(len(blocks))
+    return tuple(counts)
+
+
+def guard_matches_the_published_architecture(module) -> None:
+    """The built module tree must match the PUBLISHED architecture, re-derived.
+
+    The independent half of the evidence. ``module_tree_size`` pins the totals
+    this repo measured and so can only catch a regression away from whatever
+    was shipped; this one re-computes the count from the published spec and
+    compares, so it catches shipping the wrong architecture in the first place
+    — which is what happened.
+    """
+    entry_name = getattr(module, "main_class", None) or getattr(
+        module, "main_method", None
+    )
+    reference = _REFERENCE.get(entry_name)
+    assert reference is not None, (
+        f"{module.__name__}: entry point {entry_name!r} has no row in "
+        f"_REFERENCE. A hand-written detector claiming to BE a published "
+        f"architecture has to be checked against it, or the only evidence for "
+        f"its shape is a number measured off itself."
+    )
+
+    class_channels = module.output_classes + 1  # the deliberate label-space +1
+    expected = reference["parameters"](class_channels)
+    model = _build(module, module.output_classes)
+    actual = sum(p.numel() for p in model.parameters())
+
+    assert actual == expected, (
+        f"{module.__name__}: built model has {actual:,} parameters; the "
+        f"published architecture re-derived from its spec has {expected:,} — "
+        f"a difference of {actual - expected:+,}. Something in the width, "
+        f"depth, kernel sizes, block counts or head shape does not match the "
+        f"design this template claims to implement. This is the check that a "
+        f"parameter count measured off the model itself CANNOT make: a "
+        f"self-measured total is only self-consistency."
+    )
+
+    published = reference["published"]
+    if published is not None:
+        drift = abs(_reference_yolox_s_parameters(80) - published) / published
+        assert drift <= _PUBLISHED_TOLERANCE, (
+            f"the spec transcription for {entry_name} derives "
+            f"{_reference_yolox_s_parameters(80):,} parameters at 80 classes, "
+            f"{drift:.1%} from the published {published:,}. The transcription "
+            f"itself has drifted — fix it against the paper before trusting "
+            f"the comparison above."
+        )
+
+    assert tuple(model.backbone.out_channels) == reference["backbone_out"], (
+        f"{module.__name__}: backbone emits "
+        f"{tuple(model.backbone.out_channels)} channels, published design has "
+        f"{reference['backbone_out']}"
+    )
+    assert tuple(model.neck.out_channels) == reference["neck_out"], (
+        f"{module.__name__}: neck emits {tuple(model.neck.out_channels)} "
+        f"channels, published design has {reference['neck_out']}"
+    )
+    counts = _built_csp_block_counts(model)
+    assert counts == reference["csp_blocks"], (
+        f"{module.__name__}: backbone CSP stages hold {counts} blocks, "
+        f"published design has {reference['csp_blocks']} at this depth "
+        f"multiplier"
     )
 
 
@@ -1565,6 +1847,7 @@ YOLOX_GUARDS = {
     "original_coordinates": guard_predictions_are_in_original_image_coordinates,
     "declared_size_measured": guard_declared_image_size_is_the_measured_edge,
     "module_tree_size": guard_module_tree_size_is_pinned,
+    "published_architecture": guard_matches_the_published_architecture,
     "no_network": guard_constructs_with_no_network,
     "overfits_one_object": guard_overfits_a_single_object,
 }
@@ -1585,6 +1868,7 @@ RTMDET_GUARDS = {
     "original_coordinates": guard_predictions_are_in_original_image_coordinates,
     "declared_size_measured": guard_declared_image_size_is_the_measured_edge,
     "module_tree_size": guard_module_tree_size_is_pinned,
+    "published_architecture": guard_matches_the_published_architecture,
     "no_network": guard_constructs_with_no_network,
     "overfits_one_object": guard_overfits_a_single_object,
 }
@@ -1731,6 +2015,20 @@ MUTATIONS = [
         "            *[Bottleneck(hidden, hidden, 1.0, shortcut) for _ in range(n)]",
         "            *[Bottleneck(hidden, hidden, 0.5, shortcut) for _ in range(n)]",
         ("yolox", "csp_bottleneck_width"),
+    ),
+    (
+        "yolox/csp_bottleneck_squeezed_vs_reference",
+        YOLOX_PATH,
+        "            *[Bottleneck(hidden, hidden, 1.0, shortcut) for _ in range(n)]",
+        "            *[Bottleneck(hidden, hidden, 0.5, shortcut) for _ in range(n)]",
+        ("yolox", "published_architecture"),
+    ),
+    (
+        "yolox/depth_multiplier_moved",
+        YOLOX_PATH,
+        "DEPTH_MULT = 0.33",
+        "DEPTH_MULT = 1.00",
+        ("yolox", "published_architecture"),
     ),
     (
         "yolox/width_multiplier_moved",
@@ -1882,6 +2180,20 @@ MUTATIONS = [
         "            *[CSPNeXtBlock(mid, mid, add_identity) for _ in range(n)]",
         "            *[CSPNeXtBlock(mid, max(2, mid // 2), add_identity) for _ in range(n)]",
         ("rtmdet", "csp_bottleneck_width"),
+    ),
+    (
+        "rtmdet/csp_block_squeezed_vs_reference",
+        RTMDET_PATH,
+        "            *[CSPNeXtBlock(mid, mid, add_identity) for _ in range(n)]",
+        "            *[CSPNeXtBlock(mid, max(2, mid // 2), add_identity) for _ in range(n)]",
+        ("rtmdet", "published_architecture"),
+    ),
+    (
+        "rtmdet/deepen_factor_moved",
+        RTMDET_PATH,
+        "DEEPEN_FACTOR = 0.33",
+        "DEEPEN_FACTOR = 1.00",
+        ("rtmdet", "published_architecture"),
     ),
     (
         "rtmdet/width_multiplier_moved",
