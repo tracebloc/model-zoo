@@ -278,9 +278,29 @@ def test_an_empty_zoo_is_an_error_not_a_green(tmp_path):
 # 49 -> 55: backend#2982 Tier 0 added the six torchvision_detection roster
 # templates the zoo never wrapped (faster_rcnn_resnet_v2, retinanet_v2,
 # faster_rcnn_mobilenet, faster_rcnn_mobilenet_320, ssd_vgg16,
-# ssdlite_mobilenet). All six classify NO_SEED — they build with weights=None,
-# so they genuinely random-initialise and stage no dump. That is what makes them
-# invisible to the newly-armed orphan half: no dump, and no expectation of one.
+# ssdlite_mobilenet). They landed classifying NO_SEED — `weights=None`
+# genuinely random-initialises, and saying so is what made that green honest.
+# Under the newly-armed orphan half that also made them invisible to it: no
+# dump, and no expectation of one.
+#
+# backend#3055 FLIPS ALL SIX TO EXPECTS_SEED, so neither half of that is true
+# of them any more. The COCO tensors are prepped and verified — 573.8 MB of
+# backbone-only seed across the six, 6/6 OK under
+# `tools/verify_backbone_seeds.py` at output_classes=7 — so the truthful
+# classification is that each names its `<stem>_weights.pkl`.
+#
+# THE FLIP DOES NOT MOVE THE CENSUS, whatever the census currently is: it
+# reclassifies six templates between the two classified buckets and adds none.
+# (Written that way on purpose — an earlier revision said "unchanged at 55" and
+# was stale within the hour, when Tier 1 took the total to 59 for reasons that
+# have nothing to do with this change.)
+#
+# WHAT IT DOES CHANGE IS COVERAGE, and in the direction that fails closed: the
+# armed gate now looks for six dumps backend's manifest does not list, and says
+# so by name. That is the gate working, not a regression — and it is why this
+# must not land before the blobs are hosted (backend#2659) and the manifest
+# entries exist. The red is load-bearing evidence, so it is left standing
+# rather than papered over.
 #
 # 55 -> 59: backend#2982 Tier 1 added four modern-backbone detectors —
 # faster_rcnn_convnext_small, faster_rcnn_swin_t, fcos_convnext_small,
