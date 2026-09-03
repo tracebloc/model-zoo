@@ -65,9 +65,20 @@ The fix is a third number, from a source the template cannot influence:
    *architecture* is specified at. **Independent of the template by
    construction** — nothing in ``model_zoo/`` feeds it.
 
-All three must agree. A wrong declaration can no longer hide behind a matching
-transform (``efficientdet_d0``'s hole), and a wrong transform can no longer hide
-behind a matching declaration (the mirror image, which nothing checked at all).
+All three must agree, and **two comparisons are enough to say so**:
+``declared == built`` (the original check) and ``declared == published`` (the
+new one) together imply ``built == published``. A third test asserting that
+pairing directly was written and then removed — it added no coverage and
+rebuilt all twenty torchvision detectors, the heavy swin/convnext ones
+included, to re-derive an implication (review on model-zoo#252). Stated here
+so it is not helpfully re-added: if you find yourself wanting it, check
+whether the two existing comparisons already give it to you.
+
+A wrong declaration can therefore no longer hide behind a matching transform
+(``efficientdet_d0``'s hole), and a wrong transform can no longer hide behind a
+declaration edited to match it — the mirror image, which nothing checked at
+all: ``declared == built`` still passes, but ``declared == published`` now
+fails.
 
 The obvious objection to a hand-written spec table is that it can be edited to
 match a bad template — moving the tautology rather than removing it. So 20 of
@@ -336,7 +347,14 @@ def _read_declared_image_size(path: pathlib.Path) -> int | None:
         text = path.read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError):
         return None
-    match = re.search(r"^\s*image_size\s*=\s*(\d+)", text, re.MULTILINE)
+    # Anchored at COLUMN ZERO, not ``^\s*``. ``\s*`` consumes leading
+    # indentation, so an indented ``image_size = N`` — a class attribute, a
+    # local in a builder — would match as if it were the module-level
+    # declaration, and the reader's own test claims it does not. No current
+    # template trips it, so this was latent; the guarantee is now the one
+    # stated (review on model-zoo#252). All 23 OD templates declare
+    # ``image_size`` at column zero, so nothing on the roster moves.
+    match = re.search(r"^image_size\s*=\s*(\d+)", text, re.MULTILINE)
     return int(match.group(1)) if match else None
 
 
@@ -462,60 +480,6 @@ def test_declared_image_size_is_the_resolution_the_model_runs_at(path):
     )
 
 
-@pytest.mark.parametrize(
-    "path", FAMILY_TEMPLATES, ids=lambda p: str(p.relative_to(ROOT))
-)
-def test_the_built_model_runs_at_the_published_resolution(path):
-    """The third pairing: ``published`` against ``built``.
-
-    Declared-vs-built catches a template whose two numbers disagree.
-    Declared-vs-published catches a wrong declaration. This catches the mirror
-    image of the second — a wrong **transform** hiding behind a declaration
-    that was edited to match it. Nothing checked that at all before, and it is
-    the same defect from the other end: the model would train at a resolution
-    the architecture was never specified for, with the edge dutifully
-    delivering it.
-
-    ``torchvision_detection`` only — the comparison needs a ``transform``.
-    """
-    torch = pytest.importorskip("torch", reason="pytorch not installed in this CI job")
-    pytest.importorskip("torchvision", reason="torchvision not installed in this CI job")
-    del torch
-
-    stem = _stem(path)
-    published, anchor, citation = PUBLISHED_RESOLUTION[stem]
-    _, model = _build(path)
-    effective = _effective_resolution(model)
-    assert effective is not None, (
-        f"{path.name}: no .transform to read an effective resolution from — if "
-        f"this template resizes some other way, this guard needs to learn "
-        f"about it rather than skipping it"
-    )
-
-    known = KNOWN_MISMATCHES.get(stem)
-    if known is not None:
-        # The three legacy templates already run AT the published resolution;
-        # it is their declaration that is wrong. Assert that, so a row cannot
-        # quietly come to mean something else.
-        assert effective == known[1] == published, (
-            f"{stem} is recorded as running at {known[1]} and the "
-            f"architecture is specified at {published} ({citation}), but the "
-            f"built model runs at {effective}. Resolve the disagreement "
-            f"before trusting the row."
-        )
-        return
-
-    assert effective == published, (
-        f"{stem}'s built model runs at {effective}, but {anchor} says this "
-        f"architecture is specified at {published} ({citation}).\n"
-        f"Its declared image_size may well agree with the transform — that is "
-        f"the tautology (backend#3058) — but both would then be wrong "
-        f"together, and the edge would be asked to deliver a resolution the "
-        f"architecture was never trained at.\n"
-        f"⚠️ Do NOT edit the PUBLISHED_RESOLUTION row to match the model."
-    )
-
-
 def test_known_mismatches_are_all_still_mismatched():
     """The other direction, stated once rather than per template.
 
@@ -624,11 +588,13 @@ def test_every_od_template_has_a_published_resolution_row():
         f"— if they were deleted, delete their rows too"
     )
 
+    # Anchor-KIND validity is deliberately not re-asserted here:
+    # ``test_the_anchor_kinds_partition_the_roster`` owns that partition over
+    # this same dict, and two tests failing on one edit tells the reader
+    # nothing the first one did not (review on model-zoo#252). This test owns
+    # COMPLETENESS.
     for stem, (value, anchor, citation) in sorted(PUBLISHED_RESOLUTION.items()):
         assert isinstance(value, int) and value > 0, f"{stem}: bad resolution {value!r}"
-        assert anchor in (BUILDER, CLASS_DEFAULT, ENGINE, LITERAL), (
-            f"{stem}: unknown anchor {anchor!r}"
-        )
         assert citation.strip(), (
             f"{stem}: empty citation. A row without one is an unreviewable "
             f"literal, which is the thing this table replaces."
@@ -656,7 +622,16 @@ def test_declared_image_size_matches_the_published_specification(path):
         f"hands this to the edge to size the dataset; a template without one "
         f"cannot be checked and probably cannot be trained."
     )
-    published, anchor, citation = PUBLISHED_RESOLUTION[stem]
+    row = PUBLISHED_RESOLUTION.get(stem)
+    assert row is not None, (
+        f"{stem} has no PUBLISHED_RESOLUTION row, so there is nothing to "
+        f"check its declaration against. See "
+        f"test_every_od_template_has_a_published_resolution_row for what to "
+        f"add and why — indexing the dict directly here raised a bare "
+        f"KeyError for every parametrized case and buried that message "
+        f"(review on model-zoo#252)."
+    )
+    published, anchor, citation = row
 
     known = KNOWN_MISMATCHES.get(stem)
     if known is not None:
@@ -827,6 +802,58 @@ def test_the_anchor_kinds_partition_the_roster():
         )
 
 
+def _engine_fixed_input_sizes(notes: str) -> set[int]:
+    """The fixed input size(s) the engine's family notes actually declare.
+
+    Matched against the FIELD — the contract's phrasing is "fixed 448 input" —
+    not against any 3-4 digit token in the prose. ``\\b(\\d{3,4})\\b`` accepted
+    an incidental number (an issue id like 3058, a year, or the papers' own
+    640), so a wrong ENGINE row could pass merely because 448 appeared
+    somewhere else in the sentence (review on model-zoo#252).
+
+    Extracted as a function purely so
+    ``test_the_engine_anchor_reads_the_field_not_the_prose`` can point it at
+    adversarial notes. Inline, the loose pattern and this one agree on today's
+    contract text, so loosening it back was a mutation NOTHING could see —
+    which is the only reason this is not still a one-liner.
+    """
+    return {int(n) for n in re.findall(r"fixed\s+(\d{3,4})\s+input", notes)}
+
+
+def test_the_engine_anchor_reads_the_field_not_the_prose():
+    """Control: the anchor must not be satisfiable by stray digits.
+
+    The two patterns agree on the contract as it reads today, so this pins the
+    difference on prose that separates them — otherwise the tightening is
+    unenforced and reverts silently.
+    """
+    contract_today = (
+        "Grid-tensor output + external loss, fixed 448 input. The family name "
+        "equals the declared value, so it needs no alias."
+    )
+    assert _engine_fixed_input_sizes(contract_today) == {448}
+
+    # The same declaration, with incidental numbers a future editor might add.
+    chatty = (
+        "Grid-tensor output + external loss, fixed 448 input. See backend#3058; "
+        "note YOLOv5-s and YOLOv8 are published at 640 upstream, 2026 revision."
+    )
+    assert _engine_fixed_input_sizes(chatty) == {448}, (
+        "the anchor picked up a number that is not the declared fixed input. "
+        "With `\\b(\\d{3,4})\\b` this returns {448, 3058, 640}, so an ENGINE row "
+        "of 640 — the papers' resolution, which is exactly the wrong answer "
+        "for this family — would pass. Anchor to the field."
+    )
+
+    reworded = "Grid-tensor output, a fixed input of 448."
+    assert _engine_fixed_input_sizes(reworded) == set(), (
+        "the extractor claimed to find a size in prose that does not use the "
+        "phrasing it matches; it must come back empty so the caller's 'no "
+        "longer names a fixed <N> input' assertion fires and someone updates "
+        "the pattern deliberately"
+    )
+
+
 def test_the_engine_anchored_rows_match_the_vendored_contract():
     """The yolo rows are anchored to a file the ENGINE owns, not to a literal.
 
@@ -840,14 +867,16 @@ def test_the_engine_anchored_rows_match_the_vendored_contract():
     yolo = [f for f in schema["families"] if f["family"] == "yolo"]
     assert yolo, f"{_schema_path().name}: no 'yolo' family entry to anchor against"
     notes = yolo[0].get("notes", "")
-    sizes = {int(n) for n in re.findall(r"\b(\d{3,4})\b", notes)}
+    sizes = _engine_fixed_input_sizes(notes)
     assert sizes, (
         f"{_schema_path().name}: the yolo family's notes no longer name a "
-        f"fixed input size ({notes!r}), so the ENGINE-anchored rows in "
+        f"'fixed <N> input' ({notes!r}), so the ENGINE-anchored rows in "
         f"PUBLISHED_RESOLUTION have nothing to be anchored to. Either the "
-        f"contract moved the number somewhere machine-readable — read it from "
-        f"there — or the family's input is no longer fixed, in which case "
-        f"those rows need a different anchor entirely."
+        f"contract rephrased it — match the new phrasing, or better, read it "
+        f"from a machine-readable field if one now exists — or the family's "
+        f"input is no longer fixed, in which case those rows need a different "
+        f"anchor entirely. Do NOT widen this back to bare digits: that made "
+        f"the anchor satisfiable by any number in the prose."
     )
 
     engine_rows = {
@@ -939,9 +968,34 @@ def test_the_two_readers_are_independent_and_discriminate(tmp_path):
     # would not, so both directions are pinned.
     assert _read_declared_image_size(template) == 640
     assert _read_declared_image_size(support) is None
+
+    # Both halves of the "module level" claim, each enforced. The indented
+    # half was previously only CLAIMED: the reader used `^\s*image_size`, and
+    # `\s*` happily consumes indentation, so an indented assignment ahead of
+    # the real one would have won. Latent — no template trips it — but the
+    # docstring promised something the regex did not deliver (review on
+    # model-zoo#252).
     commented = tmp_path / "commented.py"
     commented.write_text("# image_size = 111\nimage_size = 512\n", "utf-8")
     assert _read_declared_image_size(commented) == 512, (
-        "the reader must not pick up a commented-out or indented assignment "
-        "ahead of the real module-level one"
+        "the reader must not pick up a commented-out assignment ahead of the "
+        "real module-level one"
+    )
+
+    indented = tmp_path / "indented.py"
+    indented.write_text(
+        "class _Cfg:\n    image_size = 111\n\n\nimage_size = 512\n", "utf-8"
+    )
+    assert _read_declared_image_size(indented) == 512, (
+        "the reader picked up an INDENTED image_size ahead of the "
+        "module-level one — a class attribute or a builder local is not the "
+        "value the SDK hands the edge, and treating it as such would compare "
+        "the published resolution against an unrelated number"
+    )
+
+    only_indented = tmp_path / "only_indented.py"
+    only_indented.write_text("class _Cfg:\n    image_size = 111\n", "utf-8")
+    assert _read_declared_image_size(only_indented) is None, (
+        "a file whose ONLY image_size is indented declares none at module "
+        "level; returning 111 here would invent a declaration"
     )
