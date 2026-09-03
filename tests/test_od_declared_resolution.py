@@ -235,15 +235,37 @@ PUBLISHED_RESOLUTION: dict[str, tuple[int, str, str]] = {
     "sparse_rcnn": (800, LITERAL, "Sparse R-CNN (Sun et al. 2021) sec. 4.1 trains at 800/1333, the R50-FPN reference recipe"),
     "centernet_resnet": (512, LITERAL, "CenterNet (Zhou et al. 2019) sec. 4: 512x512 input"),
     "efficientdet_d0": (512, LITERAL, "EfficientDet (Tan et al. 2020) table 1: D0 input is 512x512"),
+    # NOT the same template as `yolo_v8` above, and the two must not be
+    # collapsed. `yolo_v8` is forced into the engine's v1-shaped 7x7 grid
+    # contract at 448; `yolov8_s` (model-zoo#253) is the genuine multi-scale
+    # YOLOv8-S, anchor-free with a DFL box branch, and Ultralytics specifies it
+    # at 640 -- which is also the `imgsz` default its published 11,166,560
+    # parameter summary is measured at. A row that read 448 here would be
+    # describing the wrong architecture.
+    "yolov8_s": (640, LITERAL, "YOLOv8 (Ultralytics 2023) default imgsz=640; the yolov8s.yaml scale the published 11,166,560-parameter summary is quoted at"),
 }
 
 #: The rows whose expectation is a hand-written literal rather than re-derived.
-#: Pinned by EQUALITY, and small on purpose: 3 of 23. A new template landing
+#: Pinned by EQUALITY, and small on purpose: 5 of 25. A new template landing
 #: here has to be added deliberately, with a citation and a reviewer looking at
 #: it — not by omission from the derivation maps, which is how a "spec" table
 #: quietly degrades back into whatever the templates already said.
+#:
+#: The pin is doing its job rather than being maintenance: `sparse_rcnn`
+#: (model-zoo#246) and `yolov8_s` (model-zoo#253) both arrived on `develop`
+#: while this PR was open, and each forced a deliberate cited edit here instead
+#: of being absorbed. That is the whole design — but it also means this set
+#: grows once per hand-written template, so if it ever passes ~8 the honest
+#: response is a derivation source for the hand-written family, not a longer
+#: list.
 UNVERIFIABLE_LITERALS = frozenset(
-    {"cascade_rcnn", "centernet_resnet", "efficientdet_d0", "sparse_rcnn"}
+    {
+        "cascade_rcnn",
+        "centernet_resnet",
+        "efficientdet_d0",
+        "sparse_rcnn",
+        "yolov8_s",
+    }
 )
 
 
@@ -791,16 +813,28 @@ def test_the_anchor_kinds_partition_the_roster():
         f"  - SHRANK? Good: a row became re-derivable. Update this set in the "
         f"same commit."
     )
-    assert len(UNVERIFIABLE_LITERALS) == 4, (
+    assert len(UNVERIFIABLE_LITERALS) == 5, (
         f"UNVERIFIABLE_LITERALS holds {len(UNVERIFIABLE_LITERALS)} rows, not "
-        f"the 4 recorded. Growing it weakens every claim in this file's "
+        f"the 5 recorded. Growing it weakens every claim in this file's "
         f"docstring about the table being independent, so each addition is a "
-        f"deliberate edit here with a citation — which is what the pin is "
-        f"for. It grew from 3 to 4 for `sparse_rcnn` (model-zoo#246, merged to "
-        f"develop while this branch was open): it builds its own "
-        f"GeneralizedRCNNTransform from its own image_size, so there is no "
-        f"torchvision builder or class default to re-derive against, exactly "
-        f"like cascade_rcnn."
+        f"deliberate edit here with a citation — which is what the pin is for.\n"
+        f"\n"
+        f"3 -> 4 for `sparse_rcnn` (model-zoo#246) and 4 -> 5 for `yolov8_s` "
+        f"(model-zoo#253), both of which merged to develop while this branch "
+        f"was open. Neither has a torchvision builder or a class default to "
+        f"re-derive against — each builds its own transform from its own "
+        f"image_size, exactly like cascade_rcnn — so the citation is the only "
+        f"thing standing between the row and the tautology this file removes.\n"
+        f"\n"
+        f"NOTE for whoever hits this next: `yolov8_s` is 640 and is NOT the "
+        f"same template as `yolo_v8`, which the engine's contract fixes at 448 "
+        f"in a v1-shaped 7x7 grid. Reusing 448 here would pin the wrong "
+        f"architecture and the guard would still be green.\n"
+        f"\n"
+        f"This set grows once per hand-written template, so it will keep "
+        f"growing as backend#2982 lands tiers. If it passes ~8 the honest "
+        f"response is a derivation source for the hand-written family, not a "
+        f"longer list."
     )
     for stem in UNVERIFIABLE_LITERALS:
         citation = PUBLISHED_RESOLUTION[stem][2]
