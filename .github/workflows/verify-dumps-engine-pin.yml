@@ -153,19 +153,49 @@ jobs:
       # A failure here is a hard error, never a swallowed green (fail-closed).
       - run: pip install -r tools/requirements-engine-pin.txt
       # Obtain the staged dumps. They are NOT committed (served from the
-      # tracebloc model store; hosting is backend#2659). When a manifest.json
-      # and a store-sync tool land, fetch the <base>_weights.pkl files into
-      # ./dist here. Until then there is no manifest and the sweep is an armed
-      # no-op. tools/sync_zoo_weights.py is the fetch hook (backend#2658 refs);
-      # wire it in when #2659 hosts the dumps.
+      # tracebloc model store; hosting is backend#2659). tools/sync_zoo_weights.py
+      # is the fetch hook (backend#2658 refs) and fetches the
+      # <base>_weights.pkl files into ./dist.
+      #
+      # Each precondition is reported BY NAME. The previous guard was a single
+      # `[ -f manifest.json ] && [ -f tools/sync_zoo_weights.py ]`, which
+      # attributed every no-op to hosting — including the case where the fetch
+      # hook itself was not in the repo. It was: the tool existed only as an
+      # uncommitted file on one laptop, so `-f` selected the no-op branch on
+      # every run and printed a reassuring hosting message, which is why the
+      # gap survived unnoticed (backend#3060). A missing tool and an undecided
+      # bucket are different problems and now say so.
+      #
+      # Still exit 0 in every skip branch: verify_dumps_against_engine_pin.py
+      # owns the fail-closed decision (armed-green on an ABSENT manifest, red on
+      # a manifest present with dumps it cannot account for), and duplicating
+      # that judgement here is how the two drift apart.
       - name: Obtain staged dumps from the model store
+        env:
+          # The store URI is backend#2659's decision, so it is configuration and
+          # not a literal here. Unset resolves to the empty string and selects
+          # the "no store URI" branch below.
+          TRACEBLOC_ZOO_WEIGHTS_URI: ${{ vars.TRACEBLOC_ZOO_WEIGHTS_URI }}
         run: |
+          set -euo pipefail
           mkdir -p dist
-          if [ -f manifest.json ] && [ -f tools/sync_zoo_weights.py ]; then
-            python3 tools/sync_zoo_weights.py --manifest manifest.json --out dist
+          if [ ! -f manifest.json ]; then
+            echo "SKIP (no manifest): no manifest.json in the checkout, so no"
+            echo "  dumps are declared for verification. The gate is armed and"
+            echo "  activates when a manifest lands. Not a defect."
+          elif [ ! -f tools/sync_zoo_weights.py ]; then
+            echo "SKIP (no sync tool): manifest.json declares dumps, but the"
+            echo "  fetch hook tools/sync_zoo_weights.py is NOT in this checkout."
+            echo "  This is a DEFECT in the repo, not a pending decision — the"
+            echo "  hook is committed (backend#3060); restore it. The verifier"
+            echo "  below will report every declared dump as MISSING."
+          elif [ -z "${TRACEBLOC_ZOO_WEIGHTS_URI:-}" ]; then
+            echo "SKIP (no store URI): manifest.json and the fetch hook are both"
+            echo "  present, but TRACEBLOC_ZOO_WEIGHTS_URI is unset, so there is"
+            echo "  nowhere to fetch from. THIS is the hosting decision —"
+            echo "  backend#2659. Set the repo variable once the store exists."
           else
-            echo "No manifest.json / sync tool yet — dumps hosting is backend#2659."
-            echo "The verifier runs armed; it activates when a manifest lands."
+            python3 tools/sync_zoo_weights.py --staging . fetch-all --dest dist
           fi
       # The gate. Exits non-zero on any dump that cannot strict-load into its
       # template under the engine pin, or any built_with-vs-engine drift.
