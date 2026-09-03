@@ -22,6 +22,8 @@ import pathlib
 import re
 import sys
 
+import zoo_census
+
 ROOT = pathlib.Path(__file__).parent.parent
 TOOL = ROOT / "tools" / "check_dump_coverage.py"
 
@@ -247,70 +249,31 @@ def test_an_empty_zoo_is_an_error_not_a_green(tmp_path):
 
 # --- against the real zoo --------------------------------------------------
 
-# The census both tests below pin. It is an EXACT count, not a floor: the point
-# is that a template appearing or disappearing is a deliberate edit here, not a
-# silent drift in what the gate surveys.
+# THE CENSUS IS DERIVED, NOT DECLARED (backend#2982).
 #
-# 57 (#1499's migrated set) -> 50: backend#2973 deleted the seven DETR templates
-# (detr, rt_detr, rt_detr_v2, deformable_detr, d_fine, owlv2, grounding_dino)
-# when the hf_transformer family was retired — the platform stopped supporting
-# HuggingFace models and the engine handler those templates routed to never
-# trained anything. Their seven dumps are NOT deleted by that change: under
-# backend#2985 they are RETAINED and marked `"status": "retired"` in the
-# manifest, because they were prepped under the stack pinned at
-# `scripts/.tracebloc-engine-ref` and a deletion is irreversible in practice
-# while a flag is one line. The orphan half of this gate is now armed (the CI
-# job passes --manifest, pinned by the tests at the bottom of this file) and
-# reports them as RETIRED rather than failing on them.
+# There used to be a `MIGRATED_TEMPLATE_CENSUS = <n>` literal here, and it was a
+# real guard — it is what stopped a template joining or leaving the survey
+# unnoticed. It was also, mechanically, the thing that serialised every template
+# PR: all of them edited this one line, so *n* open template PRs produced *O(n)*
+# conflicts per merge. On 2026-09-01 the census went 55 -> 59 -> 60 -> 61 and
+# three of the four open template PRs went DIRTY at once; a conflicted PR runs no
+# `pull_request` workflows at all, so each one's green checks described a tree
+# that no longer existed, and one PR's census comment was stale within the hour.
+# Tier 2/3 is another 20-30 templates and none of them depend on each other.
 #
-# This paragraph previously said the orphan half was "unarmed (CI passes no
-# --manifest / --dumps-dir), so it will surface them by name on the day hosting
-# arms it". Both halves of that are now false, and the second was never right:
-# hosting (backend#2659) does not supply the manifest — a cross-repo read does.
+# `tests/zoo_census.py` re-derives the answer from the tree instead. It is a
+# SECOND IMPLEMENTATION, not a call into the tool — it recurses where `survey()`
+# globs one level, normalises whitespace where `classify()` matches raw text, and
+# accepts several footprints where the tool accepts one — so the two sides go
+# blind in different places and a disagreement between them is what reddens.
+# `tests/test_zoo_census.py` proves each of those divergences on a synthetic
+# tree, which is what stops the derivation from being quietly turned into a
+# tautology later. Read that module's docstring for the one direction this
+# trades away (a NO_SEED template losing its whole docstring paragraph).
 #
-# 50 -> 49: backend#2988 deleted mask_rcnn (unusable — its mask head needs a
-# masks target key the OD path never supplies). Its dump was the one deletion
-# taken under #2985: trivially regenerable from torchvision, and re-homing Mask
-# R-CNN under backend#795 would need a seed built against a different module
-# tree, so retaining it pre-paid for nothing. Manifest entry removed by
-# backend#2996, blob deleted under #2985 — gone from both sides.
-#
-# 49 -> 55: backend#2982 Tier 0 added the six torchvision_detection roster
-# templates the zoo never wrapped (faster_rcnn_resnet_v2, retinanet_v2,
-# faster_rcnn_mobilenet, faster_rcnn_mobilenet_320, ssd_vgg16,
-# ssdlite_mobilenet). All six classify NO_SEED — they build with weights=None,
-# so they genuinely random-initialise and stage no dump. That is what makes them
-# invisible to the newly-armed orphan half: no dump, and no expectation of one.
-#
-# 55 -> 59: backend#2982 Tier 1 added four modern-backbone detectors —
-# faster_rcnn_convnext_small, faster_rcnn_swin_t, fcos_convnext_small,
-# fcos_swin_t — assembled via detection.backbone_utils.BackboneWithFPN. All
-# four classify NO_SEED for the same reason.
-#
-# 59 -> 60: backend#2982 Tier 2 added atss_resnet — RetinaNet's backbone and
-# head with Adaptive Training Sample Selection replacing the fixed-IoU matcher.
-# NO_SEED for the same reason.
-#
-# 60 -> 61: backend#2982 Tier 2 added gfl_resnet — Generalized Focal Loss over
-# that same ATSS-assigned skeleton. NO_SEED for the same reason.
-#
-# 61 -> 62: backend#2982 Tier 2 added sparse_rcnn — 100 learned proposal boxes
-# and features, six stages of dynamic instance interaction, and Hungarian set
-# prediction with no RPN and no NMS. NO_SEED for the same reason.
-#
-# ⚠️ EACH NUMBER HERE IS A RUNNING TOTAL, NOT ITS BRANCH'S ARITHMETIC. Tier 0
-# had to unlearn a plausible-looking `57 + 6 = 63` — wrong by the eight
-# templates #2973 and #2988 deleted. Whoever rebases onto a moved develop takes
-# what `tools/check_dump_coverage.py --zoo .` reports against the merged tree.
-#
-# ⚠️ SIX Tier 2 templates are in flight against this one number, and every one
-# of them can honestly claim 62 from its own branch: centernet_resnet (#236),
-# yolox_s + rtmdet_s (#237, +2), tood (#238), vfnet (#239), and this PR's two
-# siblings cascade_rcnn (#242) and efficientdet_d0 (#244). The first to land is
-# 62; after that the number is whatever the tool reports against the merged
-# tree. RE-READ IT, DO NOT ADD — a rebase that keeps this branch's literal goes
-# green locally and red on develop.
-MIGRATED_TEMPLATE_CENSUS = 62
+# A template author now edits NOTHING here. Take any count you quote in a PR
+# from `python tools/check_dump_coverage.py --zoo .`, never by arithmetic on a
+# previous value.
 
 
 def test_the_real_zoo_classifies_every_migrated_template(tmp_path):
@@ -321,8 +284,37 @@ def test_the_real_zoo_classifies_every_migrated_template(tmp_path):
     unclassified = {k: v["detail"] for k, v in found.items()
                     if v["status"] == tool.UNCLASSIFIED}
     assert not unclassified, f"unclassified migrated templates: {unclassified}"
-    assert len(found) == MIGRATED_TEMPLATE_CENSUS, (
-        f"expected {MIGRATED_TEMPLATE_CENSUS} migrated templates, got {len(found)}"
+
+
+def test_the_real_zoo_surveys_exactly_what_the_tree_says_it_should(tmp_path):
+    """The census, as a SET COMPARISON against an independent derivation.
+
+    Replaces the old `len(found) == MIGRATED_TEMPLATE_CENSUS`. A count could only
+    ever say "61 != 62"; this names the template and the footprint the tool is
+    disagreeing with, which is the difference between a message that tells you to
+    edit a literal and one that tells you what broke.
+    """
+    tool = _tool()
+    surveyed = {k: v["status"] for k, v in tool.survey(ROOT).items()}
+    expected = zoo_census.census(ROOT)
+    reasons = zoo_census.why(ROOT)
+
+    missing = sorted(set(expected) - set(surveyed))
+    extra = sorted(set(surveyed) - set(expected))
+    assert not missing, (
+        "the tree says these are migrated templates and tools/check_dump_"
+        "coverage.py does not survey them:\n"
+        + "\n".join(f"  {k}: {reasons[k]}" for k in missing)
+    )
+    assert not extra, (
+        "the tool surveys templates tests/zoo_census.py does not recognise — one "
+        f"of the two enumerations is wrong: {extra}"
+    )
+    disagree = {k: (expected[k], surveyed[k]) for k in expected if expected[k] != surveyed[k]}
+    assert not disagree, (
+        "tree-derived status vs surveyed status, {template: (tree, tool)} — a "
+        "line wrap inside `no weight file` or `weights=False` declassifies a "
+        f"template exactly this way: {disagree}"
     )
 
 
@@ -331,7 +323,7 @@ def test_the_real_zoo_writes_a_survey(tmp_path):
     assert _tool().main(["--zoo", str(ROOT), "--out", str(out)]) == 0
     survey = json.loads(out.read_text("utf-8"))
     assert survey["inventory_checked"] is False
-    assert len(survey["templates"]) == MIGRATED_TEMPLATE_CENSUS
+    assert set(survey["templates"]) == set(zoo_census.census(ROOT))
 
 
 # --- unmapped collisions ----------------------------------------------------
