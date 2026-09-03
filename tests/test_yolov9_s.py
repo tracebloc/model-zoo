@@ -2408,8 +2408,10 @@ MUTATIONS = [
     ),
     (
         "aconv_drops_the_average_pool",
-        "        return self.conv(F.avg_pool2d(x, 2, stride=1, padding=0, "
-        "count_include_pad=True))",
+        "        return self.conv(\n"
+        "            F.avg_pool2d(x, 2, stride=1, padding=0, "
+        "count_include_pad=True)\n"
+        "        )",
         "        return self.conv(x)",
         "aconv_pools_first",
     ),

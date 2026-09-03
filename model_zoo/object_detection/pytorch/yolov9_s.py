@@ -462,11 +462,11 @@ class RepBottleneck(nn.Module):
     """``RepConvNormAct`` 3x3 -> plain 3x3, with an optional identity branch.
 
     ``expansion`` has NO DEFAULT, for the same reason it has none in
-    ``yolov8_s.py`` / ``yolox_s.py``: inside a ``RepCSP`` it must be ``1.0``
-    because the CSP split has already halved the channel count, and squeezing
-    again there narrows the whole backbone and neck while leaving every loss
-    finite. A default invited exactly that slip once and it shipped past thirty
-    guards.
+    ``yolov8_s.py``: inside a ``RepCSP`` it must be ``1.0`` because the CSP
+    split has already halved the channel count, and squeezing again there
+    narrows the whole backbone and neck while leaving every loss finite. A
+    default invited exactly that slip once on a sibling and it shipped past
+    thirty guards — caught only by the published parameter count.
     """
 
     def __init__(self, in_ch, out_ch, expansion, shortcut=True):
@@ -598,7 +598,9 @@ class AConv(nn.Module):
         self.conv = ConvNormAct(in_ch, out_ch, 3, stride=2, padding=1)
 
     def forward(self, x):
-        return self.conv(F.avg_pool2d(x, 2, stride=1, padding=0, count_include_pad=True))
+        return self.conv(
+            F.avg_pool2d(x, 2, stride=1, padding=0, count_include_pad=True)
+        )
 
 
 class ADown(nn.Module):
@@ -639,7 +641,10 @@ class SPPELAN(nn.Module):
     strictly smaller receptive field, so it has a functional guard.
     """
 
-    def __init__(self, in_ch, out_ch, hidden, ksize=SPPELAN_KERNEL, repeats=SPPELAN_REPEATS):
+    def __init__(
+        self, in_ch, out_ch, hidden, ksize=SPPELAN_KERNEL,
+        repeats=SPPELAN_REPEATS,
+    ):
         super().__init__()
         self.repeats = repeats
         self.cv1 = ConvNormAct(in_ch, hidden, 1, stride=1)
@@ -758,7 +763,9 @@ class GELANNeck(nn.Module):
         (p4_out, p4_mid, p4_inner, p4_blocks), (p3_out, p3_mid, p3_inner, p3_blocks) = (
             top_down
         )
-        self.td_p4 = _build_stage("csp_elan", c5 + c4, p4_out, p4_mid, p4_inner, p4_blocks)
+        self.td_p4 = _build_stage(
+            "csp_elan", c5 + c4, p4_out, p4_mid, p4_inner, p4_blocks
+        )
         self.td_p3 = _build_stage(
             "csp_elan", p4_out + c3, p3_out, p3_mid, p3_inner, p3_blocks
         )
