@@ -124,6 +124,44 @@ def _read_model_type(path: pathlib.Path) -> str | None:
     return match.group(1) if match else None
 
 
+def _other_family_values() -> frozenset[str]:
+    """Accepted values routing to a family that is NOT this one.
+
+    The schema says object detection has exactly two families, so this plus
+    ``FAMILY_VALUES`` partitions the vocabulary — which is what lets the guard
+    below assert COVERAGE without a floor to recompute (backend#2982).
+    """
+    schema = json.loads(_schema_path().read_text(encoding="utf-8"))
+    values: set[str] = set()
+    for entry in schema["families"]:
+        if entry["family"] == FAMILY:
+            continue
+        values |= {entry["family"], *entry.get("aliases", [])}
+    return frozenset(v.strip().lower() for v in values)
+
+
+OTHER_FAMILY_VALUES = _other_family_values()
+
+
+def _declares_framework(path: pathlib.Path) -> str | None:
+    """The module-level ``framework``, or ``None`` for a support module.
+
+    A SECOND, INDEPENDENT regex from ``_read_model_type``: the partition below
+    compares the two readers' verdicts, and one reader answering for both would
+    make that comparison vacuous the moment it broke.
+    """
+    try:
+        text = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return None
+    match = re.search(r'^\s*framework\s*=\s*["\'](\w*)["\']', text, re.MULTILINE)
+    return match.group(1) if match else None
+
+
+def _od_templates() -> list[pathlib.Path]:
+    return [p for p in sorted(OD_ROOT.rglob("*.py")) if _declares_framework(p)]
+
+
 FAMILY_TEMPLATES = [
     p for p in sorted(OD_ROOT.rglob("*.py"))
     if (_read_model_type(p) or "").strip().lower() in FAMILY_VALUES
@@ -169,9 +207,40 @@ def test_family_templates_were_found():
         f"faster_rcnn_resnet declares it and is one of the KNOWN_MISMATCHES, so "
         f"this scan just stopped covering the row that matters most"
     )
-    assert len(FAMILY_TEMPLATES) >= 4, (
-        f"expected the {FAMILY} roster under {OD_ROOT}, found "
-        f"{[p.name for p in FAMILY_TEMPLATES]}"
+    # This was `len(FAMILY_TEMPLATES) >= 4` — a floor every roster PR is
+    # invited to raise, i.e. a shared literal with the same serialisation cost
+    # the census literal had (backend#2982). It is a PARTITION now: the schema
+    # publishes exactly two OD families, so every OD template belongs to this
+    # one or to `yolo`, and adding a template moves both sides at once.
+    templates = _od_templates()
+    assert templates, (
+        f"no file under {OD_ROOT} declares `framework` — the scan lost the tree, "
+        f"and this file would pass by checking nothing"
+    )
+    other = {
+        p
+        for p in templates
+        if (_read_model_type(p) or "").strip().lower() in OTHER_FAMILY_VALUES
+    }
+    assert other, (
+        f"no OD template routes to a family other than {FAMILY!r}; the yolo "
+        f"roster is part of the tree, so this means model_type reading broke"
+    )
+    uncovered = sorted(
+        str(p.relative_to(ROOT)) for p in set(templates) - other - set(FAMILY_TEMPLATES)
+    )
+    assert not uncovered, (
+        f"OD template(s) in neither the {FAMILY!r} roster this file checks nor "
+        f"any other family — they declare a model_type outside the schema's "
+        f"vocabulary, or none at all, so no resolution check reaches them: "
+        f"{uncovered}"
+    )
+    unexpected = sorted(
+        str(p.relative_to(ROOT)) for p in set(FAMILY_TEMPLATES) - set(templates)
+    )
+    assert not unexpected, (
+        f"the {FAMILY!r} roster contains files that do not declare `framework` — "
+        f"a support module cannot be a template: {unexpected}"
     )
     missing = set(KNOWN_MISMATCHES) - {p.stem for p in FAMILY_TEMPLATES}
     assert not missing, (
@@ -292,3 +361,20 @@ def test_the_known_mismatch_list_only_ever_shrinks():
         f"should be updated in the same commit that lowers it."
     )
 
+
+
+def test_the_two_readers_are_independent_and_discriminate(tmp_path):
+    """Guard the guard above: the partition compares two readers' verdicts, and
+    if both collapsed to "always None" the roster and the expected roster would
+    go empty together and it would pass on nothing (backend#2982)."""
+    support = tmp_path / "loss.py"
+    support.write_text("import torch\n\n\ndef loss(a, b):\n    return a - b\n", "utf-8")
+    assert _declares_framework(support) is None
+    assert _read_model_type(support) is None
+
+    template = tmp_path / "model.py"
+    template.write_text(
+        'framework = "pytorch"\nmodel_type = "torchvision_detection"\n', "utf-8"
+    )
+    assert _declares_framework(template) == "pytorch"
+    assert _read_model_type(template) == "torchvision_detection"

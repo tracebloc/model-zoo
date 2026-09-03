@@ -825,10 +825,32 @@ class RTMDetS(nn.Module):
             image_boxes[:, 0::2] = image_boxes[:, 0::2].clamp(min=0, max=float(width))
             image_boxes[:, 1::2] = image_boxes[:, 1::2].clamp(min=0, max=float(height))
 
+            # ⚠️ CHANNEL 0 IS DROPPED BEFORE THE THRESHOLD, not after.
+            #
+            # The head is `output_classes + 1` wide and indexes by the incoming
+            # label directly. Since backend#3062 the family handler hands this
+            # model space `[1, C]` (`_targets_to_model_space`), so channel 0 is
+            # never a positive target -- it is trained only as a negative, and
+            # emitting it produces detections carrying dataset class `-1` once
+            # the handler shifts back.
+            #
+            # The engine does drop them: `_detections_to_dataset_space` keeps
+            # only `labels >= BACKGROUND_LABEL_OFFSET`. But that is downstream
+            # of THIS function's score threshold and top-k, so a channel-0
+            # candidate still consumes a detection slot a real object should
+            # have had. Acute here: SCORE_THRESH is 0.001 against a 0.01 prior,
+            # so channel 0 clears it constantly at initialisation.
+            #
+            # Consequence worth stating plainly: this template now REQUIRES the
+            # family handler's shift. Fed raw 0-based dataset labels it would
+            # discard the first class. That is the contract as of backend#3062,
+            # and the zoo's own family train-step test asserts the `[1, C]`
+            # range (model-zoo#245).
+            class_scores = class_scores[:, 1:]
             num_priors, num_classes = class_scores.shape
             flat_scores = class_scores.reshape(-1)
             labels = (
-                torch.arange(num_classes, device=image_boxes.device)
+                torch.arange(1, num_classes + 1, device=image_boxes.device)
                 .unsqueeze(0)
                 .expand(num_priors, num_classes)
                 .reshape(-1)

@@ -86,8 +86,30 @@ def _read_model_type(path: pathlib.Path) -> str | None:
     return match.group(1) if match else None
 
 
+def _read_framework(path: pathlib.Path) -> str | None:
+    """The module-level ``framework``, or ``None`` for a support module.
+
+    Every model file declares it (the metadata contract in CLAUDE.md); the
+    ``yolo_*/loss.py`` helpers do not. A SECOND, INDEPENDENT regex from
+    ``_read_model_type`` on purpose — the guard below compares the two readers'
+    verdicts, and one reader answering for both would make that comparison
+    vacuous the moment it broke.
+    """
+    try:
+        text = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return None
+    match = re.search(r'^\s*framework\s*=\s*["\'](\w*)["\']', text, re.MULTILINE)
+    return match.group(1) if match else None
+
+
 def _od_model_files() -> list[pathlib.Path]:
     return sorted(OD_ROOT.rglob("*.py"))
+
+
+def _od_templates() -> list[pathlib.Path]:
+    """The OD files that are template entry points, not support modules."""
+    return [p for p in _od_model_files() if _read_framework(p)]
 
 
 def test_accepted_vocabulary_is_not_empty() -> None:
@@ -99,29 +121,58 @@ def test_accepted_vocabulary_is_not_empty() -> None:
 def test_od_templates_declaring_model_type_were_found() -> None:
     """The parametrized test skips support files and empty declarations; if that
     left it with nothing to check, an OD template rename could hide real drift
-    behind an all-skipped run (the backend#1859 silent-green shape)."""
-    declared = [
-        p for p in _od_model_files() if (_read_model_type(p) or "") != ""
-    ]
-    # Floor lowered 10 -> 7 by backend#2973 (deleting the seven DETR templates),
-    # then 7 -> 6 by backend#2988 (deleting the unusable mask_rcnn), leaving six
-    # declaring templates (faster_rcnn_resnet, fcos, retinanet, and the three
-    # yolo model.py entry points). The floor tracks the live tree, not a
-    # historical high-water mark — left too high it would have failed on a
-    # deletion that is the point of the change, which teaches people to lower it
-    # reflexively and defeats the guard.
-    #
-    # It rose again with the roster work, as that note said it would: 6 -> 12
-    # with backend#2982's Tier 0 (six torchvision builders), 12 -> 16 with its
-    # Tier 1 (four modern-backbone detectors), 16 -> 17 with atss_resnet,
-    # 17 -> 18 with gfl_resnet and 18 -> 20 with yolox_s and rtmdet_s. Like the
-    # census in test_check_dump_coverage.py this is a RUNNING TOTAL: a rebase
-    # re-counts the tree rather than keeping this branch's literal. Measured,
-    # not added: this branch re-derived it after each of #231, #232 and #235.
-    assert len(declared) >= 20, (
-        f"expected the OD templates to declare model_type, found {len(declared)} "
-        f"under {OD_ROOT} — did the tree move?"
+    behind an all-skipped run (the backend#1859 silent-green shape).
+
+    THIS USED TO BE A FLOOR (``len(declared) >= 6``), hand-recomputed on every
+    change: lowered 10 -> 7 by backend#2973's DETR deletions, 7 -> 6 by
+    backend#2988's mask_rcnn deletion, with a comment telling the next author to
+    raise it again for backend#2982's roster. A literal every roster PR edits is
+    a serialisation point — the same cost the census literal had, measured on
+    backend#2982 — and a floor that trails the tree is also a guard that has
+    stopped guarding.
+
+    It is now derived: EVERY OD TEMPLATE MUST DECLARE ``model_type``, and a
+    template is a file declaring ``framework``. That is strictly stronger than
+    the floor, because the parametrized test below SKIPS a file with no
+    declaration as a "support file" — so an OD template that simply forgot
+    ``model_type`` was silently uncovered at any floor value. Adding a template
+    moves both sides at once; there is nothing to raise.
+    """
+    templates = _od_templates()
+    assert templates, (
+        f"no file under {OD_ROOT} declares `framework` — the scan lost the tree, "
+        f"and every assertion in this file would pass by checking nothing"
     )
+    undeclared = sorted(
+        str(p.relative_to(ROOT)) for p in templates if _read_model_type(p) is None
+    )
+    assert not undeclared, (
+        "OD template(s) declaring `framework` but no `model_type` — the "
+        "parametrized test below SKIPS these as support files, so they are "
+        "covered by nothing. A template declares the FAMILY it routes to "
+        f"(torchvision_detection / yolo): {undeclared}"
+    )
+    declared = [p for p in templates if (_read_model_type(p) or "") != ""]
+    assert declared, (
+        f"every OD template under {OD_ROOT} declares an EMPTY `model_type`, so "
+        f"the registry check below skips all of them — the vocabulary assertion "
+        f"is exercising nothing"
+    )
+
+
+def test_the_two_readers_are_independent_and_discriminate(tmp_path) -> None:
+    """Guard the guard above: it compares two readers' verdicts, and if both
+    collapsed to "always None" the template list and the undeclared list would go
+    empty together and it would pass on nothing."""
+    support = tmp_path / "loss.py"
+    support.write_text("import torch\n\n\ndef loss(a, b):\n    return a - b\n", "utf-8")
+    assert _read_framework(support) is None
+    assert _read_model_type(support) is None
+
+    template = tmp_path / "model.py"
+    template.write_text('framework = "pytorch"\nmodel_type = "yolo"\n', "utf-8")
+    assert _read_framework(template) == "pytorch"
+    assert _read_model_type(template) == "yolo"
 
 
 @pytest.mark.parametrize(

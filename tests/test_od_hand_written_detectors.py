@@ -1032,6 +1032,35 @@ def guard_yolox_decode_is_per_image_and_aligned(module) -> None:
 
     results = model._predictions(raw, grids, [(64, 64), (64, 64)])
 
+    # ⚠️ SECOND SCENARIO, same driver: the BACKGROUND channel strongest.
+    # Channel 0 is never a positive target -- since backend#3062 the family
+    # handler hands this template model space [1, C], so channel 0 trains only
+    # as a negative. Emitting it spends a detection slot the real object should
+    # have had, and yields dataset label -1 once the handler shifts back.
+    #
+    # This needs its own raw tensor because the fixture above deliberately puts
+    # its confident scores on REAL classes, so it cannot see a channel-0 leak.
+    # And a freshly built model cannot see it either: this template's prior sits
+    # below its own score_thresh, so `model(images)` returns zero detections at
+    # initialisation and any assertion over an empty label tensor is vacuous.
+    bg = torch.full((1, len(cells), 5 + classes), -10.0)
+    bg[:, :, :4] = 0.0
+    bg[0, 2, 4] = 10.0          # objectness
+    bg[0, 2, 5 + 0] = 12.0      # background channel, strongest
+    bg[0, 2, 5 + classes - 1] = 8.0   # a real class, weaker
+    bg_results = model._predictions(bg, _grid(torch, cells, 8), [(64, 64)])
+    bg_labels = bg_results[0]["labels"]
+    assert bg_labels.numel(), (
+        "yolox_s: the background-channel fixture decoded to nothing, so the "
+        "assertion below is vacuous -- check the scores clear score_thresh"
+    )
+    assert not bool((bg_labels == 0).any()), (
+        f"yolox_s: decode returned label 0, the background channel: "
+        f"{sorted(set(bg_labels.tolist()))}. It is trained only as a negative "
+        f"and must be dropped BEFORE the score threshold, not left to the "
+        f"engine -- the top-k budget is spent here."
+    )
+
     assert isinstance(results, list) and len(results) == 2, (
         f"yolox_s: decoding two images returned "
         f"{len(results) if isinstance(results, list) else type(results).__name__} "
@@ -1841,6 +1870,8 @@ YOLOX_GUARDS = {
     "decoupled_head": guard_yolox_head_is_decoupled,
     "decode_per_level_stride": guard_yolox_decode_scales_by_each_levels_stride,
     "head_flatten_order": guard_yolox_head_flatten_order_matches_the_grid,
+
+
     "decode_per_image": guard_yolox_decode_is_per_image_and_aligned,
     "dynamic_k": guard_yolox_dynamic_k_is_dynamic,
     "centre_region_candidates": guard_yolox_centre_region_creates_candidates,
