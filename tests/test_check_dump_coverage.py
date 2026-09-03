@@ -296,14 +296,19 @@ def test_an_empty_zoo_is_an_error_not_a_green(tmp_path):
 #
 # 61 -> 62: backend#2982 Tier 2 added centernet_resnet — "Objects as Points",
 # the roster's only NMS-free detector. NO_SEED for the same reason.
+# 62 -> 63: backend#2982 Tier 2 added vfnet_resnet — VarifocalNet: the
+# asymmetric varifocal loss plus star-shaped deformable box refinement. NO_SEED
+# for the same reason.
 #
 # ⚠️ EACH NUMBER HERE IS A RUNNING TOTAL, NOT ITS BRANCH'S ARITHMETIC. Tier 0
 # had to unlearn a plausible-looking `57 + 6 = 63` — wrong by the eight
 # templates #2973 and #2988 deleted. Whoever rebases onto a moved develop takes
 # what `tools/check_dump_coverage.py --zoo .` reports against the merged tree.
-# tood_resnet (model-zoo#238) and vfnet_resnet are also in flight and claim 62;
-# whichever lands after this becomes 63, then 64 — re-read the tool, never add.
-MIGRATED_TEMPLATE_CENSUS = 62
+# tood_resnet (model-zoo#238) is the remaining template in flight and
+# claims 62; it becomes 64 on rebase — re-read the tool, never add. That
+# this constant is hand-maintained in a shared file is why every merge
+# conflicts every other open template PR; raised on backend#2982.
+MIGRATED_TEMPLATE_CENSUS = 63
 
 
 def test_the_real_zoo_classifies_every_migrated_template(tmp_path):
