@@ -294,13 +294,23 @@ def test_an_empty_zoo_is_an_error_not_a_green(tmp_path):
 # 60 -> 61: backend#2982 Tier 2 added gfl_resnet — Generalized Focal Loss over
 # that same ATSS-assigned skeleton. NO_SEED for the same reason.
 #
+# 61 -> 62: backend#2982 Tier 2 added sparse_rcnn — 100 learned proposal boxes
+# and features, six stages of dynamic instance interaction, and Hungarian set
+# prediction with no RPN and no NMS. NO_SEED for the same reason.
+#
 # ⚠️ EACH NUMBER HERE IS A RUNNING TOTAL, NOT ITS BRANCH'S ARITHMETIC. Tier 0
 # had to unlearn a plausible-looking `57 + 6 = 63` — wrong by the eight
 # templates #2973 and #2988 deleted. Whoever rebases onto a moved develop takes
 # what `tools/check_dump_coverage.py --zoo .` reports against the merged tree.
-# centernet_resnet (model-zoo#236, +1) is also in flight and claims 61 too;
-# whichever of the two lands second becomes 62 — re-read the tool, do not add.
-MIGRATED_TEMPLATE_CENSUS = 61
+#
+# ⚠️ SIX Tier 2 templates are in flight against this one number, and every one
+# of them can honestly claim 62 from its own branch: centernet_resnet (#236),
+# yolox_s + rtmdet_s (#237, +2), tood (#238), vfnet (#239), and this PR's two
+# siblings cascade_rcnn (#242) and efficientdet_d0 (#244). The first to land is
+# 62; after that the number is whatever the tool reports against the merged
+# tree. RE-READ IT, DO NOT ADD — a rebase that keeps this branch's literal goes
+# green locally and red on develop.
+MIGRATED_TEMPLATE_CENSUS = 62
 
 
 def test_the_real_zoo_classifies_every_migrated_template(tmp_path):
