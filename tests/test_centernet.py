@@ -289,11 +289,24 @@ def test_decode_clamps_negative_predicted_sizes(cn, model):
 
     height, width = 16, 16
     outputs = _blank_outputs(torch, model.num_classes, height, width)
-    outputs["heatmap"][0, 0, 8, 8] = 20.0
+    # ⚠️ A FOREGROUND channel, not channel 0. This test used to write its only
+    # peak to channel 0, and once `decode` began slicing the background channel
+    # off before the top-k the fixture yielded ZERO boxes -- at which point
+    # `.all()` over an empty comparison is vacuously True and dropping the size
+    # clamp still passed. The suite stayed green while this test stopped
+    # asserting anything. Caught by Bugbot on model-zoo#236; the emptiness
+    # assertion below is what makes the vacuity impossible to reintroduce.
+    foreground = model.num_classes - 1
+    outputs["heatmap"][0, foreground, 8, 8] = 20.0
     outputs["size"][0, :, 8, 8] = -12.0   # what an untrained head really produces
 
     detections = model.decode(outputs, [(height * model.output_stride, width * model.output_stride)])
     boxes = detections[0]["boxes"]
+    assert boxes.numel(), (
+        "the fixture decoded to no boxes at all, so the clamp assertions below "
+        "are vacuous -- `.all()` over an empty comparison is True. Check the "
+        "peak is on a foreground channel that `decode` does not slice away."
+    )
     assert bool((boxes[:, 2] >= boxes[:, 0]).all()), (
         "a negative predicted width produced x2 < x1 — the size clamp is missing"
     )
