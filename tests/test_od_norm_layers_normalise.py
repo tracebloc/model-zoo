@@ -139,8 +139,8 @@ _MAX_LEAK = 0.01
 #:
 #: Do not add a row to silence a new template. A new non-normalising norm is a
 #: bug in that template — the whole point of this file is that twelve templates
-#: share one wrong default, and a twelfth would be the same defect, not a new
-#: one.
+#: share one wrong default, and a thirteenth would be the same defect, not a
+#: new one.
 NON_NORMALISING = {
     "atss_resnet": ("FrozenBatchNorm2d", 53),
     "cascade_rcnn": ("FrozenBatchNorm2d", 53),
@@ -451,8 +451,9 @@ def test_the_non_normalising_list_only_ever_shrinks():
     performed on the list itself.
 
     Legal edits are: delete a row, lower ``MAX_NON_NORMALISING``, and update
-    the pin below, all in one commit. Adding a row fails here, so a twelfth
-    non-normalising template has to be argued for rather than absorbed.
+    the pin below, all in one commit. Adding a row fails here, so a
+    thirteenth non-normalising template has to be argued for rather than
+    absorbed.
     """
     assert len(NON_NORMALISING) == MAX_NON_NORMALISING, (
         f"NON_NORMALISING holds {len(NON_NORMALISING)} entries "
@@ -571,8 +572,9 @@ def test_identical_probe_constants_would_disable_the_rule():
     layer on the roster, normalising or not, returns the same thing for the
     same input, so the leak is 0 everywhere, all twenty-four templates look
     clean, and the twelve recorded rows become indistinguishable from the
-    eleven genuinely clean ones (plus the one that is norm-free by design). Demonstrated on the worst case — the layer this file
-    exists to catch — rather than asserted in a comment.
+    eleven genuinely clean ones (plus the one that is norm-free by design).
+    Demonstrated on the worst case — the layer this file exists to catch —
+    rather than asserted in a comment.
     """
     torch = pytest.importorskip("torch", reason="pytorch not installed in this CI job")
     pytest.importorskip("torchvision", reason="torchvision not installed in this CI job")
