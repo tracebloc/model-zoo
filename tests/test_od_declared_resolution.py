@@ -82,15 +82,15 @@ fails.
 
 The obvious objection to a hand-written spec table is that it can be edited to
 match a bad template — moving the tautology rather than removing it. So 20 of
-its 23 rows are **re-derived at test time** rather than trusted: 9 by
+its 24 rows are **re-derived at test time** rather than trusted: 9 by
 constructing the torchvision builder the template mirrors and reading its
 transform, 8 by reading ``min_size``'s default off the torchvision detector
 class the template instantiates without overriding, 3 from the vendored engine
 family contract. Editing one of those rows to match a bad template turns this
 file red. The remaining 3 — ``cascade_rcnn``, ``centernet_resnet``,
-``efficientdet_d0``, all of which build their own transform from their own
-``image_size`` — are hand-written literals with citations, and that set is
-pinned by equality so a new template cannot join it by omission.
+``efficientdet_d0`` and ``sparse_rcnn``, all of which build their own transform
+from their own ``image_size`` — are hand-written literals with citations, and
+that set is pinned by equality so a new template cannot join it by omission.
 
 Adding a row cannot silence anything either: ``PUBLISHED_RESOLUTION`` requires
 a row for **every** template with no default and no fallback, and the ratchet on
@@ -232,6 +232,7 @@ PUBLISHED_RESOLUTION: dict[str, tuple[int, str, str]] = {
     # --- the old check tautological — so these are the rows where the
     # --- citation is doing the work, and the ones a reviewer should check.
     "cascade_rcnn": (800, LITERAL, "Cascade R-CNN (Cai & Vasconcelos 2018) trains at 800/1333, the R50-FPN reference recipe"),
+    "sparse_rcnn": (800, LITERAL, "Sparse R-CNN (Sun et al. 2021) sec. 4.1 trains at 800/1333, the R50-FPN reference recipe"),
     "centernet_resnet": (512, LITERAL, "CenterNet (Zhou et al. 2019) sec. 4: 512x512 input"),
     "efficientdet_d0": (512, LITERAL, "EfficientDet (Tan et al. 2020) table 1: D0 input is 512x512"),
 }
@@ -241,7 +242,9 @@ PUBLISHED_RESOLUTION: dict[str, tuple[int, str, str]] = {
 #: here has to be added deliberately, with a citation and a reviewer looking at
 #: it — not by omission from the derivation maps, which is how a "spec" table
 #: quietly degrades back into whatever the templates already said.
-UNVERIFIABLE_LITERALS = frozenset({"cascade_rcnn", "centernet_resnet", "efficientdet_d0"})
+UNVERIFIABLE_LITERALS = frozenset(
+    {"cascade_rcnn", "centernet_resnet", "efficientdet_d0", "sparse_rcnn"}
+)
 
 
 def _schema_path() -> pathlib.Path:
@@ -788,10 +791,16 @@ def test_the_anchor_kinds_partition_the_roster():
         f"  - SHRANK? Good: a row became re-derivable. Update this set in the "
         f"same commit."
     )
-    assert len(UNVERIFIABLE_LITERALS) == 3, (
+    assert len(UNVERIFIABLE_LITERALS) == 4, (
         f"UNVERIFIABLE_LITERALS holds {len(UNVERIFIABLE_LITERALS)} rows, not "
-        f"the 3 recorded when this landed. Growing it weakens every claim in "
-        f"this file's docstring about the table being independent."
+        f"the 4 recorded. Growing it weakens every claim in this file's "
+        f"docstring about the table being independent, so each addition is a "
+        f"deliberate edit here with a citation — which is what the pin is "
+        f"for. It grew from 3 to 4 for `sparse_rcnn` (model-zoo#246, merged to "
+        f"develop while this branch was open): it builds its own "
+        f"GeneralizedRCNNTransform from its own image_size, so there is no "
+        f"torchvision builder or class default to re-derive against, exactly "
+        f"like cascade_rcnn."
     )
     for stem in UNVERIFIABLE_LITERALS:
         citation = PUBLISHED_RESOLUTION[stem][2]
