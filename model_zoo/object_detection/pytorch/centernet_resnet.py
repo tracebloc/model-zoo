@@ -123,6 +123,14 @@ OUTPUT_STRIDE = 4
 #: Peaks kept before scoring, per image. 100 is the paper's value.
 MAX_DETECTIONS = 100
 
+#: Peaks below this are not detections. Without it the top-k always returns
+#: MAX_DETECTIONS rows, so once the real peaks are exhausted the remaining
+#: slots are filled with whatever local maxima the heatmap happens to have --
+#: at initialisation, noise. torchmetrics scores every returned row, so those
+#: become false positives that no ground truth can match. Matches the family's
+#: convention (torchvision's detectors default to 0.05).
+SCORE_THRESH = 0.05
+
 #: Minimum IoU a shifted box must retain for the Gaussian radius construction.
 GAUSSIAN_MIN_OVERLAP = 0.7
 
@@ -246,6 +254,7 @@ class CenterNet(nn.Module):
         self.num_classes = num_classes
         self.output_stride = OUTPUT_STRIDE
         self.max_detections = MAX_DETECTIONS
+        self.score_thresh = SCORE_THRESH
         self.transform = GeneralizedRCNNTransform(
             min_size=min_size,
             max_size=max_size,
@@ -381,12 +390,30 @@ class CenterNet(nn.Module):
 
         detections = []
         for index in range(batch):
-            flat = heatmap[index].reshape(-1)
+            # ⚠️ Channel 0 is the BACKGROUND slot. `MyModel` allocates
+            # `output_classes + 1` channels to match this family's model space,
+            # where torchvision reserves index 0 for background, so channel 0
+            # carries no dataset class. It is sliced off BEFORE the top-k, not
+            # filtered after: the top-k has a fixed budget, so a background
+            # local maximum admitted here would consume a detection slot that a
+            # real object should have had. Emitted labels are therefore in
+            # [1, C], which is the model space the engine's family handler
+            # translates back to dataset space (backend#3062).
+            foreground = heatmap[index, 1:]
+            flat = foreground.reshape(-1)
             k = min(self.max_detections, flat.numel())
             scores, topk = flat.topk(k)
 
-            # Unflatten (class, y, x) from the (C, H, W) index.
-            classes = torch.div(topk, height * width, rounding_mode="floor")
+            # And a threshold, because top-k always returns k rows: past the
+            # real peaks it pads with noise, and every padded row is scored as
+            # a false positive.
+            keep = scores > self.score_thresh
+            scores, topk = scores[keep], topk[keep]
+
+            # Unflatten (class, y, x) from the (C-1, H, W) index, then +1 to
+            # step back over the background channel that was sliced away.
+            classes = torch.div(
+                topk, height * width, rounding_mode="floor") + 1
             spatial = topk % (height * width)
             grid_y = torch.div(spatial, width, rounding_mode="floor")
             grid_x = spatial % width

@@ -79,6 +79,132 @@ def _blank_outputs(torch, num_classes, height, width):
 # --- the eval path: analytic decode -----------------------------------------
 
 
+def test_decode_never_emits_a_background_class_box(cn, model):
+    """Channel 0 is the background slot, so no decoded box may carry label 0.
+
+    ⚠️ THE FIXTURE IS THE WHOLE TEST. A random-initialised heatmap does NOT
+    exercise this: measured, the top-100 over 12 x 32 x 40 positions simply did
+    not happen to include channel 0, so the pre-fix decode returned no label-0
+    box and a test built on random weights passed against the bug. That is
+    trap 24 (FIXTURE-DEGENERACY) -- the fixture could not fail for the reason
+    the test is named after.
+
+    So channel 0 is given the GLOBAL MAXIMUM here, which is the situation
+    Bugbot described: past the real peaks the fixed-budget top-k pads its slots
+    with whatever local maxima exist, and background maxima are eligible.
+    """
+    import torch
+
+    height, width, num_classes = 32, 40, model.num_classes
+    heatmap = torch.full((1, num_classes, height, width), -20.0)
+    # A real object on a foreground channel...
+    foreground = num_classes - 1  # derived: the fixture model is narrow
+    heatmap[0, foreground, 10, 17] = 8.0
+    # ...and a STRONGER background peak, plus a ridge of them, so the top-k
+    # cannot avoid channel 0 by chance.
+    heatmap[0, 0, 5, 5] = 9.0
+    heatmap[0, 0, 20, 30] = 8.5
+    heatmap[0, 0, 25, 12] = 8.2
+
+    outputs = {
+        "heatmap": heatmap,
+        "size": torch.full((1, 2, height, width), 4.0),
+        "offset": torch.zeros((1, 2, height, width)),
+    }
+    detections = model.decode(outputs, [(height * model.output_stride,
+                                        width * model.output_stride)])
+    labels = detections[0]["labels"]
+
+    assert labels.numel() > 0, (
+        "the fixture's foreground peak decoded to nothing, so this test cannot "
+        "distinguish 'no background boxes' from 'no boxes at all'")
+    assert not bool((labels == 0).any()), (
+        f"decode returned label 0, the background channel: labels="
+        f"{sorted(set(labels.tolist()))}. MyModel allocates output_classes + 1 "
+        f"channels and channel 0 carries no dataset class, so a label-0 box is "
+        f"a false positive no ground truth can ever match -- torchmetrics "
+        f"scores it as an extra predicted class.")
+    assert int(labels.min()) >= 1, (
+        f"labels must be in model space [1, C]; got minimum {int(labels.min())}")
+    assert foreground in labels.tolist(), (
+        "the real foreground peak on channel 3 is missing from the output -- "
+        "the background slice removed a real class rather than the background")
+
+
+def test_decode_drops_background_before_the_topk_budget(cn, model):
+    """Background peaks must not consume detection slots.
+
+    Filtering label 0 AFTER the top-k would also produce no label-0 boxes, so
+    the previous test alone cannot tell the two implementations apart. This one
+    can: with a budget of exactly 2 and one foreground peak ranked BELOW two
+    background peaks, a post-filter returns 0 boxes (both slots eaten) while a
+    pre-slice returns the foreground box.
+    """
+    import torch
+
+    height, width, num_classes = 12, 12, model.num_classes
+    heatmap = torch.full((1, num_classes, height, width), -20.0)
+    # ⚠️ SPACING MATTERS. `_peaks` is a 3x3 max-pool NMS, so two peaks within
+    # one cell of each other are not two peaks -- the weaker is suppressed.
+    # An earlier version of this fixture put the two background peaks at (1,1)
+    # and (2,2): only one survived, a slot stayed free, and the post-filter
+    # implementation this test exists to reject returned the foreground box and
+    # PASSED. Measured at the time: top-4 channels [0, 12, 0, 0]. Every peak
+    # below is >= 3 cells from every other, so all three survive the NMS and
+    # the 2-slot budget is genuinely contested.
+    heatmap[0, 0, 1, 1] = 9.0      # background, strongest
+    heatmap[0, 0, 1, 9] = 8.5      # background, second
+    foreground = num_classes - 1   # derived: the fixture model is narrow
+    heatmap[0, foreground, 9, 1] = 8.0     # the real object, third
+
+    outputs = {
+        "heatmap": heatmap,
+        "size": torch.full((1, 2, height, width), 2.0),
+        "offset": torch.zeros((1, 2, height, width)),
+    }
+    original = model.max_detections
+    try:
+        model.max_detections = 2
+        detections = model.decode(
+            outputs, [(height * model.output_stride, width * model.output_stride)])
+    finally:
+        model.max_detections = original
+
+    labels = detections[0]["labels"].tolist()
+    assert labels == [foreground], (
+        f"expected [{foreground}] alone, got {labels}. With a 2-slot "
+        f"budget and two stronger background peaks, an implementation that "
+        f"filters label 0 after the top-k spends both slots on background and "
+        f"returns nothing -- the real object is lost, not merely accompanied.")
+
+
+def test_decode_applies_a_score_threshold(cn, model):
+    """Sub-threshold peaks are not detections.
+
+    Without this the fixed-budget top-k always returns `max_detections` rows,
+    so past the real peaks it pads with noise and every padded row is scored as
+    a false positive.
+    """
+    import torch
+
+    height, width, num_classes = 8, 8, model.num_classes
+    # Everything far below threshold except one clear peak.
+    heatmap = torch.full((1, num_classes, height, width), -20.0)
+    heatmap[0, num_classes - 1, 3, 3] = 8.0
+    outputs = {
+        "heatmap": heatmap,
+        "size": torch.full((1, 2, height, width), 2.0),
+        "offset": torch.zeros((1, 2, height, width)),
+    }
+    detections = model.decode(
+        outputs, [(height * model.output_stride, width * model.output_stride)])
+    scores = detections[0]["scores"]
+    assert scores.numel() == 1, (
+        f"expected exactly the one supra-threshold peak, got {scores.numel()} "
+        f"rows -- the top-k budget is padding with sub-threshold noise")
+    assert float(scores.min()) > model.score_thresh
+
+
 def test_decode_places_the_box_analytically(cn, model):
     """One synthetic peak with known size and offset must decode to an exact box.
 
