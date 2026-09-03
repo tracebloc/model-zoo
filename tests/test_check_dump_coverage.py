@@ -294,13 +294,16 @@ def test_an_empty_zoo_is_an_error_not_a_green(tmp_path):
 # 60 -> 61: backend#2982 Tier 2 added gfl_resnet — Generalized Focal Loss over
 # that same ATSS-assigned skeleton. NO_SEED for the same reason.
 #
+# 61 -> 62: backend#2982 Tier 2 added centernet_resnet — "Objects as Points",
+# the roster's only NMS-free detector. NO_SEED for the same reason.
+#
 # ⚠️ EACH NUMBER HERE IS A RUNNING TOTAL, NOT ITS BRANCH'S ARITHMETIC. Tier 0
 # had to unlearn a plausible-looking `57 + 6 = 63` — wrong by the eight
 # templates #2973 and #2988 deleted. Whoever rebases onto a moved develop takes
 # what `tools/check_dump_coverage.py --zoo .` reports against the merged tree.
-# centernet_resnet (model-zoo#236, +1) is also in flight and claims 61 too;
-# whichever of the two lands second becomes 62 — re-read the tool, do not add.
-MIGRATED_TEMPLATE_CENSUS = 61
+# tood_resnet (model-zoo#238) and vfnet_resnet are also in flight and claim 62;
+# whichever lands after this becomes 63, then 64 — re-read the tool, never add.
+MIGRATED_TEMPLATE_CENSUS = 62
 
 
 def test_the_real_zoo_classifies_every_migrated_template(tmp_path):
