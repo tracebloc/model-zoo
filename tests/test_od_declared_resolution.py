@@ -17,13 +17,18 @@ twice and throws away the detail it would have had if the dataset had delivered
 that is worse than the architecture should give — which is indistinguishable
 from "detection is hard".
 
-Three shipped templates have it (``faster_rcnn_resnet``, ``fcos``,
-``retinanet``, all 448 against a transform at 800). **They are deliberately not
-fixed here.** Changing a declared shape changes what the edge is asked to
-deliver, so backend#3058 wants a before/after mAP measurement rather than a
-blind edit. This file is the guard, landing first: it stops a *new* template
-acquiring the same defect, and it makes the three known ones explicit instead of
-folklore.
+Three shipped templates HAD it (``faster_rcnn_resnet``, ``fcos``,
+``retinanet``, all 448 against a transform at 800). **All three are fixed** —
+backend#3058, model-zoo#265 — and ``KNOWN_MISMATCHES`` is empty with its ratchet
+at zero. This file landed as the guard first and is now also the record of the
+fix: it stops a *new* template acquiring the defect, and there is no longer any
+template it excuses.
+
+The before/after mAP measurement backend#3058 originally wanted was NOT gated
+on: it needs seeded weights from the blocked backend#2659, both arms score ~0
+from random init, and an upscale cannot recover detail a downscale discarded —
+so it would have established magnitude, not direction. It rides on
+backend#3048's sweep once seeds exist.
 
 Asserted in both directions
 ---------------------------
@@ -125,14 +130,16 @@ FAMILY = "torchvision_detection"
 #: they run at, tracked as backend#3058. Value is the declared/effective pair, so
 #: a partial change is as loud as no change.
 #:
-#: ⚠️ Asserted in BOTH directions — fixing one of these fails this file until
-#: its row is deleted. Do not add a row to silence a new template; a new
+#: **EMPTY as of model-zoo#265**, which fixed the last three
+#: (``faster_rcnn_resnet``, ``fcos``, ``retinanet`` — all 448 against a transform
+#: at 800). This dict now exists only so that ADDING a row is still the thing the
+#: ratchet refuses. Same shape as ``NON_NORMALISING`` in
+#: ``test_od_norm_layers_normalise.py`` after model-zoo#262 emptied it.
+#:
+#: ⚠️ Asserted in BOTH directions — fixing a listed template fails this file
+#: until its row is deleted. Do not add a row to silence a new template; a new
 #: mismatch is a bug in that template, not a new known issue.
-KNOWN_MISMATCHES = {
-    "faster_rcnn_resnet": (448, 800),
-    "fcos": (448, 800),
-    "retinanet": (448, 800),
-}
+KNOWN_MISMATCHES: dict[str, tuple[int, int]] = {}
 
 #: The list is a RATCHET: it may only ever shrink, and its length is pinned by
 #: EQUALITY rather than by an upper bound.
@@ -157,7 +164,7 @@ KNOWN_MISMATCHES = {
 #: the `MAX_KNOWN_MISMATCHES == <n>` pin below keeps that a conscious,
 #: reviewable edit rather than a silent one. The legal edit is therefore
 #: *enforced* rather than merely documented.
-MAX_KNOWN_MISMATCHES = 3
+MAX_KNOWN_MISMATCHES = 0
 
 #: How each row of ``PUBLISHED_RESOLUTION`` is anchored — i.e. what would have
 #: to change for the row to legitimately change. Three of the four kinds are
@@ -529,8 +536,8 @@ def test_family_templates_were_found():
     nothing, and it is driven by a file scan plus a schema lookup."""
     assert "rcnn" in FAMILY_VALUES, (
         f"{_schema_path().name}: {FAMILY!r} lost its legacy 'rcnn' alias — "
-        f"faster_rcnn_resnet declares it and is one of the KNOWN_MISMATCHES, so "
-        f"this scan just stopped covering the row that matters most"
+        f"faster_rcnn_resnet declares it, so this scan just stopped covering "
+        f"the only template on the legacy alias"
     )
     # This was `len(FAMILY_TEMPLATES) >= 4` — a floor every roster PR is
     # invited to raise, i.e. a shared literal with the same serialisation cost
@@ -663,27 +670,36 @@ def test_the_known_mismatch_list_only_ever_shrinks():
     cap — both a ``<=`` bound and the ``MAX == n`` pin still pass, leaving a free
     slot a later commit can refill with a brand-new mismatch and stay green.
 
-    Legal edits are: delete a row, lower ``MAX_KNOWN_MISMATCHES``, and update
-    the pin below — all in one commit. Adding a row fails here, so a new
-    mismatch has to be argued for rather than absorbed.
+    **The ratchet is now AT ITS FLOOR** — empty, pinned at 0 (model-zoo#265).
+    There is no legal edit to these two values left: the only edit the original
+    design permitted was *downward*, and down is where they are. A new
+    declared/effective mismatch is a bug in the template that introduced it, not
+    a row to add here.
+
+    Historically the legal edit was: delete a row, lower
+    ``MAX_KNOWN_MISMATCHES``, and update the pin below — all in one commit. That
+    is recorded because it is what got us to zero, not because it is still
+    available.
     """
     assert len(KNOWN_MISMATCHES) == MAX_KNOWN_MISMATCHES, (
         f"KNOWN_MISMATCHES holds {len(KNOWN_MISMATCHES)} entries "
         f"({sorted(KNOWN_MISMATCHES)}) against a pinned {MAX_KNOWN_MISMATCHES}.\n"
         f"  - GREW? A declared/effective mismatch in a NEW template is a bug in "
         f"that template — fix its image_size instead of listing it.\n"
-        f"  - SHRANK? Good: backend#3058 fixed one. Lower MAX_KNOWN_MISMATCHES "
-        f"to {len(KNOWN_MISMATCHES)} in this same commit, and update the "
-        f"equality pin below.\n"
+        f"  - SHRANK? No longer possible: the ratchet is at its floor (0) as "
+        f"of model-zoo#265, so a shrink means a row was added and removed, not "
+        f"that a template was fixed.\n"
         f"This is asserted by EQUALITY, not `<=`, on purpose: an upper bound "
         f"would let a fix free a slot that a later commit could quietly refill "
         f"with a brand-new mismatch."
     )
-    assert MAX_KNOWN_MISMATCHES == 3, (
-        f"MAX_KNOWN_MISMATCHES is {MAX_KNOWN_MISMATCHES}, not the 3 recorded "
-        f"when this guard landed. Raising it defeats the ratchet; lowering it "
-        f"is correct once backend#3058 fixes a template, and this assertion "
-        f"should be updated in the same commit that lowers it."
+    assert MAX_KNOWN_MISMATCHES == 0, (
+        f"MAX_KNOWN_MISMATCHES is {MAX_KNOWN_MISMATCHES}, not the 0 this ratchet "
+        f"reached when backend#3058 fixed the last three templates "
+        f"(faster_rcnn_resnet, fcos, retinanet). It may only ever go DOWN, and "
+        f"it is already at the floor: there is no legal edit to this number "
+        f"left. A new declared/effective mismatch is a bug in the template that "
+        f"introduced it, not a row to add here."
     )
 
 
@@ -746,9 +762,10 @@ def test_declared_image_size_matches_the_published_specification(path):
     the declared-vs-built comparison cannot see, and why nothing the template
     does at construction time can influence its expectation.
 
-    The three ``KNOWN_MISMATCHES`` templates fail this too (they declare 448
-    against a published 800), so their recorded value is honoured here as well
-    — one exemption list, one ratchet, read by both comparisons.
+    ``KNOWN_MISMATCHES`` is read here as well as by the declared-vs-built
+    comparison — one exemption list, one ratchet, both comparisons. It is now
+    **empty** (model-zoo#265), so this test exempts nothing: every template's
+    declared value is checked against its published specification.
     """
     stem = _stem(path)
     declared = _read_declared_image_size(path)
