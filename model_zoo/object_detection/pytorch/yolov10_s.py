@@ -170,6 +170,24 @@ derived into a head count and pinned on the **built** module, with a mutation
 that proves the derivation is live (see
 ``guard_attention_head_count_is_derived_and_reaches_the_attention``).
 
+The attention itself is routed through
+``torch.nn.functional.scaled_dot_product_attention`` rather than an explicit
+matmul-softmax-matmul, so it dispatches to the fused attention kernels on
+hardware that has them. backend#2090 established that conversion for
+``masked_language_modeling/pytorch/relative_position_mlm.py``; this is the
+second template in the zoo to adopt it, and — to be accurate about the state of
+the repo rather than implying a rule — it is **not** a repo-wide requirement
+today: four other templates (``vitpose``, ``vitpose_plus``, ``mask2former``,
+``oneformer``) still compute attention by hand, and neither ``CLAUDE.md`` nor
+``.cursor/BUGBOT.md`` states a requirement. It is adopted here because the
+conversion is provably numerics-neutral for this block, and #2090's own
+acceptance bar — run the pre-conversion formula and the SDPA path on the same
+weights and require agreement in fp32 at tight tolerance — is applied to it in
+``guard_attention_matches_the_manual_formula`` (measured deviation 6.3e-07).
+The declared ``scale`` is passed to the call explicitly rather than left to
+SDPA's identical default, so it does not become a constant that reaches
+nothing.
+
 The published anchors, and what they actually count
 ===================================================
 ⚠️ THE v10 YAML FILES CARRY NO PARAMETER COUNTS. Unlike ``yolov9{t,s,c}.yaml``,
@@ -806,11 +824,31 @@ class Attention(nn.Module):
         query, key, value = qkv.split(
             [self.key_dim, self.key_dim, self.head_dim], dim=2
         )
-        attention = (query.transpose(-2, -1) @ key) * self.scale
-        attention = attention.softmax(dim=-1)
-        attended = (value @ attention.transpose(-2, -1)).reshape(
-            batch, channels, height, width
-        )
+        # Routed through SDPA rather than an explicit matmul-softmax-matmul, so
+        # it dispatches to the fused attention kernels on hardware that has them
+        # (backend#2090 established this for `relative_position_mlm.py`; this is
+        # the second template to adopt it).
+        #
+        # ⚠️ THE LAYOUT TRANSPOSE IS PART OF THE CALL, not tidiness. Upstream
+        # holds q/k/v CHANNELS-FIRST — `(batch, heads, width, tokens)` — while
+        # SDPA's contract is tokens-second-to-last, `(batch, heads, tokens,
+        # width)`. Feeding the channels-first tensors straight in would attend
+        # over CHANNELS instead of over spatial positions: same output shape,
+        # finite losses, and a completely different operator.
+        #
+        # `scale` is passed EXPLICITLY even though SDPA's default is already
+        # `1 / sqrt(query.size(-1))` and `self.scale` equals it exactly today.
+        # Relying on the default would make `self.scale` a constant that reaches
+        # nothing, so a future change to ATTN_RATIO — which moves `key_dim` and
+        # therefore the correct scale — would be silently ignored by the kernel
+        # while still reading as configuration here.
+        attended = F.scaled_dot_product_attention(
+            query.transpose(-2, -1),
+            key.transpose(-2, -1),
+            value.transpose(-2, -1),
+            scale=self.scale,
+        ).transpose(-2, -1)
+        attended = attended.reshape(batch, channels, height, width)
         return self.proj(attended + self.pe(value.reshape(batch, channels, height, width)))
 
 

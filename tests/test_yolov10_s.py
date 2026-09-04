@@ -1498,6 +1498,105 @@ def guard_psa_attends_to_only_half_the_channels(module) -> None:
     )
 
 
+def guard_attention_matches_the_manual_formula(module) -> None:
+    """``Attention`` routes through SDPA, and must compute what the explicit
+    matmul-softmax-matmul computed.
+
+    ``tests/test_sdpa_equivalence.py`` is the acceptance bar backend#2090 set
+    for this conversion: run the pre-conversion formula and the SDPA path on the
+    SAME weights and the SAME input, and require them to agree in fp32 at tight
+    tolerance. This is that bar applied to this template's attention, and it is
+    the reason the conversion is safe to make at all — a silently different
+    attention leaves every structural guard in this file green.
+
+    Two ways the conversion can go wrong, and they fail DIFFERENTLY:
+
+    * **the q/k/v layout.** Upstream holds them channels-first — ``(batch,
+      heads, width, tokens)`` — while SDPA's contract is ``(batch, heads,
+      tokens, width)``. ⚠️ MEASURED, not assumed: at this template's shape the
+      wrong layout **raises** rather than differing quietly, because ``key`` and
+      ``value`` then disagree on their sequence length (``key_dim`` 32 against
+      ``head_dim`` 64) and the downstream reshape gets the wrong element count.
+      That is luck rather than design — it depends on ``ATTN_RATIO`` making the
+      two widths differ — so this guard converts any exception into its own
+      assertion instead of letting the mutation sweep record an ERROR, and the
+      claim made here is the narrow one: it is caught, not that it is subtle;
+    * **the scale.** SDPA's default is ``1 / sqrt(query.size(-1))``, which
+      equals ``self.scale`` exactly today, so relying on the default would make
+      ``self.scale`` a constant that reaches nothing and a future
+      ``ATTN_RATIO`` change would be silently ignored by the kernel. That one
+      IS numerically silent — it just scales the logits — and is what the
+      tolerance below actually catches.
+
+    The manual formula is written out longhand rather than called, so it cannot
+    drift into being the same code it is checking.
+    """
+    import torch
+
+    torch.manual_seed(0)
+    dim = 128
+    attention = module.Attention(dim)
+    attention.eval()
+    probe = torch.rand(2, dim, 5, 5)
+
+    def manual(block, x):
+        """The pre-conversion formula, verbatim."""
+        batch, channels, height, width = x.shape
+        tokens = height * width
+        qkv = block.qkv(x).view(
+            batch, block.num_heads, 2 * block.key_dim + block.head_dim, tokens
+        )
+        query, key, value = qkv.split(
+            [block.key_dim, block.key_dim, block.head_dim], dim=2
+        )
+        scores = (query.transpose(-2, -1) @ key) * block.scale
+        scores = scores.softmax(dim=-1)
+        attended = (value @ scores.transpose(-2, -1)).reshape(
+            batch, channels, height, width
+        )
+        return block.proj(
+            attended + block.pe(value.reshape(batch, channels, height, width))
+        )
+
+    with torch.no_grad():
+        expected = manual(attention, probe)
+        # WRAPPED: at this shape a transposed layout raises rather than
+        # returning wrong numbers, and an unwrapped exception would make the
+        # mutation sweep record an ERROR instead of a caught mutation.
+        try:
+            actual = attention(probe)
+        except Exception as error:  # noqa: BLE001 — any failure here is the bug
+            raise AssertionError(
+                f"{module.__name__}: the attention forward raised "
+                f"{type(error).__name__}: {error}. The SDPA call wants q/k/v as "
+                f"(batch, heads, tokens, width); upstream holds them "
+                f"channels-first, so the transposes around the call are part of "
+                f"the call and not tidiness."
+            ) from error
+
+    assert expected.dtype == torch.float32
+    assert actual.shape == expected.shape, (
+        f"{module.__name__}: SDPA path emits {tuple(actual.shape)}, the manual "
+        f"formula {tuple(expected.shape)}"
+    )
+    deviation = float((actual - expected).abs().max())
+    assert deviation < 1e-4, (
+        f"{module.__name__}: the SDPA attention path deviates from the explicit "
+        f"matmul-softmax-matmul by {deviation:.3g} (bar 1e-4, measured 6.3e-07 "
+        f"on the shipped template). The likely cause is the SCALE: SDPA's "
+        f"default is 1 / sqrt(query.size(-1)) and this call passes self.scale "
+        f"explicitly so the declared value cannot be silently ignored — if "
+        f"those two ever disagree, this is where it shows."
+    )
+    # The tolerance is only meaningful if the formula is doing real mixing:
+    # a near-uniform attention would agree with almost anything.
+    assert float(expected.abs().max()) > 1e-3, (
+        f"fixture is degenerate: the manual formula's output is ~0 "
+        f"({float(expected.abs().max()):.3g}), so agreeing with it proves "
+        f"nothing"
+    )
+
+
 def guard_sppf_and_psa_are_applied_to_the_deepest_map(module) -> None:
     """``SPPF`` and ``PSA`` must actually be APPLIED, in that order, to the
     stride-32 feature map the backbone returns.
@@ -3419,6 +3518,7 @@ GUARDS = {
     "c2f_fuses_intermediates": guard_c2f_fuses_every_intermediate_block,
     "sppf_series": guard_sppf_pools_in_series,
     "psa_partial": guard_psa_attends_to_only_half_the_channels,
+    "attention_matches_manual": guard_attention_matches_the_manual_formula,
     "deepest_stage_modules_are_applied": (
         guard_sppf_and_psa_are_applied_to_the_deepest_map
     ),
@@ -3647,6 +3747,31 @@ MUTATIONS = [
         "        attending = self.attn(attending)\n"
         "        attending = attending + self.ffn(attending)",
         "psa_partial",
+    ),
+    # The layout bug the SDPA conversion makes available: shape-legal here
+    # (tokens 25 vs key_dim 32 both feed a legal matmul), finite losses,
+    # attends over CHANNELS instead of spatial positions.
+    (
+        "attention_sdpa_gets_the_channels_first_layout",
+        """        attended = F.scaled_dot_product_attention(
+            query.transpose(-2, -1),
+            key.transpose(-2, -1),
+            value.transpose(-2, -1),
+            scale=self.scale,
+        ).transpose(-2, -1)""",
+        """        attended = F.scaled_dot_product_attention(
+            query,
+            key,
+            value,
+            scale=self.scale,
+        )""",
+        "attention_matches_manual",
+    ),
+    (
+        "attention_scale_left_to_the_sdpa_default",
+        "            scale=self.scale,\n        ).transpose(-2, -1)",
+        "            scale=self.scale * 2.0,\n        ).transpose(-2, -1)",
+        "attention_matches_manual",
     ),
     (
         "attention_head_count_hardcoded",
