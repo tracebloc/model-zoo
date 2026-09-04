@@ -51,6 +51,30 @@ normalise. The list and its ratchet are KEPT rather than deleted so that the
 cheapest way to green a newly-broken template is still not "add a row" — see
 ``test_the_non_normalising_list_only_ever_shrinks``.
 
+Two halves, and the gap between them
+------------------------------------
+1. **Every norm module must normalise** (the leak probe below).
+2. **The BACKBONE must carry at least one norm module of its own.** The total
+   is not sufficient: detector heads carry their own GroupNorms — torchvision's
+   ``FCOSHead`` does, and so does every hand-written head here — so a trunk
+   that lost every norm module still reports ``probed > 0`` and every remaining
+   module normalises. Measured: swapping this family's ``norm_layer`` for
+   ``nn.Identity`` left ``fcos`` with 8 healthy head norms and this file green.
+
+⚠️ WHAT NEITHER HALF CATCHES, measured rather than assumed. A norm module that
+is CONSTRUCTED but never APPLIED is invisible here: wrap the GroupNorm in a
+module whose ``forward`` returns its input unchanged and the probe still finds
+the inner GroupNorm through ``named_modules()``, probes it directly, and sees a
+leak of 0. Structure cannot see a bypassed ``forward`` — the same blind spot
+measured twice elsewhere in this epic against parameter counts, tensor shapes,
+``state_dict`` keys and loss keys. Catching it needs a forward pass with hooks
+asserting each norm module actually fired, which is not in this file: it would
+add a detector forward per roster template to a file that deliberately builds
+each model once. Half of the same ground is covered exactly, from outside:
+``test_cascade_rcnn_stages`` and ``test_sparse_rcnn_matching`` reconcile their
+trunk's parameter count against torchvision's own builder, so on those two any
+change to the norm module set fails arithmetically.
+
 Why the obvious guards do not work
 ----------------------------------
 **Not a distributional assertion.** Anything asserting a *statistic* of a
@@ -188,6 +212,25 @@ NORM_FREE_BY_DESIGN = {
 }
 
 
+#: Templates that expose no ``backbone`` attribute, with the reason. Every other
+#: template on the roster does, and for those the check below insists the
+#: BACKBONE subtree carries a norm module of its own — see
+#: ``test_norm_layers_normalise_a_from_scratch_build``.
+#:
+#: ⚠️ Asserted in both directions: a listed template that grows a ``backbone``
+#: fails (delete its row, the stronger check then applies to it), and an
+#: unlisted template without one fails rather than skipping the check silently.
+#: That is what stops the backbone half of this file from quietly covering
+#: fewer templates over time.
+NO_BACKBONE_ATTRIBUTE = {
+    "yolo_v1": (
+        "the original YOLO is a plain conv stack with a fully-connected head "
+        "and no separable trunk; the module holds its layers directly rather "
+        "than under a `backbone` submodule, so there is no subtree to name."
+    ),
+}
+
+
 #: The roster, the ``framework`` reader and the import-and-construct all come
 #: from ``tests/_od.py`` rather than being re-typed here. They were
 #: byte-identical in three OD test files and had already drifted in two ways
@@ -302,28 +345,52 @@ def _leak(torch, module, shapes=None) -> float:
     )
 
 
-def _leaky_norms(torch, model) -> tuple[list[tuple[str, str, float]], int]:
-    """``(non-normalising modules, number of modules probed)``.
+def _leaky_norms(torch, model) -> tuple[list[tuple[str, str, float]], int, int | None]:
+    """``(non-normalising modules, modules probed, modules probed in backbone)``.
 
     ``train()`` mode: see the module docstring — a fresh ``BatchNorm2d`` leaks
     1.0 in ``eval()`` and 0.0 while training, and training is the regime this
     defect breaks.
+
+    The third element is ``None`` for a model with no ``backbone`` attribute
+    and a count otherwise. It exists because the total is NOT sufficient: a
+    detector head can carry its own GroupNorms (torchvision's ``FCOSHead``
+    does, and so does every hand-written head on this roster), so a trunk that
+    lost every one of its norm modules still reports ``probed > 0`` and passes.
+    Measured: replacing this template family's ``norm_layer`` with
+    ``nn.Identity`` leaves ``fcos`` at 8 probed head norms, all of which
+    normalise, and the guard was green. That mutation is the reason this
+    returns three values instead of two.
     """
     # Loop-invariant: one tuple for the whole model, not one per module. A
     # from-scratch ResNet-50 detector has several hundred modules and this
     # runs across the whole roster.
     norm_types = _norm_types(torch)
     model.train()
+    backbone = getattr(model, "backbone", None)
+    in_backbone = (
+        None
+        if backbone is None
+        else {name for name, _ in backbone.named_modules()}
+    )
     leaky: list[tuple[str, str, float]] = []
     probed = 0
+    probed_backbone = None if in_backbone is None else 0
     for name, module in model.named_modules():
         if not isinstance(module, norm_types):
             continue
         leak = _leak(torch, module, _candidate_shapes(torch, module))
         probed += 1
+        if in_backbone is not None and name.startswith("backbone."):
+            # `named_modules()` on the model prefixes with "backbone."; the set
+            # from the subtree is unprefixed. Compare on the stripped name so a
+            # head module that merely SHARES a name with a backbone one cannot
+            # be counted as trunk coverage.
+            if name[len("backbone."):] in in_backbone:
+                probed_backbone += 1
         if leak > _MAX_LEAK:
             leaky.append((name, type(module).__name__, leak))
-    return leaky, probed
+    return leaky, probed, probed_backbone
 
 
 def test_the_roster_was_found():
@@ -343,6 +410,11 @@ def test_the_roster_was_found():
         f"NON_NORMALISING names templates the scan did not find: {missing} — "
         f"if they were deleted, delete their rows (and lower "
         f"MAX_NON_NORMALISING) in the same commit"
+    )
+    stale = sorted(set(NO_BACKBONE_ATTRIBUTE) - stems)
+    assert not stale, (
+        f"NO_BACKBONE_ATTRIBUTE names templates the scan did not find: "
+        f"{stale} — if they were deleted, delete their rows too"
     )
     unknown = sorted(set(NORM_FREE_BY_DESIGN) - stems)
     assert not unknown, (
@@ -374,7 +446,7 @@ def test_norm_layers_normalise_a_from_scratch_build(path):
     stem = _stem(path)
     _, model = _build(path)
     try:
-        leaky, probed = _leaky_norms(torch, model)
+        leaky, probed, probed_backbone = _leaky_norms(torch, model)
     finally:
         del model
         gc.collect()
@@ -395,6 +467,37 @@ def test_norm_layers_normalise_a_from_scratch_build(path):
         f"in which case add a row to NORM_FREE_BY_DESIGN saying which. A "
         f"vacuous pass is not an answer."
     )
+
+    # The TRUNK, separately from the total. A head's own norms satisfy
+    # `probed` on their own, so without this a backbone that lost every norm
+    # module passes — measured, see `_leaky_norms`.
+    no_backbone = NO_BACKBONE_ATTRIBUTE.get(stem)
+    if probed_backbone is None:
+        assert no_backbone is not None, (
+            f"{stem} exposes no `backbone` attribute, so the backbone half of "
+            f"this rule checked nothing on it. Either it genuinely has no "
+            f"separable trunk — add a row to NO_BACKBONE_ATTRIBUTE saying so — "
+            f"or the attribute was renamed, in which case teach _leaky_norms "
+            f"the new name. A silently narrower check is how this file would "
+            f"stop covering the thing it is about."
+        )
+    else:
+        assert no_backbone is None, (
+            f"{stem} is listed in NO_BACKBONE_ATTRIBUTE but now exposes a "
+            f"`backbone`. Delete its row — the trunk check applies to it now. "
+            f"The recorded reason was: {no_backbone}"
+        )
+        assert probed_backbone, (
+            f"{stem} has {probed} norm module(s) but NONE of them is in its "
+            f"backbone, so the trunk trains with no normalisation at all while "
+            f"the head's own norms make the total look healthy. That is the "
+            f"backend#3093 failure mode with the norm removed rather than "
+            f"frozen — `norm_layer=nn.Identity`, or a `norm_layer=` argument "
+            f"dropped from a builder that then defaults to none. Note the "
+            f"floor this asserts: it catches losing ALL of them, not some. "
+            f"Only `cascade_rcnn` and `sparse_rcnn` pin the trunk's exact "
+            f"parameter count against torchvision's own builder."
+        )
 
     known = NON_NORMALISING.get(stem)
     if known is None:
