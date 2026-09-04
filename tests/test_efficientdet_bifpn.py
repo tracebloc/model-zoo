@@ -345,9 +345,11 @@ def test_the_model_carries_no_batchnorm_running_buffers():
 
     Two reasons this matters and neither is style: BN running statistics average
     poorly across non-IID federated clients (``CLAUDE.md``), and
-    ``FrozenBatchNorm2d`` — the escape hatch the rest of this family uses — does
-    not normalise anything on a from-scratch trunk, because its running
-    statistics are the untouched 0/1 defaults.
+    ``FrozenBatchNorm2d`` — the escape hatch the torchvision family used to
+    reach for — does not normalise anything on a from-scratch trunk, because
+    its running statistics are the untouched 0/1 defaults, so it is not an
+    alternative either. That family moved to GroupNorm in model-zoo#259
+    (backend#3093); this template was already there.
     """
     model = MODULE.MyModel(3)
     batchnorms = [
