@@ -184,7 +184,7 @@ MAX_KNOWN_MISMATCHES = 3
 #:                     it is checked against ``MODERN_YOLO_RESOLUTION``, one
 #:                     cited family fact shared by all of them, the way the
 #:                     ``ENGINE`` rows are checked against the engine contract.
-#:                     Added by model-zoo#256 because ``UNVERIFIABLE_LITERALS``
+#:                     Added by model-zoo#258 because ``UNVERIFIABLE_LITERALS``
 #:                     had reached the 8 its own message named as the limit and
 #:                     asked the next author for a derivation source for this
 #:                     family instead of a ninth row.
@@ -297,11 +297,11 @@ PUBLISHED_RESOLUTION: dict[str, tuple[int, str, str]] = {
     # `yolo` contract. A row of 448 here would pin the wrong architecture.
     # the multi-scale anchor-free YOLOX-S (model-zoo#237); the name reads like the legacy yolo family and is not in it
     "yolox_s": (MODERN_YOLO_RESOLUTION, MODERN_YOLO, "the multi-scale anchor-free YOLOX-S (model-zoo#237); the name reads like the legacy yolo family and is not in it. YOLOX (Ge et al. 2021) sec. 3 and the official Megvii README standard-models table: YOLOX-s is size 640, the scale its published 9.0M-parameter row is quoted at"),
-    # the NMS-free dual-assignment YOLOv10-S (model-zoo#256). ⚠️ Its published
+    # the NMS-free dual-assignment YOLOv10-S (model-zoo#258). ⚠️ Its published
     # parameter figure has THREE variants and this row's citation is quoted at
     # the dual-head one; do not "correct" it to the README's 7.2M, which is the
     # fused one2one-only deployed graph. The resolution is 640 in every variant.
-    "yolov10_s": (MODERN_YOLO_RESOLUTION, MODERN_YOLO, "the NMS-free dual-assignment YOLOv10-S (model-zoo#256). YOLOv10 (Wang et al. 2024, NeurIPS, arXiv:2405.14458) results table gives Test Size 640 for every scale; the scale its published 8,128,272-parameter dual-head summary is quoted at"),
+    "yolov10_s": (MODERN_YOLO_RESOLUTION, MODERN_YOLO, "the NMS-free dual-assignment YOLOv10-S (model-zoo#258). YOLOv10 (Wang et al. 2024, NeurIPS, arXiv:2405.14458) results table gives Test Size 640 for every scale; the scale its published 8,128,272-parameter dual-head summary is quoted at"),
     # RTMDet is NOT a YOLO — CSPNeXt backbone, mmdetection lineage — so it does
     # not join the family anchor above even though its resolution matches.
     # Membership is the thing being asserted, not the number.
@@ -901,7 +901,7 @@ def test_the_anchor_kinds_partition_the_roster():
         f"History: 3 -> 4 `sparse_rcnn` (model-zoo#246), 4 -> 5 `yolov8_s` "
         f"(model-zoo#253), 5 -> 6 `yolov9_s` (model-zoo#255), 6 -> 8 "
         f"`yolox_s` and `rtmdet_s` together (model-zoo#237), then 8 -> 5 when "
-        f"`yolov10_s` (model-zoo#256) arrived.\n"
+        f"`yolov10_s` (model-zoo#258) arrived.\n"
         f"\n"
         f"⚠️ THAT LAST STEP WENT DOWN, AND ON PURPOSE. At 8 this message said "
         f"the next addition should come with a derivation source for the "
