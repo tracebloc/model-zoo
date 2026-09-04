@@ -108,10 +108,16 @@ Federated note (GroupNorm, not BatchNorm)
 The norm layers are GroupNorm. Upstream YOLOX uses BatchNorm, and an earlier
 revision of this file did too, defending it as "the same trade every
 torchvision detector in this family already carries". That claim was FALSE and
-was caught in review: every shipped template in this family builds its
-backbone with ``norm_layer=misc_nn_ops.FrozenBatchNorm``, i.e. FROZEN -- the
-running statistics never update, so there is nothing to average. This template
-carried 21,738 live buffer elements against ``efficientdet_d0``'s 0.
+was caught in review: at the time every torchvision template in this family
+built its backbone with ``norm_layer=misc_nn_ops.FrozenBatchNorm``, i.e. FROZEN
+-- the running statistics never update, so there is nothing to average. This
+template carried 21,738 live buffer elements against ``efficientdet_d0``'s 0.
+(Frozen BN turned out to be a bit-exact no-op on those from-scratch builds,
+backend#3093, and they moved to GroupNorm in model-zoo#259. Note what that
+change is NOT: moving BN -> GroupNorm here left the parameter count identical
+and dropped 21,738 buffers, whereas moving FrozenBN -> GroupNorm there ADDED
+2 parameters per normalised channel, because frozen BN held weight/bias as
+buffers. The two migrations are not the same arithmetic.)
 
 BN's ``running_mean``/``running_var`` are buffers the averaging service ships
 and averages every round, and they average badly across non-IID clients (see

@@ -155,12 +155,13 @@ The norm layers are GroupNorm. Upstream YOLOv8 uses BatchNorm.
 
 BN's ``running_mean``/``running_var`` are **buffers the averaging service ships
 and averages every federated round**, and they average badly across non-IID
-clients (see CLAUDE.md). The rest of this family avoids that with
+clients (see CLAUDE.md). The torchvision family used to avoid that with
 ``norm_layer=misc_nn_ops.FrozenBatchNorm``, whose statistics never update — and
 on a ``weights=None`` backbone ``FrozenBatchNorm2d`` is a **bit-exact identity**
 (``weight=1``, ``bias=0``, ``running_mean=0``, ``running_var=1``, verified in
 backend#3093), so freezing it on a from-scratch template normalises nothing at
-all.
+all. That whole family moved to GroupNorm in model-zoo#259; this note is kept
+because it is the reasoning, not a description of the other templates.
 
 GroupNorm is preferred here over both for a specific reason: Frozen BN registers
 ``weight``/``bias`` as BUFFERS, which changes the parameter count and would
@@ -322,9 +323,10 @@ class ConvNormAct(nn.Module):
         )
         # GroupNorm, NOT BatchNorm. BN's running_mean/running_var are buffers
         # the averaging service ships and averages every round, and they
-        # average badly across non-IID clients. The shipped family avoids this
-        # with FrozenBatchNorm2d -- which on a weights=None backbone is a
-        # bit-exact identity (backend#3093), i.e. no normalisation at all.
+        # average badly across non-IID clients. The torchvision family used
+        # to avoid this with FrozenBatchNorm2d -- which on a weights=None
+        # backbone is a bit-exact identity (backend#3093), i.e. no
+        # normalisation at all, and it moved to GroupNorm in model-zoo#259.
         # GroupNorm is used here instead because Frozen BN also moves
         # weight/bias into buffers and would change the parameter count,
         # silently invalidating the published-architecture guard. GroupNorm

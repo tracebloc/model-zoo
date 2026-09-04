@@ -71,12 +71,12 @@ differs from the ``retinanet`` template.
 Verified against torchvision 0.26.0 (the engine pin, ``tools/requirements-engine-pin.txt``).
 """
 import torch
+from torch import nn
 from torchvision.models import resnet50
 from torchvision.models.detection.anchor_utils import AnchorGenerator
 from torchvision.models.detection.backbone_utils import _resnet_fpn_extractor
 from torchvision.models.detection.retinanet import RetinaNet, RetinaNetHead
 from torchvision.ops import boxes as box_ops
-from torchvision.ops import misc as misc_nn_ops
 from torchvision.ops.feature_pyramid_network import LastLevelP6P7
 
 # backend#2642 — the task head is NOT carried by the hosted seed.
@@ -99,6 +99,35 @@ image_size = 800
 batch_size = 8
 output_classes = 12
 category = "object_detection"
+
+
+def _group_norm(channels):
+    """GroupNorm with the largest group count ``<= 32`` that divides ``channels``.
+
+    The backbone norm for a from-scratch build (backend#3093). This template
+    used ``FrozenBatchNorm2d``, which at construction holds ``weight=1``,
+    ``bias=0``, ``running_mean=0``, ``running_var=1`` and therefore computes
+    ``(x - 0) / sqrt(1 + eps) * 1 + 0`` -- its input, unchanged. Those buffers
+    only mean anything once a pretrained checkpoint loads real statistics into
+    them; with ``weights=None`` there is nothing to freeze and the layer is a
+    no-op, so the backbone trained with no normalisation at all. GroupNorm
+    normalises per sample, so it is correct with no checkpoint AND holds no
+    running statistics for the averaging service to ship every federated round
+    -- the reason frozen BN was reached for in the first place.
+
+    The group count is derived, not hardcoded to 32: ``nn.GroupNorm`` requires
+    ``channels % num_groups == 0``, which ResNet-50's 64..2048 all satisfy at
+    32 (the canonical Wu & He setting) but MobileNetV3's 16/24/40/72/120/184
+    stages do not.
+
+    Duplicated per template on purpose -- a zoo template is uploaded as ONE
+    file and cannot import a sibling (no relative imports anywhere in this
+    repo). ``efficientdet_d0._norm`` and ``rtmdet_s``/``yolox_s._norm_groups``
+    are the same helper for the same reason.
+    """
+    groups = max(g for g in range(1, 33) if channels % g == 0)
+    return nn.GroupNorm(groups, channels)
+
 
 #: Candidates drawn per pyramid level, per ground-truth box. 9 is the paper's
 #: value and its ablation shows the result is flat between roughly 7 and 17, so
@@ -236,9 +265,15 @@ def MyModel(num_classes=output_classes):
     num_classes = num_classes + 1  # 1 for background
 
     # weights=None: architecture only, no download (the #199 egress lockdown
-    # blocks download.pytorch.org). FrozenBatchNorm2d and trainable_layers=3
-    # match the retinanet template, so this differs from it in assignment only.
-    backbone = resnet50(weights=None, norm_layer=misc_nn_ops.FrozenBatchNorm2d)
+    # blocks download.pytorch.org). GroupNorm (backend#3093) and
+    # trainable_layers=3 match the rest of this family. GroupNorm, not
+    # FrozenBatchNorm2d: frozen BN answers the federated-averaging problem --
+    # BN running statistics average badly across non-IID clients -- but on a
+    # weights=None build its weight=1 / bias=0 / running_mean=0 /
+    # running_var=1 buffers make it a bit-exact identity, so this backbone
+    # trained with no normalisation at all. GroupNorm normalises per sample:
+    # correct with no checkpoint, and no running statistics to average.
+    backbone = resnet50(weights=None, norm_layer=_group_norm)
     backbone = _resnet_fpn_extractor(
         backbone,
         trainable_layers=3,

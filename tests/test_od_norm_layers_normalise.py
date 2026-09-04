@@ -15,8 +15,8 @@ layer degenerates to a no-op.
 
 Every template in this repo builds ``weights=None`` (the hub is a closed door,
 RFC-0003 D6), and no OD seed is staged yet — backend#3055 is blocked on the
-store decision in backend#2659. So on the platform today, twelve shipped OD
-templates train with **no backbone normalisation at all**. Not weak
+store decision in backend#2659. So until model-zoo#259, twelve shipped OD
+templates trained with **no backbone normalisation at all**. Not weak
 normalisation: none. Measured downstream, activations reach sigma ~= 24 at the
 ROI head against ~= 3 with a live BatchNorm, and the loss stays finite and
 decreasing throughout — the recurring shape of defects in this area.
@@ -28,15 +28,28 @@ average badly across non-IID clients) and the wrong answer from scratch, and
 the two halves of that sentence are not equivalent. That file is corrected in
 the same commit as this one.
 
-What this file does NOT do
---------------------------
-It does not choose a replacement norm. That is a decision, not a sweep:
-GroupNorm is correct in both regimes and adds no averaged buffers, but it
-changes the state_dict key set of twelve templates that exist specifically to
-reproduce the torchvision checkpoint architecture for ``strict=True`` seed
-loading. Recorded on backend#3093; the twelve are pinned here as known-bad in
-the meantime, so a *new* template cannot acquire the defect and the twelve stop
-being folklore.
+The twelve are fixed, and this file is now a pure invariant
+----------------------------------------------------------
+When this file landed it deferred the norm DECISION and pinned the twelve as
+known-bad, because GroupNorm changes the state_dict key set of templates that
+exist to reproduce the torchvision checkpoint architecture for ``strict=True``
+seed loading. model-zoo#259 took that decision: all twelve moved to GroupNorm,
+``NON_NORMALISING`` is empty and ``MAX_NON_NORMALISING`` is 0.
+
+What the decision cost is recorded in each template's own docstring rather than
+here: a torchvision COCO checkpoint's BN running statistics have nowhere to go
+in a GroupNorm tree, so the three templates that DECLARE a seed
+(``faster_rcnn_resnet``, ``fcos``, ``retinanet``) can no longer be seeded from
+``download.pytorch.org`` weights, and the two mobilenet templates lose the
+key-exactness they were assembled by hand to preserve. No OD seed is hosted
+(backend#2659), so nothing in service broke; the declaration versus the
+regenerable dump is backend#3055's to settle.
+
+With the list empty, every template goes through the single strong branch of
+``test_norm_layers_normalise_a_from_scratch_build``: every norm module must
+normalise. The list and its ratchet are KEPT rather than deleted so that the
+cheapest way to green a newly-broken template is still not "add a row" — see
+``test_the_non_normalising_list_only_ever_shrinks``.
 
 Why the obvious guards do not work
 ----------------------------------
@@ -133,45 +146,19 @@ _MAX_LEAK = 0.01
 #: modules)`` so a PARTIAL fix — some layers swapped, some not — is as loud as
 #: no fix.
 #:
+#: EMPTY as of model-zoo#259: the twelve FrozenBatchNorm2d entries were the
+#: defect, and all twelve now build GroupNorm. Every template therefore takes
+#: the strong branch below — "every norm module must normalise" — and this dict
+#: exists only so that adding a row is still the thing the ratchet refuses.
+#:
 #: ⚠️ Asserted in BOTH directions: a listed template that has been fixed fails
 #: too, with an instruction to delete its row. A list that quietly tolerates a
 #: fixed entry decays into folklore nobody can audit.
 #:
 #: Do not add a row to silence a new template. A new non-normalising norm is a
-#: bug in that template — the whole point of this file is that twelve templates
-#: share one wrong default, and a thirteenth would be the same defect, not a
-#: new one.
-NON_NORMALISING = {
-    "atss_resnet": ("FrozenBatchNorm2d", 53),
-    "cascade_rcnn": ("FrozenBatchNorm2d", 53),
-    "centernet_resnet": ("FrozenBatchNorm2d", 53),
-    "faster_rcnn_mobilenet": ("FrozenBatchNorm2d", 46),
-    "faster_rcnn_mobilenet_320": ("FrozenBatchNorm2d", 46),
-    "faster_rcnn_resnet": ("FrozenBatchNorm2d", 53),
-    "fcos": ("FrozenBatchNorm2d", 53),
-    "gfl_resnet": ("FrozenBatchNorm2d", 53),
-    "retinanet": ("FrozenBatchNorm2d", 53),
-    # The twelfth. `sparse_rcnn` (model-zoo#246) merged to develop between
-    # this guard's CI run and its own merge, so neither PR's checks ever saw
-    # the other: green on both branches, red on develop. The base-stale merge
-    # race, not a new defect.
-    #
-    # It is listed rather than fixed, and the ratchet's own message says a new
-    # identity norm is "that template's bug", so that needs an argument.
-    # `sparse_rcnn` is not a template acquiring the defect AFTER this guard
-    # landed; it is a twelfth instance of the same pre-existing one, authored
-    # against the same `resnet50(weights=None,
-    # norm_layer=misc_nn_ops.FrozenBatchNorm2d)` line as the other eleven and
-    # merged in the same window. Fixing it means taking the norm decision on
-    # backend#3093 — deferred precisely because GroupNorm forfeits COCO
-    # seeding for this whole family (model-zoo#233 / backend#3055) — and doing
-    # that for one template while eleven siblings wait would split the roster
-    # for no benefit. Its head towers already use GroupNorm; it is the ResNet
-    # trunk that is the no-op, exactly as for the other eleven.
-    "sparse_rcnn": ("FrozenBatchNorm2d", 53),
-    "tood_resnet": ("FrozenBatchNorm2d", 53),
-    "vfnet_resnet": ("FrozenBatchNorm2d", 53),
-}
+#: bug in that template — twelve templates once shared one wrong default, and a
+#: thirteenth would be the same defect, not a new one.
+NON_NORMALISING: dict[str, tuple[str, int]] = {}
 
 #: The list is a RATCHET pinned by EQUALITY, not by an upper bound — the same
 #: shape (and the same reasoning) as ``MAX_KNOWN_MISMATCHES`` in
@@ -179,7 +166,8 @@ NON_NORMALISING = {
 #: blocks growth above the high-water mark but not RE-GROWTH after a fix. Fix
 #: one template, delete its row, and a ``<=`` cap leaves a free slot a later
 #: commit can refill with a brand-new non-normalising norm and stay green.
-MAX_NON_NORMALISING = 12
+#: At 0 it is the floor: any row at all is a regression.
+MAX_NON_NORMALISING = 0
 
 #: Templates that carry NO norm module at all, with the reason. Not an
 #: exemption from the rule above — a *different* question, recorded so a zero
@@ -432,8 +420,8 @@ def test_norm_layers_normalise_a_from_scratch_build(path):
         f"{stem} is recorded in NON_NORMALISING as {known[1]} x {known[0]}, "
         f"but this build has {len(leaky)} non-normalising module(s) of "
         f"class(es) {found_classes or ['none']} out of {probed} probed.\n"
-        f"  - FIXED (none left)? Delete its row from NON_NORMALISING, lower "
-        f"MAX_NON_NORMALISING to {MAX_NON_NORMALISING - 1}, and update the "
+        f"  - FIXED (none left)? Delete its row from NON_NORMALISING, set "
+        f"MAX_NON_NORMALISING to {len(NON_NORMALISING) - 1}, and update the "
         f"equality pin in test_the_non_normalising_list_only_ever_shrinks — "
         f"all in this commit. The guard then holds it correct forever.\n"
         f"  - PARTIALLY fixed? Some layers were swapped and some were not; the "
@@ -460,19 +448,18 @@ def test_the_non_normalising_list_only_ever_shrinks():
         f"({sorted(NON_NORMALISING)}) against a pinned {MAX_NON_NORMALISING}.\n"
         f"  - GREW? A norm that does not normalise in a new template is that "
         f"template's bug. Pick one that works from scratch instead of listing "
-        f"it.\n"
-        f"  - SHRANK? Good: backend#3093 fixed one. Lower MAX_NON_NORMALISING "
-        f"to {len(NON_NORMALISING)} and update the equality pin below in this "
-        f"same commit.\n"
+        f"it — GroupNorm is what the twelve original entries were fixed to.\n"
+        f"  - SHRANK? It cannot: 0 is the floor.\n"
         f"Asserted by EQUALITY, not `<=`: an upper bound would let a fix free "
         f"a slot a later commit could quietly refill."
     )
-    assert MAX_NON_NORMALISING == 12, (
-        f"MAX_NON_NORMALISING is {MAX_NON_NORMALISING}, not the 12 recorded. "
-        f"Raising it defeats the ratchet, and it has been raised exactly once "
-        f"— 11 to 12 for `sparse_rcnn`, with the argument on its row. "
-        f"Lowering it is correct once backend#3093 fixes a template, and "
-        f"belongs in the same commit that lowers it."
+    assert MAX_NON_NORMALISING == 0, (
+        f"MAX_NON_NORMALISING is {MAX_NON_NORMALISING}, not the 0 recorded. "
+        f"backend#3093 is fixed (model-zoo#259) and 0 is the floor: there is "
+        f"no longer a known-bad template for a row to describe, so ANY row is "
+        f"a regression and raising this to accommodate one defeats the "
+        f"ratchet. It went 11 -> 12 once, for `sparse_rcnn`'s merge race, and "
+        f"then 12 -> 0 when the twelve moved to GroupNorm."
     )
 
 
@@ -480,12 +467,14 @@ def test_the_probe_discriminates_between_the_norm_kinds():
     """Control: the probe must answer differently for the norm kinds on the
     roster, and the measured margin either side of ``_MAX_LEAK`` must hold.
 
-    This is the assertion that stops the whole file from being vacuous. If
-    ``_leak`` regressed to "everything normalises", every unlisted template
-    above would still pass and only the twelve recorded rows would notice; if
-    it regressed the other way, the failure would read like a template bug.
-    Both directions are pinned here on hand-built layers, with no template
-    involved.
+    This is the assertion that stops the whole file from being vacuous, and it
+    became the ONLY such assertion when ``NON_NORMALISING`` emptied
+    (model-zoo#259). While twelve rows were recorded, a ``_leak`` that
+    regressed to "everything normalises" would at least have reddened those
+    twelve; with no rows left, nothing on the roster would notice — every
+    template would pass by checking nothing. So the discrimination is pinned
+    here, on hand-built layers with no template involved, in both directions:
+    the layers that must be flagged, and the layers that must not.
 
     ``FrozenBatchNorm2d`` is checked at three ``eps`` values on purpose.
     ``eps=1e-3`` is the case a plain ``torch.allclose(x, layer(x))`` identity
@@ -570,11 +559,12 @@ def test_identical_probe_constants_would_disable_the_rule():
 
     With ``a == b`` the probe compares a layer's output against itself: every
     layer on the roster, normalising or not, returns the same thing for the
-    same input, so the leak is 0 everywhere, all twenty-four templates look
-    clean, and the twelve recorded rows become indistinguishable from the
-    eleven genuinely clean ones (plus the one that is norm-free by design).
-    Demonstrated on the worst case — the layer this file exists to catch —
-    rather than asserted in a comment.
+    same input, so the leak is 0 everywhere and every template on the roster
+    looks clean. That was already the degeneracy while twelve templates were
+    recorded as known-bad; now that ``NON_NORMALISING`` is empty it is the
+    whole file, because there is no row left whose recorded finding would
+    disappear and fail. Demonstrated on the worst case — the layer this file
+    exists to catch — rather than asserted in a comment.
     """
     torch = pytest.importorskip("torch", reason="pytorch not installed in this CI job")
     pytest.importorskip("torchvision", reason="torchvision not installed in this CI job")
