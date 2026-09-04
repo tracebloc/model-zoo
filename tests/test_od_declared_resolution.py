@@ -308,13 +308,13 @@ PUBLISHED_RESOLUTION: dict[str, tuple[int, str, str]] = {
     # the dual-head one; do not "correct" it to the README's 7.2M, which is the
     # fused one2one-only deployed graph. The resolution is 640 in every variant.
     "yolov10_s": (MODERN_YOLO_RESOLUTION, MODERN_YOLO, "the NMS-free dual-assignment YOLOv10-S (model-zoo#258). YOLOv10 (Wang et al. 2024, NeurIPS, arXiv:2405.14458) results table gives Test Size 640 for every scale; the scale its published 8,128,272-parameter dual-head summary is quoted at"),
-    # the C3k2/C2PSA YOLO11-S (model-zoo#259). ⚠️ THE STEM HAS NO `v`: upstream
+    # the C3k2/C2PSA YOLO11-S (model-zoo#263). ⚠️ THE STEM HAS NO `v`: upstream
     # dropped it at this generation (`yolo11.yaml`, `yolo11s.pt`), so `yolov11_s`
     # is a name that has never existed and searching for it finds nothing.
     # Unlike `yolov10_s` above there is only ONE published figure worth quoting:
     # unfused 9,458,752 against fused 9,443,760, a 0.16% gap the docs table's
     # one-decimal "9.4M" cannot distinguish either way.
-    "yolo11_s": (MODERN_YOLO_RESOLUTION, MODERN_YOLO, "the C3k2/C2PSA YOLO11-S (model-zoo#259), NMS-based unlike its yolov10_s neighbour. Ultralytics YOLO11 (2024) cfg/models/11/yolo11.yaml quotes '9458752 parameters, 9458736 gradients, 21.7 GFLOPs' on one summary line per scale, and 21.7 GFLOPs is reproduced only at 640 — the resolution is recovered from the same line as the parameter count rather than asserted alongside it"),
+    "yolo11_s": (MODERN_YOLO_RESOLUTION, MODERN_YOLO, "the C3k2/C2PSA YOLO11-S (model-zoo#263), NMS-based unlike its yolov10_s neighbour. Ultralytics YOLO11 (2024) cfg/models/11/yolo11.yaml quotes '9458752 parameters, 9458736 gradients, 21.7 GFLOPs' on one summary line per scale, and 21.7 GFLOPs is reproduced only at 640 — the resolution is recovered from the same line as the parameter count rather than asserted alongside it"),
     # RTMDet is NOT a YOLO — CSPNeXt backbone, mmdetection lineage — so it does
     # not join the family anchor above even though its resolution matches.
     # Membership is the thing being asserted, not the number.
