@@ -38,6 +38,7 @@ time (the verifier imports torch lazily, inside functions).
 from __future__ import annotations
 
 import importlib.util
+import os
 import re
 import shutil
 import subprocess
@@ -499,12 +500,24 @@ def _stage_repo(tmp_path: Path) -> Path:
 def _run_guard_step(root: Path) -> subprocess.CompletedProcess:
     script = root / "guard_step.sh"
     script.write_text(_guard_step_shell())
+    # `python3` in the workflow must be THIS interpreter, not whatever the
+    # ambient PATH offers — the shim idiom tests/test_dump_fetch_guard.py uses.
+    # PREPENDED to the real PATH rather than replacing it: the step's shell also
+    # needs `bash` itself, and hard-coding a minimal PATH assumes where that
+    # lives.
+    shim_dir = root / "_bin"
+    shim_dir.mkdir(exist_ok=True)
+    shim = shim_dir / "python3"
+    shim.write_text(f'#!/bin/sh\nexec "{sys.executable}" "$@"\n')
+    shim.chmod(0o755)
+    env = dict(os.environ)
+    env["PATH"] = f"{shim_dir}{os.pathsep}{env.get('PATH', '')}"
     return subprocess.run(
         ["bash", str(script)],
         cwd=str(root),
         capture_output=True,
         text=True,
-        env={"PATH": f"{Path(sys.executable).parent}:/usr/bin:/bin", "HOME": str(root)},
+        env=env,
     )
 
 
