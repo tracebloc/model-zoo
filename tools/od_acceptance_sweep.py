@@ -771,6 +771,10 @@ def run_experiment(
     """
     record: Dict[str, Any] = {"seed": seed, "steps_requested": steps}
     started = time.perf_counter()
+    # DECLARED OUTSIDE THE TRY so the handler can always read it. It used to be
+    # initialised after `build_template`, so an exception before that point left
+    # the `except` referring to an unbound name.
+    findings: List[str] = []
     try:
         torch.manual_seed(seed)
         _, model = build_template(path, num_classes, prefix="od_sweep")
@@ -782,7 +786,6 @@ def run_experiment(
 
         optimizer = make_optimizer(torch, model)
         model.train()
-        findings: List[str] = []
         history: List[float] = []
         for step in range(steps):
             optimizer.zero_grad(set_to_none=True)
@@ -808,6 +811,25 @@ def run_experiment(
                 round(history[-1] / history[0], 4) if history[0] else None
             )
 
+        # A STEP-LEVEL FINDING STOPS THE FOLLOW-UP MEASUREMENTS.
+        # `train_step_findings` already recorded the designed cause (a non-dict,
+        # empty, or non-scalar loss) and broke the loop. Running gradient
+        # reachability and inference on that same bad value raises, and the
+        # handler below then reported a `TypeError` in place of the precise
+        # cause -- a worse diagnosis than the one already in hand, on a tool
+        # whose entire purpose is an honest per-template cause. Found by Cursor
+        # Bugbot on model-zoo#261. The skipped fields are absent rather than
+        # zero: they were not measured, and 0 would read as "measured, none".
+        if findings:
+            record["findings"] = findings
+            record["divergence"] = divergence_findings(
+                record.get("loss_first"), record.get("loss_last"),
+                record["steps_run"],
+            )
+            record["status"] = classify_status(findings, record["divergence"])
+            record["wall_s"] = round(time.perf_counter() - started, 2)
+            return record
+
         n_trainable, no_grad, zero_grad = measure_gradient_reachability(
             torch, model, optimizer, images, targets
         )
@@ -831,7 +853,10 @@ def run_experiment(
         )
         record["status"] = classify_status(findings, record["divergence"])
     except Exception as error:  # noqa: BLE001 -- the failure IS the deliverable
-        record["findings"] = [f"{type(error).__name__}: {error}"]
+        # EXTEND, DO NOT REPLACE. Overwriting discarded every finding already
+        # collected, so a designed step-level cause was lost in favour of the
+        # exception it went on to provoke.
+        record["findings"] = findings + [f"{type(error).__name__}: {error}"]
         record["divergence"] = []
         record["status"] = STATUS_FAIL
     record["wall_s"] = round(time.perf_counter() - started, 2)

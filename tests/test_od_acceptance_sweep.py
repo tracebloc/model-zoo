@@ -886,3 +886,199 @@ def test_an_all_slow_selection_refuses_rather_than_reporting_zero_rows() -> None
     message = str(caught.value)
     assert "selection is empty" in message, message
     assert "SLOW_TEMPLATES" in message, message
+
+
+# ---------------------------------------------------------------------------
+# A designed cause must survive its own consequences (Cursor Bugbot, #261)
+# ---------------------------------------------------------------------------
+#
+# `run_experiment` was not unit-tested at all -- it needs torch and a real
+# template, which is why the sweep is a tool rather than a test. That is also
+# why the bug below survived: the one function whose whole job is "report the
+# failure with its cause" had no test asserting which cause it reports.
+#
+# The defect: `train_step_findings` recorded a designed cause (non-dict, empty,
+# or non-scalar loss) and broke the loop, then `measure_gradient_reachability`
+# raised on that same bad value, and the handler REPLACED findings with
+# `TypeError: ...`. The precise cause was lost in favour of the exception it
+# provoked.
+#
+# Faked at the seams `run_experiment` already takes as arguments or module
+# globals, so this stays CI-fast and needs no torch.
+
+
+class _FakeTorch:
+    """The torch entry points `run_experiment` reaches."""
+
+    @staticmethod
+    def manual_seed(_seed):
+        return None
+
+    @staticmethod
+    def is_tensor(_obj):
+        return False
+
+    @staticmethod
+    def no_grad():
+        """`with torch.no_grad():` around the inference call."""
+        import contextlib
+
+        return contextlib.nullcontext()
+
+
+def _stub_run_experiment_seams(monkeypatch, model):
+    """Point the module's build/batch/optimizer seams at trivial fakes."""
+    monkeypatch.setattr(sweep_mod, "build_template", lambda *a, **k: (None, model))
+    monkeypatch.setattr(sweep_mod, "make_batch", lambda *a, **k: ([object()], [{}]))
+    monkeypatch.setattr(sweep_mod, "observed_input_shape", lambda *a, **k: "1x3x8x8")
+    monkeypatch.setattr(
+        sweep_mod,
+        "make_optimizer",
+        lambda *a, **k: type(
+            "Opt",
+            (),
+            {
+                "zero_grad": lambda self, **k: None,
+                # `step` too: without it the loop raises AttributeError and
+                # every assertion downstream holds for the wrong reason.
+                "step": lambda self: None,
+            },
+        )(),
+    )
+
+
+def test_a_malformed_loss_reports_its_own_cause_not_a_typeerror(monkeypatch) -> None:
+    """The designed step-level cause must reach the record."""
+
+    class BadLossModel:
+        def __call__(self, *_a, **_k):
+            return "not a loss dict"
+
+        def train(self):
+            return None
+
+        def parameters(self):
+            # WITHOUT THIS the record's `params_m` line raises AttributeError
+            # before the loop, the handler catches it, and the assertions below
+            # hold for the wrong reason. My first version of this test omitted
+            # it and SURVIVED both mutations it was written to catch -- a
+            # vacuous test of the very code path that reports causes honestly.
+            return []
+
+    _stub_run_experiment_seams(monkeypatch, BadLossModel())
+
+    # If the follow-up measurements still ran, this would raise and the handler
+    # would overwrite the finding -- so a fake that EXPLODES if reached.
+    def _must_not_be_reached(*_a, **_k):
+        raise TypeError("measure_gradient_reachability was reached anyway")
+
+    monkeypatch.setattr(sweep_mod, "measure_gradient_reachability", _must_not_be_reached)
+
+    record = sweep_mod.run_experiment(
+        _FakeTorch(), pathlib.Path("fake_template.py"),
+        steps=2, num_classes=2, seed=0, image_size=8,
+    )
+
+    assert record["status"] == sweep_mod.STATUS_FAIL, record
+    joined = " ".join(record["findings"])
+    # POSITIVE assertion first: the exact designed cause, not merely "not an
+    # exception name". `train_step_findings` yields
+    # "step 0: train mode returned str, not a dict".
+    assert "returned str, not a dict" in joined, (
+        f"the designed cause is missing: {record['findings']}"
+    )
+    assert "TypeError" not in joined, (
+        f"the exception masked the designed cause: {record['findings']}"
+    )
+
+
+def test_an_early_exception_keeps_findings_and_appends_itself(monkeypatch) -> None:
+    """The handler must EXTEND, and must not trip over an unbound name.
+
+    `findings` used to be initialised after `build_template`, so an exception
+    raised before that point left the handler referring to a name that did not
+    exist -- a NameError reported in place of the real failure.
+    """
+    def _explode(*_a, **_k):
+        raise RuntimeError("template does not import")
+
+    monkeypatch.setattr(sweep_mod, "build_template", _explode)
+
+    record = sweep_mod.run_experiment(
+        _FakeTorch(), pathlib.Path("fake_template.py"),
+        steps=1, num_classes=2, seed=0, image_size=8,
+    )
+    assert record["status"] == sweep_mod.STATUS_FAIL, record
+    joined = " ".join(record["findings"])
+    assert "RuntimeError" in joined and "does not import" in joined, record
+    assert "NameError" not in joined, f"handler tripped on its own scope: {record}"
+
+
+class _FakeLoss:
+    """Enough tensor surface for the train loop: `sum`, `detach`, `backward`."""
+
+    def __radd__(self, other):
+        return self
+
+    def __add__(self, other):
+        return self
+
+    def detach(self):
+        return 1.0
+
+    def backward(self):
+        return None
+
+
+def test_findings_survive_an_exception_raised_after_they_were_collected(
+    monkeypatch,
+) -> None:
+    """The handler must EXTEND findings, not replace them.
+
+    The path the malformed-loss test cannot reach: the train loop completes
+    cleanly, `gradient_findings` records a real finding, and inference THEN
+    raises. Overwriting at that point discards a measured gradient-reachability
+    result in favour of the inference exception -- both are true and only one
+    survived.
+    """
+
+    class Model:
+        def __call__(self, *_a, **_k):
+            if self._eval:
+                raise RuntimeError("inference exploded")
+            return {"loss_box": _FakeLoss()}
+
+        _eval = False
+
+        def train(self):
+            self._eval = False
+
+        def eval(self):
+            self._eval = True
+
+        def parameters(self):
+            return []
+
+    _stub_run_experiment_seams(monkeypatch, Model())
+    # A clean loop, then a real gradient finding, then inference raises.
+    monkeypatch.setattr(sweep_mod, "train_step_findings", lambda *a, **k: [])
+    monkeypatch.setattr(
+        sweep_mod,
+        "measure_gradient_reachability",
+        lambda *a, **k: (7, ["backbone.body.layer1.0.weight"], []),
+    )
+
+    record = sweep_mod.run_experiment(
+        _FakeTorch(), pathlib.Path("fake_template.py"),
+        steps=1, num_classes=2, seed=0, image_size=8,
+    )
+
+    joined = " ".join(record["findings"])
+    # BOTH must be present. Either alone is an incomplete report.
+    assert "backbone.body.layer1.0.weight" in joined, (
+        f"the gradient finding was discarded: {record['findings']}"
+    )
+    assert "inference exploded" in joined, (
+        f"the exception was not reported: {record['findings']}"
+    )
+    assert record["status"] == sweep_mod.STATUS_FAIL, record
