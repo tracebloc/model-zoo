@@ -484,7 +484,17 @@ def make_batch(torch, image_size: int, num_classes: int):
     return images, targets
 
 
-def observed_input_shape(model, images, targets) -> Optional[List[int]]:
+class _ShapeCaptured(Exception):
+    """Internal control flow: the transform has reported, abort the forward.
+
+    Not an error. Caught immediately by `observed_input_shape` and never seen by
+    a caller. Every OTHER exception still propagates exactly as before, so a
+    template that genuinely fails in `forward` is reported by `run_experiment`
+    rather than silently losing its shape.
+    """
+
+
+def observed_input_shape(torch, model, images, targets) -> Optional[List[int]]:
     """The POST-TRANSFORM batched tensor shape, or ``None`` if no transform.
 
     The resolution the network actually saw, which is not the declared
@@ -508,11 +518,34 @@ def observed_input_shape(model, images, targets) -> Optional[List[int]]:
             captured["shape"] = list(result[0].tensors.shape)
         except (AttributeError, IndexError, TypeError):
             pass
-        return result
+        # NOTHING AFTER THE TRANSFORM IS NEEDED, so nothing after it runs.
+        #
+        # This used to complete the whole forward just to read a shape the
+        # transform had already reported. Two costs, and @saqlainsyed007 flagged
+        # both on model-zoo#261:
+        #
+        #   * it built and discarded an autograd graph -- and for
+        #     `faster_rcnn_convnext_small` that is the ~44s/step forward, paid
+        #     once per experiment for nothing
+        #   * running in TRAIN mode, any real BatchNorm updated its running
+        #     statistics before `loss_first` was measured, perturbing the very
+        #     first number the report quotes
+        #
+        # The suggested `torch.no_grad()` fixes the first and NOT the second:
+        # BatchNorm updates running stats on `self.training`, independent of
+        # grad mode. Measured -- train+no_grad moved `running_mean` 0.0 ->
+        # 0.2298; only `eval()` held it. Aborting is strictly stronger than
+        # either, because the backbone never executes at all.
+        raise _ShapeCaptured
 
     transform.forward = _capture
     try:
-        model(images, targets)
+        # `no_grad` as well: the transform itself does real tensor work, and the
+        # shape does not depend on grad mode.
+        with torch.no_grad():
+            model(images, targets)
+    except _ShapeCaptured:
+        pass
     finally:
         transform.forward = original
     return captured.get("shape")
@@ -823,7 +856,9 @@ def run_experiment(
             sum(p.numel() for p in model.parameters()) / 1e6, 1
         )
         images, targets = make_batch(torch, image_size, num_classes)
-        record["observed_input_shape"] = observed_input_shape(model, images, targets)
+        record["observed_input_shape"] = observed_input_shape(
+            torch, model, images, targets
+        )
 
         optimizer = make_optimizer(torch, model)
         model.train()

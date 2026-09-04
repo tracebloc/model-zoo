@@ -533,11 +533,18 @@ def test_the_quality_cause_is_derived_from_the_payload_not_a_template_list() -> 
     assert sweep_mod._quality_cause([3, 0], seeded=False) == sweep_mod.CAUSE_RANDOM_SCORES
     assert sweep_mod._quality_cause([], seeded=False) == sweep_mod.CAUSE_EMPTY_PAYLOAD
     assert sweep_mod._quality_cause([0, 0], seeded=True) == sweep_mod.CAUSE_MEASURABLE
-    assert (
-        sweep_mod.CAUSE_EMPTY_PAYLOAD
-        != sweep_mod.CAUSE_RANDOM_SCORES
-        != sweep_mod.CAUSE_MEASURABLE
-    )
+    # SET CARDINALITY, not a chained `!=`. `A != B != C` is
+    # `(A != B) and (B != C)` -- it never compares A with C, so
+    # CAUSE_EMPTY_PAYLOAD and CAUSE_MEASURABLE could collide and every
+    # assertion above would still pass (each would return the collided value).
+    # Flagged by @saqlainsyed007 on model-zoo#261. Includes CAUSE_NOT_REACHED,
+    # which the chained form would have left out entirely.
+    assert len({
+        sweep_mod.CAUSE_EMPTY_PAYLOAD,
+        sweep_mod.CAUSE_RANDOM_SCORES,
+        sweep_mod.CAUSE_MEASURABLE,
+        sweep_mod.CAUSE_NOT_REACHED,
+    }) == 4
 
 
 def test_the_seeding_column_covers_the_roster_and_reports_nothing_seeded() -> None:
@@ -1181,3 +1188,88 @@ def test_sweep_takes_its_scalars_from_worst_run() -> None:
         "a positional run pick is back in sweep(); that is the defect Bugbot "
         "found on model-zoo#261"
     )
+
+
+# ---------------------------------------------------------------------------
+# The shape capture must not run the model (@saqlainsyed007, model-zoo#261)
+# ---------------------------------------------------------------------------
+
+
+class _NoGradTorch(_FakeTorch):
+    """`_FakeTorch` plus the `no_grad` context the shape capture now uses."""
+
+
+def test_the_shape_capture_aborts_before_the_backbone_runs() -> None:
+    """Nothing after the transform may execute.
+
+    Two costs when the whole forward completed just to read a shape the
+    transform had already reported: a discarded autograd graph (for
+    `faster_rcnn_convnext_small` that is the ~44s/step forward, once per
+    experiment, for nothing), and — running in TRAIN mode — any real BatchNorm
+    updating its running statistics before `loss_first` was measured.
+    """
+    reached = {"backbone": False}
+
+    class Transform:
+        def forward(self, imgs, tgts=None):
+            class Batched:
+                tensors = type("T", (), {"shape": (1, 3, 800, 1067)})()
+
+            return (Batched(), tgts)
+
+    class Model:
+        transform = Transform()
+
+        def __call__(self, imgs, tgts=None):
+            # Mirrors GeneralizedRCNN: the transform runs FIRST, the backbone
+            # after. The fake has to call its own transform or the capture never
+            # fires and this test proves nothing -- my first version did exactly
+            # that and reported `None`.
+            self.transform.forward(imgs, tgts)
+            reached["backbone"] = True
+            return {}
+
+    shape = sweep_mod.observed_input_shape(
+        _NoGradTorch(), Model(), [object()], [{}]
+    )
+
+    assert shape == [1, 3, 800, 1067], shape
+    assert not reached["backbone"], (
+        "the forward continued past the transform — the autograd graph and the "
+        "BatchNorm running-stat update are both back"
+    )
+
+
+def test_a_model_with_no_transform_reports_no_shape_rather_than_raising() -> None:
+    """The accepting direction: a transform-less template is not an error."""
+
+    class Bare:
+        def __call__(self, *_a, **_k):
+            return {}
+
+    assert sweep_mod.observed_input_shape(
+        _NoGradTorch(), Bare(), [object()], [{}]
+    ) is None
+
+
+def test_a_real_forward_failure_still_propagates_from_the_shape_capture() -> None:
+    """Only the internal abort is swallowed. Everything else must escape.
+
+    `run_experiment` reports a template that genuinely fails in `forward`; if
+    the capture swallowed that, the failure would be lost here and only
+    resurface at the train step, with a different cause attached.
+    """
+
+    class Transform:
+        def forward(self, imgs, tgts=None):
+            raise RuntimeError("the transform itself is broken")
+
+    class Model:
+        transform = Transform()
+
+        def __call__(self, imgs, tgts=None):
+            self.transform.forward(imgs, tgts)
+            return {}
+
+    with pytest.raises(RuntimeError, match="the transform itself is broken"):
+        sweep_mod.observed_input_shape(_NoGradTorch(), Model(), [object()], [{}])
