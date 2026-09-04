@@ -249,6 +249,13 @@ PUBLISHED_RESOLUTION: dict[str, tuple[int, str, str]] = {
     # 640x640, and 640 is also the scale `yolov9s.yaml`'s own 7318368-parameter
     # header is quoted at -- the anchor #255's count is verified against.
     "yolov9_s": (640, LITERAL, "YOLOv9 (Wang et al. 2024) sec. 4.1 trains at 640x640 on MS COCO; the yolov9s.yaml scale its published 7,318,368-parameter header is quoted at"),
+    # Same distinction as `yolov8_s`/`yolov9_s` above and worth repeating,
+    # because `yolox` reads like a yolo-family name and is not one: this is the
+    # multi-scale anchor-free YOLOX-S (model-zoo#237), which declares
+    # `torchvision_detection`, NOT a member of the engine's fixed-448 7x7-grid
+    # `yolo` contract. A row of 448 here would pin the wrong architecture.
+    "yolox_s": (640, LITERAL, "YOLOX (Ge et al. 2021) sec. 3 and the official Megvii README standard-models table: YOLOX-s is size 640, the scale its published 9.0M-parameter row is quoted at"),
+    "rtmdet_s": (640, LITERAL, "RTMDet (Lyu et al. 2022); mmdetection configs/rtmdet/README.md COCO table gives the RTMDet-s row as input size 640, 8.89M parameters, 44.6 box AP"),
 }
 
 #: The rows whose expectation is a hand-written literal rather than re-derived.
@@ -272,6 +279,8 @@ UNVERIFIABLE_LITERALS = frozenset(
         "sparse_rcnn",
         "yolov8_s",
         "yolov9_s",
+        "yolox_s",
+        "rtmdet_s",
     }
 )
 
@@ -820,14 +829,15 @@ def test_the_anchor_kinds_partition_the_roster():
         f"  - SHRANK? Good: a row became re-derivable. Update this set in the "
         f"same commit."
     )
-    assert len(UNVERIFIABLE_LITERALS) == 6, (
+    assert len(UNVERIFIABLE_LITERALS) == 8, (
         f"UNVERIFIABLE_LITERALS holds {len(UNVERIFIABLE_LITERALS)} rows, not "
-        f"the 6 recorded. Growing it weakens every claim in this file's "
+        f"the 8 recorded. Growing it weakens every claim in this file's "
         f"docstring about the table being independent, so each addition is a "
         f"deliberate edit here with a citation — which is what the pin is for.\n"
         f"\n"
         f"3 -> 4 `sparse_rcnn` (model-zoo#246), 4 -> 5 `yolov8_s` "
-        f"(model-zoo#253), 5 -> 6 `yolov9_s` (model-zoo#255). None has a "
+        f"(model-zoo#253), 5 -> 6 `yolov9_s` (model-zoo#255), 6 -> 8 "
+        f"`yolox_s` and `rtmdet_s` together (model-zoo#237). None has a "
         f"torchvision builder or a class default to "
         f"re-derive against — each builds its own transform from its own "
         f"image_size, exactly like cascade_rcnn — so the citation is the only "
@@ -835,13 +845,19 @@ def test_the_anchor_kinds_partition_the_roster():
         f"\n"
         f"NOTE for whoever hits this next: `yolov8_s` is 640 and is NOT the "
         f"same template as `yolo_v8`, which the engine's contract fixes at 448 "
-        f"in a v1-shaped 7x7 grid. Reusing 448 here would pin the wrong "
-        f"architecture and the guard would still be green.\n"
+        f"in a v1-shaped 7x7 grid. `yolox_s` is the same trap with a name that "
+        f"reads even more like the yolo family and is not in it. Reusing 448 "
+        f"for any of them would pin the wrong architecture and the guard would "
+        f"still be green.\n"
         f"\n"
-        f"This set grows once per hand-written template, so it will keep "
-        f"growing as backend#2982 lands tiers. If it passes ~8 the honest "
-        f"response is a derivation source for the hand-written family, not a "
-        f"longer list."
+        f"⚠️ THIS SET HAS NOW REACHED THE 8 THIS MESSAGE NAMED AS THE LIMIT. "
+        f"It grows once per hand-written template and backend#2982 has tiers "
+        f"left to land, so the next addition should come with a derivation "
+        f"source for the hand-written family rather than a ninth row — the "
+        f"mmdet/Ultralytics config READMEs these citations already point at "
+        f"are machine-readable, which is where that derivation would start. "
+        f"Raising this number again without that is the decay this pin exists "
+        f"to make visible (model-zoo#237)."
     )
     for stem in UNVERIFIABLE_LITERALS:
         citation = PUBLISHED_RESOLUTION[stem][2]
