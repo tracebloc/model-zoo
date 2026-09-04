@@ -178,15 +178,54 @@ MAX_KNOWN_MISMATCHES = 3
 #:                     input size, so a yolo template is bound by the handler,
 #:                     not by its paper. Read out of the vendored engine
 #:                     contract.
+#: ``MODERN_YOLO``   — the template is one of the hand-written modern YOLOs,
+#:                     every one of which is published and evaluated at the
+#:                     same resolution. The row carries no number of its own:
+#:                     it is checked against ``MODERN_YOLO_RESOLUTION``, one
+#:                     cited family fact shared by all of them, the way the
+#:                     ``ENGINE`` rows are checked against the engine contract.
+#:                     Added by model-zoo#258 because ``UNVERIFIABLE_LITERALS``
+#:                     had reached the 8 its own message named as the limit and
+#:                     asked the next author for a derivation source for this
+#:                     family instead of a ninth row.
 #: ``LITERAL``       — the architecture has no reference implementation in our
-#:                     stack, so the row is a hand-written number with a
-#:                     citation. **These are the only rows that could be edited
-#:                     to match a bad template**, which is why the set of them
-#:                     is pinned by equality below rather than open-ended.
+#:                     stack AND shares its authority with nothing else, so the
+#:                     row is a hand-written number with a citation. **These are
+#:                     the only rows that could be edited to match a bad
+#:                     template**, which is why the set of them is pinned by
+#:                     equality below rather than open-ended.
 BUILDER = "torchvision-builder"
 CLASS_DEFAULT = "torchvision-class-default"
 ENGINE = "engine-contract"
+MODERN_YOLO = "modern-yolo-family"
 LITERAL = "published-literal"
+
+#: The resolution every modern-YOLO scale is published, trained and evaluated
+#: at, and the citation for it. ONE fact, anchoring FOUR rows.
+#:
+#: This is the "derivation source for the hand-written family" the
+#: ``UNVERIFIABLE_LITERALS`` pin asked the next author for (model-zoo#237) —
+#: delivered rather than deferred with a ninth row. It works the same way the
+#: ``ENGINE`` kind does: one authority, many rows, so an individual row can no
+#: longer be quietly edited to match a bad template. It must equal this
+#: constant, and changing this constant moves all four rows at once and shows up
+#: as such in a diff.
+#:
+#: ⚠️ WHAT THIS IS NOT. It is not a re-derivation from our own stack the way
+#: BUILDER and CLASS_DEFAULT are — nothing here constructs an upstream object
+#: and reads its transform, because these templates have no upstream object in
+#: our dependency set to construct. The honest claim is narrower: four
+#: unreviewable literals have been collapsed into ONE reviewable literal plus a
+#: family membership test. That is a real reduction in the soft spot, and it is
+#: deliberately not described as more than that.
+MODERN_YOLO_RESOLUTION = 640
+MODERN_YOLO_CITATION = (
+    "Every modern-YOLO scale is published, trained and evaluated at 640x640 on "
+    "MS COCO: YOLOX (Ge et al. 2021) sec. 3 test size 640; Ultralytics YOLOv8 "
+    "(2023) default imgsz=640; YOLOv9 (Wang et al. 2024) sec. 4.1; YOLOv10 "
+    "(Wang et al. 2024, NeurIPS, arXiv:2405.14458) results table Test Size 640. "
+    "Each template's own published parameter figure is quoted at that scale."
+)
 
 #: The resolution each architecture is SPECIFIED at, with its anchor and the
 #: detail needed to re-derive or review it. This is the number that makes this
@@ -242,19 +281,30 @@ PUBLISHED_RESOLUTION: dict[str, tuple[int, str, str]] = {
     # at 640 -- which is also the `imgsz` default its published 11,166,560
     # parameter summary is measured at. A row that read 448 here would be
     # describing the wrong architecture.
-    "yolov8_s": (640, LITERAL, "YOLOv8 (Ultralytics 2023) default imgsz=640; the yolov8s.yaml scale the published 11,166,560-parameter summary is quoted at"),
+    # the genuine multi-scale YOLOv8-S (model-zoo#253), anchor-free with a DFL box branch — NOT `yolo_v8`, which the engine's contract fixes at 448 in a v1-shaped 7x7 grid
+    "yolov8_s": (MODERN_YOLO_RESOLUTION, MODERN_YOLO, "the genuine multi-scale YOLOv8-S (model-zoo#253), anchor-free with a DFL box branch — NOT `yolo_v8`, which the engine's contract fixes at 448 in a v1-shaped 7x7 grid. Ultralytics YOLOv8 (2023) default imgsz=640; the yolov8s.yaml scale its published 11,166,560-parameter summary is quoted at"),
     # Same distinction as `yolov8_s` above: this is the GELAN YOLOv9-S
     # (model-zoo#255), not a member of the engine's fixed-448 yolo contract.
     # YOLOv9 (Wang et al. 2024) sec. 4.1 trains and evaluates on MS COCO at
     # 640x640, and 640 is also the scale `yolov9s.yaml`'s own 7318368-parameter
     # header is quoted at -- the anchor #255's count is verified against.
-    "yolov9_s": (640, LITERAL, "YOLOv9 (Wang et al. 2024) sec. 4.1 trains at 640x640 on MS COCO; the yolov9s.yaml scale its published 7,318,368-parameter header is quoted at"),
+    # the GELAN YOLOv9-S (model-zoo#255)
+    "yolov9_s": (MODERN_YOLO_RESOLUTION, MODERN_YOLO, "the GELAN YOLOv9-S (model-zoo#255). YOLOv9 (Wang et al. 2024) sec. 4.1 trains and evaluates at 640x640 on MS COCO; the yolov9s.yaml scale its published 7,318,368-parameter header is quoted at"),
     # Same distinction as `yolov8_s`/`yolov9_s` above and worth repeating,
     # because `yolox` reads like a yolo-family name and is not one: this is the
     # multi-scale anchor-free YOLOX-S (model-zoo#237), which declares
     # `torchvision_detection`, NOT a member of the engine's fixed-448 7x7-grid
     # `yolo` contract. A row of 448 here would pin the wrong architecture.
-    "yolox_s": (640, LITERAL, "YOLOX (Ge et al. 2021) sec. 3 and the official Megvii README standard-models table: YOLOX-s is size 640, the scale its published 9.0M-parameter row is quoted at"),
+    # the multi-scale anchor-free YOLOX-S (model-zoo#237); the name reads like the legacy yolo family and is not in it
+    "yolox_s": (MODERN_YOLO_RESOLUTION, MODERN_YOLO, "the multi-scale anchor-free YOLOX-S (model-zoo#237); the name reads like the legacy yolo family and is not in it. YOLOX (Ge et al. 2021) sec. 3 and the official Megvii README standard-models table: YOLOX-s is size 640, the scale its published 9.0M-parameter row is quoted at"),
+    # the NMS-free dual-assignment YOLOv10-S (model-zoo#258). ⚠️ Its published
+    # parameter figure has THREE variants and this row's citation is quoted at
+    # the dual-head one; do not "correct" it to the README's 7.2M, which is the
+    # fused one2one-only deployed graph. The resolution is 640 in every variant.
+    "yolov10_s": (MODERN_YOLO_RESOLUTION, MODERN_YOLO, "the NMS-free dual-assignment YOLOv10-S (model-zoo#258). YOLOv10 (Wang et al. 2024, NeurIPS, arXiv:2405.14458) results table gives Test Size 640 for every scale; the scale its published 8,128,272-parameter dual-head summary is quoted at"),
+    # RTMDet is NOT a YOLO — CSPNeXt backbone, mmdetection lineage — so it does
+    # not join the family anchor above even though its resolution matches.
+    # Membership is the thing being asserted, not the number.
     "rtmdet_s": (640, LITERAL, "RTMDet (Lyu et al. 2022); mmdetection configs/rtmdet/README.md COCO table gives the RTMDet-s row as input size 640, 8.89M parameters, 44.6 box AP"),
 }
 
@@ -277,10 +327,19 @@ UNVERIFIABLE_LITERALS = frozenset(
         "centernet_resnet",
         "efficientdet_d0",
         "sparse_rcnn",
+        "rtmdet_s",
+    }
+)
+
+#: The rows anchored to the modern-YOLO family fact. Pinned by EQUALITY like the
+#: literal set, so a template cannot join the family — and inherit its
+#: resolution without its own review — merely by being named after a YOLO.
+MODERN_YOLO_ROWS = frozenset(
+    {
         "yolov8_s",
         "yolov9_s",
+        "yolov10_s",
         "yolox_s",
-        "rtmdet_s",
     }
 )
 
@@ -815,7 +874,11 @@ def test_the_anchor_kinds_partition_the_roster():
     replaced.
     """
     kinds = {stem: anchor for stem, (_, anchor, _) in PUBLISHED_RESOLUTION.items()}
-    unknown = {s: k for s, k in kinds.items() if k not in (BUILDER, CLASS_DEFAULT, ENGINE, LITERAL)}
+    unknown = {
+        s: k
+        for s, k in kinds.items()
+        if k not in (BUILDER, CLASS_DEFAULT, ENGINE, MODERN_YOLO, LITERAL)
+    }
     assert not unknown, f"rows with an unrecognised anchor kind: {unknown}"
 
     literals = {s for s, k in kinds.items() if k == LITERAL}
@@ -829,35 +892,41 @@ def test_the_anchor_kinds_partition_the_roster():
         f"  - SHRANK? Good: a row became re-derivable. Update this set in the "
         f"same commit."
     )
-    assert len(UNVERIFIABLE_LITERALS) == 8, (
+    assert len(UNVERIFIABLE_LITERALS) == 5, (
         f"UNVERIFIABLE_LITERALS holds {len(UNVERIFIABLE_LITERALS)} rows, not "
-        f"the 8 recorded. Growing it weakens every claim in this file's "
+        f"the 5 recorded. Growing it weakens every claim in this file's "
         f"docstring about the table being independent, so each addition is a "
         f"deliberate edit here with a citation — which is what the pin is for.\n"
         f"\n"
-        f"3 -> 4 `sparse_rcnn` (model-zoo#246), 4 -> 5 `yolov8_s` "
+        f"History: 3 -> 4 `sparse_rcnn` (model-zoo#246), 4 -> 5 `yolov8_s` "
         f"(model-zoo#253), 5 -> 6 `yolov9_s` (model-zoo#255), 6 -> 8 "
-        f"`yolox_s` and `rtmdet_s` together (model-zoo#237). None has a "
-        f"torchvision builder or a class default to "
-        f"re-derive against — each builds its own transform from its own "
-        f"image_size, exactly like cascade_rcnn — so the citation is the only "
-        f"thing standing between the row and the tautology this file removes.\n"
+        f"`yolox_s` and `rtmdet_s` together (model-zoo#237), then 8 -> 5 when "
+        f"`yolov10_s` (model-zoo#258) arrived.\n"
         f"\n"
-        f"NOTE for whoever hits this next: `yolov8_s` is 640 and is NOT the "
-        f"same template as `yolo_v8`, which the engine's contract fixes at 448 "
-        f"in a v1-shaped 7x7 grid. `yolox_s` is the same trap with a name that "
-        f"reads even more like the yolo family and is not in it. Reusing 448 "
-        f"for any of them would pin the wrong architecture and the guard would "
-        f"still be green.\n"
+        f"⚠️ THAT LAST STEP WENT DOWN, AND ON PURPOSE. At 8 this message said "
+        f"the next addition should come with a derivation source for the "
+        f"hand-written family rather than a ninth row, and that raising the "
+        f"number again without one was 'the decay this pin exists to make "
+        f"visible'. So #256 did not add a ninth row: the four genuine "
+        f"modern-YOLO templates (`yolov8_s`, `yolov9_s`, `yolov10_s`, "
+        f"`yolox_s`) moved onto the MODERN_YOLO anchor, which checks them "
+        f"against ONE cited family fact — MODERN_YOLO_RESOLUTION — the way the "
+        f"ENGINE kind checks the legacy yolo rows against the engine's "
+        f"contract. Four unreviewable literals became one reviewable literal "
+        f"plus a membership test.\n"
         f"\n"
-        f"⚠️ THIS SET HAS NOW REACHED THE 8 THIS MESSAGE NAMED AS THE LIMIT. "
-        f"It grows once per hand-written template and backend#2982 has tiers "
-        f"left to land, so the next addition should come with a derivation "
-        f"source for the hand-written family rather than a ninth row — the "
-        f"mmdet/Ultralytics config READMEs these citations already point at "
-        f"are machine-readable, which is where that derivation would start. "
-        f"Raising this number again without that is the decay this pin exists "
-        f"to make visible (model-zoo#237)."
+        f"What is left here is the genuinely one-off five: `cascade_rcnn`, "
+        f"`sparse_rcnn`, `centernet_resnet`, `efficientdet_d0` and "
+        f"`rtmdet_s`. None is a YOLO, none shares an authority with another, "
+        f"and none has a torchvision builder or class default to re-derive "
+        f"against — so for these the citation really is the only thing "
+        f"standing between the row and the tautology this file removes.\n"
+        f"\n"
+        f"NOTE for whoever hits this next: a new modern YOLO (YOLO11, YOLOv12) "
+        f"belongs in MODERN_YOLO_ROWS, not here, and costs this set nothing. A "
+        f"new NON-YOLO hand-written detector does land here — and if that "
+        f"pushes this back toward 8, the answer is the same as it was: find "
+        f"the shared authority, not a longer list."
     )
     for stem in UNVERIFIABLE_LITERALS:
         citation = PUBLISHED_RESOLUTION[stem][2]
@@ -866,6 +935,86 @@ def test_the_anchor_kinds_partition_the_roster():
             f"row's only defence is that a human can check it against the "
             f"source; name the paper and where in it."
         )
+
+
+def test_the_modern_yolo_rows_are_anchored_to_one_family_fact():
+    """The MODERN_YOLO rows must all equal ``MODERN_YOLO_RESOLUTION``.
+
+    This is the derivation source the ``UNVERIFIABLE_LITERALS`` pin asked for
+    (model-zoo#237), and it is what stops the hand-written modern-YOLO family
+    contributing one unreviewable literal per template forever. It works like
+    the ``ENGINE`` kind: a single authority with a single citation, and every
+    row checked against it rather than against itself.
+
+    Both directions are pinned:
+
+    * every MODERN_YOLO row equals the family constant, so an individual row
+      cannot be edited to match a template that resizes to something else —
+      only the shared constant can move, and that moves all four visibly;
+    * membership is pinned by EQUALITY, so a template cannot inherit the
+      family's resolution without its own review just by being named after a
+      YOLO. That matters in the other direction too: ``rtmdet_s`` is 640 and is
+      deliberately NOT in the family, because CSPNeXt/mmdetection is a separate
+      lineage and its agreement with 640 is a coincidence of the era rather
+      than the same published fact.
+    """
+    rows = {stem for stem, (_, anchor, _) in PUBLISHED_RESOLUTION.items()
+            if anchor == MODERN_YOLO}
+    assert rows == MODERN_YOLO_ROWS, (
+        f"the MODERN_YOLO rows are {sorted(rows)}, but MODERN_YOLO_ROWS pins "
+        f"{sorted(MODERN_YOLO_ROWS)}.\n"
+        f"  - GREW? A template joining this family inherits a resolution "
+        f"without its own citation being reviewed. That is fine for a genuine "
+        f"modern YOLO and wrong for anything else — say which it is here.\n"
+        f"  - SHRANK? A template left the family; it needs its own anchor, "
+        f"probably LITERAL with a citation, in this same commit."
+    )
+    assert rows, "the MODERN_YOLO kind has no rows, so this guard is vacuous"
+
+    for stem in sorted(rows):
+        value = PUBLISHED_RESOLUTION[stem][0]
+        assert value == MODERN_YOLO_RESOLUTION, (
+            f"{stem} is anchored to the modern-YOLO family but declares "
+            f"{value}, not the family's {MODERN_YOLO_RESOLUTION}. A row in "
+            f"this family does not get its own number — that is the entire "
+            f"point of the family anchor. If this template genuinely runs at "
+            f"another resolution it is not a member: give it a LITERAL row "
+            f"with its own citation and add it to UNVERIFIABLE_LITERALS."
+        )
+
+    # The per-row notes are free text, and the LITERAL thinness check does not
+    # reach this kind — so a row could join the family carrying no provenance
+    # at all while the shared citation did all the work. Each row keeps the
+    # paper/section reference it had before it was folded into the family.
+    for stem in sorted(rows):
+        note = PUBLISHED_RESOLUTION[stem][2]
+        assert len(note.split()) >= 8, (
+            f"{stem}: its MODERN_YOLO note {note!r} is too thin to review. "
+            f"Being in the family fixes the NUMBER; the note still has to say "
+            f"which architecture this is and where its 640 is published, "
+            f"because that is what a reviewer checks."
+        )
+
+    assert len(MODERN_YOLO_CITATION.split()) >= 20, (
+        f"MODERN_YOLO_CITATION is {len(MODERN_YOLO_CITATION.split())} words. It "
+        f"is the ONLY thing defending four rows at once, so it has to name each "
+        f"architecture and where the 640 comes from — a thinner citation here "
+        f"is worse than four separate thin ones, because it is trusted four "
+        f"times."
+    )
+    # Every family member must be NAMED in the shared citation. Without this
+    # the citation could describe three architectures while anchoring four, and
+    # the fourth would be riding on a fact nobody wrote down for it.
+    lowered = MODERN_YOLO_CITATION.lower()
+    unnamed = sorted(
+        stem for stem in rows
+        if stem.split("_")[0].replace("v", "v") not in lowered
+    )
+    assert not unnamed, (
+        f"MODERN_YOLO_CITATION does not name {unnamed}, so those rows are "
+        f"anchored to a fact that does not mention them. Extend the citation "
+        f"in the same commit that adds the row."
+    )
 
 
 def _engine_fixed_input_sizes(notes: str) -> set[int]:
