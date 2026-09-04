@@ -128,11 +128,7 @@ FAMILY = "torchvision_detection"
 #: ⚠️ Asserted in BOTH directions — fixing one of these fails this file until
 #: its row is deleted. Do not add a row to silence a new template; a new
 #: mismatch is a bug in that template, not a new known issue.
-KNOWN_MISMATCHES = {
-    "faster_rcnn_resnet": (448, 800),
-    "fcos": (448, 800),
-    "retinanet": (448, 800),
-}
+KNOWN_MISMATCHES: dict[str, tuple[int, int]] = {}
 
 #: The list is a RATCHET: it may only ever shrink, and its length is pinned by
 #: EQUALITY rather than by an upper bound.
@@ -157,7 +153,7 @@ KNOWN_MISMATCHES = {
 #: the `MAX_KNOWN_MISMATCHES == <n>` pin below keeps that a conscious,
 #: reviewable edit rather than a silent one. The legal edit is therefore
 #: *enforced* rather than merely documented.
-MAX_KNOWN_MISMATCHES = 3
+MAX_KNOWN_MISMATCHES = 0
 
 #: How each row of ``PUBLISHED_RESOLUTION`` is anchored — i.e. what would have
 #: to change for the row to legitimately change. Three of the four kinds are
@@ -658,11 +654,13 @@ def test_the_known_mismatch_list_only_ever_shrinks():
         f"would let a fix free a slot that a later commit could quietly refill "
         f"with a brand-new mismatch."
     )
-    assert MAX_KNOWN_MISMATCHES == 3, (
-        f"MAX_KNOWN_MISMATCHES is {MAX_KNOWN_MISMATCHES}, not the 3 recorded "
-        f"when this guard landed. Raising it defeats the ratchet; lowering it "
-        f"is correct once backend#3058 fixes a template, and this assertion "
-        f"should be updated in the same commit that lowers it."
+    assert MAX_KNOWN_MISMATCHES == 0, (
+        f"MAX_KNOWN_MISMATCHES is {MAX_KNOWN_MISMATCHES}, not the 0 this ratchet "
+        f"reached when backend#3058 fixed the last three templates "
+        f"(faster_rcnn_resnet, fcos, retinanet). It may only ever go DOWN, and "
+        f"it is already at the floor: there is no legal edit to this number "
+        f"left. A new declared/effective mismatch is a bug in the template that "
+        f"introduced it, not a row to add here."
     )
 
 
