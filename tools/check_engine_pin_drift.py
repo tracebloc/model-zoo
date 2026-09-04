@@ -1,14 +1,23 @@
 #!/usr/bin/env python3
-"""Assert tools/requirements-engine-pin.txt still equals the engine's live pin.
+"""Assert one mirror of the engine's pin still equals the engine's live pin.
 
 The engine (tracebloc-engine `use_cases/requirements.txt` +
 `use_cases/requirements_cuda.txt`) is the single source of truth for the
-versions a weight dump must be built and verified against. This mirror lets
+versions a weight dump must be built and verified against. A mirror lets
 prep-runners and CI install one file, but a mirror that drifts from the engine
 silently reintroduces exactly the skew backend#2641 was about. So the CI gate
 runs this check: every exact (``pkg==ver``) line in the mirror must match the
 engine's pin, or the job goes red until the mirror (and then the dumps) are
 regenerated.
+
+THERE IS MORE THAN ONE MIRROR, and this tool takes whichever one it is handed.
+`tools/requirements-engine-pin.txt` is the prep/verify environment;
+`.github/requirements/pytorch.txt` is the environment ci.yml's required
+`test-pytorch` job installs, and it carries the same rule in its own header
+("never ahead of them"). The workflow calls this script once per mirror, so
+the failure output below names the file it was given rather than assuming the
+tools/ copy — model-zoo#229, where naming one mirror in the message was part
+of what made the other one's absence easy to miss.
 
 Floors (``pkg>=ver``, e.g. safetensors) are intentionally not exact-pinned by
 the engine and are skipped here — the engine comment says the resolver governs
@@ -87,7 +96,10 @@ def main() -> int:
             )
 
     if problems:
-        print("ENGINE PIN DRIFT — tools/requirements-engine-pin.txt is stale:", file=sys.stderr)
+        # Name the mirror we were HANDED, never a hard-coded path: with two
+        # mirrors checked in the same job, a fixed string would attribute every
+        # drift to the tools/ copy and send the fix at the wrong file (#229).
+        print(f"ENGINE PIN DRIFT — {args.mirror} is stale:", file=sys.stderr)
         for p in problems:
             print(f"  {p}", file=sys.stderr)
         print(
@@ -97,7 +109,10 @@ def main() -> int:
         )
         return 1
 
-    print(f"engine pin OK: {len(mirror)} mirrored pin(s) match the engine's requirements")
+    print(
+        f"engine pin OK: {args.mirror} — {len(mirror)} mirrored pin(s) match the "
+        "engine's requirements"
+    )
     return 0
 
 

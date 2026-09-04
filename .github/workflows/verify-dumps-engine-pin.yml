@@ -8,6 +8,17 @@ name: Verify dumps against engine pin
 # ENGINE's pin and strict-loads the staged dump into it, and fails if the
 # engine pin drifts from what the dumps were built with.
 
+# THERE ARE TWO MIRRORS OF THE ENGINE'S PIN, and for a long time this gate
+# watched only one (#229). `tools/requirements-engine-pin.txt` is what prep and
+# `verify-dumps` install; `.github/requirements/pytorch.txt` is what ci.yml's
+# REQUIRED `test-pytorch` job installs, and its own header carries the rule —
+# "Bump these together with the engine's pins, never ahead of them". Nothing
+# enforced that header: the `paths:` lists below did not name the file, so a
+# lone bump there fired no job, and the guard step had a single `--mirror`
+# pointed at the tools/ copy, so it would not have looked even if it had run.
+# #227 is the proof case — as dependabot opened it, it touched only
+# pytorch.txt, sat two minors ahead of the engine, and was all green. Both
+# halves are fixed below: the trigger, and the invocation.
 on:
   pull_request:
     branches: [develop]
@@ -22,6 +33,11 @@ on:
       - "tools/check_dump_coverage.py"
       - "tools/sync_zoo_weights.py"
       - "tools/requirements-engine-pin.txt"
+      # The whole directory, not just pytorch.txt: a new CI requirement set
+      # that mirrors an engine pin must arrive INSIDE the trigger, or it
+      # repeats #229 exactly. The guard job checks only the files that
+      # actually mirror the engine, and a test asserts that set is complete.
+      - ".github/requirements/**"
       - "manifest.json"
       - ".github/workflows/verify-dumps-engine-pin.yml"
   push:
@@ -37,6 +53,7 @@ on:
       - "tools/check_dump_coverage.py"
       - "tools/sync_zoo_weights.py"
       - "tools/requirements-engine-pin.txt"
+      - ".github/requirements/**"
       - "manifest.json"
       - ".github/workflows/verify-dumps-engine-pin.yml"
   # An engine transformers bump invalidates hosted seeds WITHOUT touching this
@@ -130,12 +147,32 @@ jobs:
         with:
           name: engine-pin
           path: _engine_pin
-      - name: Assert the mirror matches the engine's pin
+      # ONE INVOCATION PER MIRROR, deliberately, rather than one multi-mirror
+      # call: the failure header names the file it was handed, so a red job
+      # says WHICH copy drifted instead of that "a" copy did.
+      #
+      # AND THE LOOP DOES NOT STOP AT THE FIRST FAILURE. An engine bump moves
+      # both mirrors at once, so `set -e` on the first check would report half
+      # the work and hide the rest until the next round-trip. Each exit status
+      # is collected and the step exits non-zero if ANY mirror drifted.
+      #
+      # The mirror list is the ONLY place these two files are named together;
+      # tests/test_engine_pin_drift_guard.py reads it back out of this YAML and
+      # fails if a file under .github/requirements/ mirrors an engine pin
+      # without appearing here.
+      - name: Assert every mirror matches the engine's pin
         run: |
-          python3 tools/check_engine_pin_drift.py \
-            --mirror tools/requirements-engine-pin.txt \
-            --engine _engine_pin/requirements.txt \
-            --engine _engine_pin/requirements_cuda.txt
+          set -euo pipefail
+          rc=0
+          for mirror in tools/requirements-engine-pin.txt .github/requirements/pytorch.txt; do
+            echo "::group::$mirror"
+            python3 tools/check_engine_pin_drift.py \
+              --mirror "$mirror" \
+              --engine _engine_pin/requirements.txt \
+              --engine _engine_pin/requirements_cuda.txt || rc=1
+            echo "::endgroup::"
+          done
+          exit "$rc"
 
   # 2) Rebuild each shipped template under the engine pin and strict-load its
   #    staged dump. Fails closed on any KEY_MISMATCH / BUILD_FAIL / provenance

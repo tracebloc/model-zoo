@@ -10,6 +10,17 @@
 # torch/torchvision come from tracebloc-engine's Dockerfile.base.text.cpu;
 # the rest from its use_cases/requirements.txt. Bump these together with the
 # engine's pins, never ahead of them.
+#
+# THAT RULE IS NOW A CHECK, not just this comment (#229). This file is the
+# second mirror of the engine's pin (the first is tools/requirements-engine-pin.txt),
+# and until #229 no guard looked at it: verify-dumps-engine-pin.yml did not
+# name .github/requirements/** in its `paths:`, so a lone bump here fired no
+# job, and its drift step had a single `--mirror` pointed at the tools/ copy.
+# #227 is the proof — opened by dependabot against this file alone, two minors
+# ahead of the engine, all green. Both halves are wired now: a change to this
+# file triggers that workflow, and `engine-pin-drift-guard` runs
+# tools/check_engine_pin_drift.py against this file as well, so a bump ahead of
+# the engine goes red here instead of reaching the edge (backend#2641).
 pytest
 torch==2.11.0
 torchvision==0.26.0
