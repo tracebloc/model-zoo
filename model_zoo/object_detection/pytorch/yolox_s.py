@@ -113,7 +113,7 @@ built its backbone with ``norm_layer=misc_nn_ops.FrozenBatchNorm``, i.e. FROZEN
 -- the running statistics never update, so there is nothing to average. This
 template carried 21,738 live buffer elements against ``efficientdet_d0``'s 0.
 (Frozen BN turned out to be a bit-exact no-op on those from-scratch builds,
-backend#3093, and they moved to GroupNorm in model-zoo#259. Note what that
+backend#3093, and they moved to GroupNorm in model-zoo#262. Note what that
 change is NOT: moving BN -> GroupNorm here left the parameter count identical
 and dropped 21,738 buffers, whereas moving FrozenBN -> GroupNorm there ADDED
 2 parameters per normalised channel, because frozen BN held weight/bias as

@@ -56,7 +56,7 @@ GroupNorm throughout, for two independent reasons:
 2. **The other templates' escape hatch is not available here.** The
    torchvision family used to reach for ``FrozenBatchNorm2d``, which is
    correct *when a pretrained seed supplies the running statistics* — it
-   followed this template to GroupNorm in model-zoo#259 for exactly the
+   followed this template to GroupNorm in model-zoo#262 for exactly the
    reason below (backend#3093). On a from-scratch,
    randomly-initialised trunk it supplies ``running_mean=0``/``running_var=1``,
    i.e. it does not normalise anything — measured on the ResNet-50 trunk the

@@ -15,7 +15,7 @@ layer degenerates to a no-op.
 
 Every template in this repo builds ``weights=None`` (the hub is a closed door,
 RFC-0003 D6), and no OD seed is staged yet — backend#3055 is blocked on the
-store decision in backend#2659. So until model-zoo#259, twelve shipped OD
+store decision in backend#2659. So until model-zoo#262, twelve shipped OD
 templates trained with **no backbone normalisation at all**. Not weak
 normalisation: none. Measured downstream, activations reach sigma ~= 24 at the
 ROI head against ~= 3 with a live BatchNorm, and the loss stays finite and
@@ -33,7 +33,7 @@ The twelve are fixed, and this file is now a pure invariant
 When this file landed it deferred the norm DECISION and pinned the twelve as
 known-bad, because GroupNorm changes the state_dict key set of templates that
 exist to reproduce the torchvision checkpoint architecture for ``strict=True``
-seed loading. model-zoo#259 took that decision: all twelve moved to GroupNorm,
+seed loading. model-zoo#262 took that decision: all twelve moved to GroupNorm,
 ``NON_NORMALISING`` is empty and ``MAX_NON_NORMALISING`` is 0.
 
 What the decision cost is recorded in each template's own docstring rather than
@@ -170,7 +170,7 @@ _MAX_LEAK = 0.01
 #: modules)`` so a PARTIAL fix — some layers swapped, some not — is as loud as
 #: no fix.
 #:
-#: EMPTY as of model-zoo#259: the twelve FrozenBatchNorm2d entries were the
+#: EMPTY as of model-zoo#262: the twelve FrozenBatchNorm2d entries were the
 #: defect, and all twelve now build GroupNorm. Every template therefore takes
 #: the strong branch below — "every norm module must normalise" — and this dict
 #: exists only so that adding a row is still the thing the ratchet refuses.
@@ -558,7 +558,7 @@ def test_the_non_normalising_list_only_ever_shrinks():
     )
     assert MAX_NON_NORMALISING == 0, (
         f"MAX_NON_NORMALISING is {MAX_NON_NORMALISING}, not the 0 recorded. "
-        f"backend#3093 is fixed (model-zoo#259) and 0 is the floor: there is "
+        f"backend#3093 is fixed (model-zoo#262) and 0 is the floor: there is "
         f"no longer a known-bad template for a row to describe, so ANY row is "
         f"a regression and raising this to accommodate one defeats the "
         f"ratchet. It went 11 -> 12 once, for `sparse_rcnn`'s merge race, and "
@@ -572,7 +572,7 @@ def test_the_probe_discriminates_between_the_norm_kinds():
 
     This is the assertion that stops the whole file from being vacuous, and it
     became the ONLY such assertion when ``NON_NORMALISING`` emptied
-    (model-zoo#259). While twelve rows were recorded, a ``_leak`` that
+    (model-zoo#262). While twelve rows were recorded, a ``_leak`` that
     regressed to "everything normalises" would at least have reddened those
     twelve; with no rows left, nothing on the roster would notice — every
     template would pass by checking nothing. So the discrimination is pinned

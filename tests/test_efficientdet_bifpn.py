@@ -348,7 +348,7 @@ def test_the_model_carries_no_batchnorm_running_buffers():
     ``FrozenBatchNorm2d`` — the escape hatch the torchvision family used to
     reach for — does not normalise anything on a from-scratch trunk, because
     its running statistics are the untouched 0/1 defaults, so it is not an
-    alternative either. That family moved to GroupNorm in model-zoo#259
+    alternative either. That family moved to GroupNorm in model-zoo#262
     (backend#3093); this template was already there.
     """
     model = MODULE.MyModel(3)

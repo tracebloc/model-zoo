@@ -135,7 +135,7 @@ GroupNorm rather than FrozenBatchNorm2d because Frozen BN moves
 invalidating the published-architecture guard. GroupNorm keeps them as
 parameters and carries no running statistics. Frozen BN was also a no-op on
 every from-scratch build (backend#3093), and the torchvision family moved to
-GroupNorm in model-zoo#259 -- so the roster is now GroupNorm throughout, and
+GroupNorm in model-zoo#262 -- so the roster is now GroupNorm throughout, and
 this template's choice is the one that generalised.
 
 The head's per-level norms remain per-level, which is the point of RTMDet's
