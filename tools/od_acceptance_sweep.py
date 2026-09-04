@@ -39,12 +39,14 @@ that declare a seed, because a declared seed that is not hosted is not a seed.
 backend#3055 states the fallback: #3048 must say, per template, whether it ran
 seeded or from scratch. So the report carries:
 
-  mechanical  -- did it train a cycle and return a well-formed payload?
+  mechanical  -- PASS / DIVERGENT / FAIL (see `classify_status`)
   quality     -- is the detection quality measurable, and what did it measure?
   cause       -- WHY quality is pending, derived per run (see below)
 
 A template that trains and infers cleanly from scratch is a REAL PASS on the
-mechanical criterion and a PENDING on the quality one. Reporting one green
+mechanical criterion and a PENDING on the quality one. `DIVERGENT` is the third
+mechanical state and it does NOT satisfy #3048's exit criterion -- see
+`DIVERGENCE_FACTOR`, and `ssd_vgg16`, whose loss ends at 1.8e+17 and is finite. Reporting one green
 verdict by quietly lowering the bar is the shape of every false-green this epic
 has produced -- most memorably an audit that scored `mask_rcnn` "uploadable"
 when it could not be uploaded at all, because it measured dispatch reachability
@@ -201,6 +203,34 @@ ENGINE_ADAPTER_PATH = "core/frameworks/pytorch_adapter.py"
 #: the run would make the skip list depend on the machine, and a skip list that
 #: differs between two runs of the same sweep is not reportable.
 SLOW_TEMPLATES = frozenset({"faster_rcnn_convnext_small", "fcos_convnext_small"})
+
+#: The three mechanical states. A two-state gate cannot express `ssd_vgg16`:
+#: its loss ends at 1.8e+17, which is FINITE, so "trains for one full cycle
+#: with finite loss" is satisfied literally while the model is plainly not
+#: training. Tightening the finiteness gate to catch it would have redefined
+#: #3048's stated criterion to make an uncomfortable row disappear; a third
+#: state reports the row for what it is instead.
+STATUS_PASS = "PASS"
+STATUS_DIVERGENT = "DIVERGENT"
+STATUS_FAIL = "FAIL"
+
+#: Worst-first, for aggregating one template's several experiments.
+_STATUS_SEVERITY = {STATUS_FAIL: 2, STATUS_DIVERGENT: 1, STATUS_PASS: 0}
+
+#: A finite loss ending more than this many times ABOVE its first step is not
+#: training, whatever the absolute number.
+#:
+#: RELATIVE, NOT ABSOLUTE, and that is forced by the roster: first-step losses
+#: span three orders of magnitude (0.67 for `efficientdet_d0`, 825.6 for
+#: `centernet_resnet`). Any fixed ceiling either sits above `ssd_vgg16`'s climb
+#: or condemns `centernet_resnet`'s legitimate starting point.
+#:
+#: 100x is deliberately loose. Real training descends; a template that ends two
+#: orders of magnitude ABOVE where it started is not near a boundary that needs
+#: fine judgement. Measured on develop: the widest genuine rise among passing
+#: templates is `vfnet_resnet` at 1.13x, so nothing legitimate is within two
+#: orders of this line.
+DIVERGENCE_FACTOR = 100.0
 
 #: Quality-pending causes, derived per run by `_quality_cause`.
 CAUSE_EMPTY_PAYLOAD = "empty-payload"
@@ -624,6 +654,95 @@ def measure_gradient_reachability(torch, model, optimizer, images, targets):
     return len(trainable), no_grad, zero_grad
 
 
+def divergence_findings(
+    loss_first: Optional[float], loss_last: Optional[float], steps_run: int
+) -> List[str]:
+    """Notes on a FINITE loss that grew instead of descending.
+
+    Read this docstring back as a specification and the three edge cases it
+    names are exactly the ones the code guards, because they are the ones where
+    "more than 100x the first step" stops meaning anything:
+
+    **Fewer than two steps.** ``first`` and ``last`` are the same number, so the
+    comparison is vacuous and would report every one-step run as non-divergent.
+    That is a clean pass on a check that did not run, so it is reported as
+    UNCHECKED rather than passed. (`--steps 1` is legal and cheap, and someone
+    will use it.)
+
+    **A non-positive first-step loss.** ``100 * first`` is then zero or negative
+    and the test either fires on everything or nothing. These losses are sums of
+    non-negative terms so it should not happen; if it does, the first-step loss
+    is itself the finding. Not reachable on today's roster -- every first-step
+    loss measured is positive -- so it is a defensive branch, and
+    `tests/test_od_acceptance_sweep.py` fires it directly rather than leaving it
+    unexercised.
+
+    **A non-finite loss.** ``nan > x`` is False, so a NaN run would read as
+    non-divergent here. It never reaches this state: `train_step_findings`
+    already produced a finding and `classify_status` gives FAIL precedence.
+
+    EXACTLY ``DIVERGENCE_FACTOR`` times is NOT divergent -- the boundary is
+    strict, matching "more than". Both sides of it are pinned by tests.
+    """
+    if steps_run < 2:
+        return [
+            f"divergence UNCHECKED: only {steps_run} step(s) ran, so first and last "
+            f"loss are the same measurement -- rerun with --steps 2 or more"
+        ]
+    if loss_first is None or loss_last is None:
+        return ["divergence UNCHECKED: no loss history was recorded"]
+    if loss_first <= 0:
+        return [
+            f"divergence UNDECIDABLE: first-step loss was {loss_first}, and these "
+            f"losses are sums of non-negative terms -- a non-positive total is "
+            f"itself the defect, not a baseline to measure growth against"
+        ]
+    if loss_last > DIVERGENCE_FACTOR * loss_first:
+        return [
+            f"loss DIVERGED: {loss_first} -> {loss_last}, "
+            f"{loss_last / loss_first:.3g}x its first step (> {DIVERGENCE_FACTOR:g}x). "
+            f"Finite, so it satisfies #3048's literal wording, and not training."
+        ]
+    return []
+
+
+def aggregate_status(statuses: Sequence[str]) -> str:
+    """One template's several experiments collapsed to one status: WORST-OF.
+
+    Not majority and not first-run. #3048 asks for "multiple experiments per
+    model, not one lucky run -- enough to show it is not flaky", and the whole
+    point of running more than once is that the bad run is the informative one.
+    A majority rule would report a template that diverges half the time as
+    passing, which is the opposite of what repetition was added to detect.
+
+    An empty sequence is PASS-by-vacuity and callers must not hand one over; it
+    cannot arise from `sweep`, which only aggregates a non-empty `runs` list.
+    """
+    if not statuses:
+        return STATUS_PASS
+    return max(statuses, key=lambda status: _STATUS_SEVERITY[status])
+
+
+def classify_status(findings: Sequence[str], divergence: Sequence[str]) -> str:
+    """``FAIL`` / ``DIVERGENT`` / ``PASS``, worst first.
+
+    FAIL TAKES PRECEDENCE over divergence deliberately: a NaN loss, a dropped
+    record or an unreachable parameter is a harder statement than "the loss
+    grew", and a run with both should not be softened to DIVERGENT.
+
+    An UNCHECKED or UNDECIDABLE divergence note is NOT a pass. It is carried as
+    DIVERGENT so it appears in the divergent count and cannot be read as a
+    template that cleared the bar -- the state means "did not demonstrably
+    descend", which is true whether the reason is growth or a missing
+    measurement.
+    """
+    if findings:
+        return STATUS_FAIL
+    if divergence:
+        return STATUS_DIVERGENT
+    return STATUS_PASS
+
+
 def _quality_cause(n_preds: Sequence[int], seeded: bool) -> str:
     """Why detection quality is or is not measurable, from THIS run's payload.
 
@@ -707,10 +826,14 @@ def run_experiment(
             if isinstance(p, dict) and torch.is_tensor(p.get("boxes"))
         ]
         record["findings"] = findings
-        record["mechanical"] = not findings
+        record["divergence"] = divergence_findings(
+            record.get("loss_first"), record.get("loss_last"), record["steps_run"]
+        )
+        record["status"] = classify_status(findings, record["divergence"])
     except Exception as error:  # noqa: BLE001 -- the failure IS the deliverable
         record["findings"] = [f"{type(error).__name__}: {error}"]
-        record["mechanical"] = False
+        record["divergence"] = []
+        record["status"] = STATUS_FAIL
     record["wall_s"] = round(time.perf_counter() - started, 2)
     return record
 
@@ -773,8 +896,9 @@ def sweep(
         }
         if image_size is None:
             row["experiments"] = []
-            row["mechanical"] = False
+            row["status"] = STATUS_FAIL
             row["findings"] = ["no module-level `image_size` declaration to size the batch"]
+            row["divergence"] = []
         else:
             runs = [
                 run_experiment(
@@ -788,10 +912,10 @@ def sweep(
                 for seed in range(experiments)
             ]
             row["experiments"] = runs
-            verdicts = {bool(r["mechanical"]) for r in runs}
-            row["mechanical"] = all(r["mechanical"] for r in runs)
-            row["flaky"] = len(verdicts) > 1
+            row["status"] = aggregate_status([r["status"] for r in runs])
+            row["flaky"] = len({r["status"] for r in runs}) > 1
             row["findings"] = sorted({f for r in runs for f in r.get("findings", [])})
+            row["divergence"] = sorted({d for r in runs for d in r.get("divergence", [])})
             row["cycles_run"] = sum(r.get("steps_run", 0) for r in runs)
             row["wall_s"] = round(sum(r.get("wall_s", 0.0) for r in runs), 2)
             first = runs[0]
@@ -852,7 +976,7 @@ def sweep(
 _HEADERS = (
     "template",
     "seeded / scratch",
-    "mechanical",
+    "status",
     "quality",
     "cause",
     "cycles",
@@ -885,13 +1009,28 @@ def markdown(report: Dict[str, Any]) -> str:
         f"- cycle: {report['steps']} steps x {report['experiments']} experiments per template"
     )
     out.append("")
-    passed = sum(1 for r in report["templates"] if r["mechanical"])
+    # THREE COUNTS, NOT A RATIO. A single "N/M pass" line is what would let the
+    # top line read "22/23 mechanical" while one of the 22 is diverging by
+    # fifteen orders of magnitude. DIVERGENT does not satisfy the exit criterion.
+    tally = {status: 0 for status in _STATUS_SEVERITY}
+    for row in report["templates"]:
+        tally[row["status"]] = tally.get(row["status"], 0) + 1
+    total = len(report["templates"])
     out.append(
-        f"**mechanical: {passed}/{len(report['templates'])} pass. "
-        f"quality: 0/{len(report['templates'])} measurable** -- no OD seed is hosted "
+        f"**mechanical: {tally[STATUS_PASS]} pass, {tally[STATUS_DIVERGENT]} divergent, "
+        f"{tally[STATUS_FAIL]} fail (of {total}). "
+        f"quality: 0/{total} measurable** -- no OD seed is hosted "
         f"(backend#2659 blocks backend#3055), so every row below ran from random "
         f"initialisation and quality is pending with a stated cause."
     )
+    if tally[STATUS_DIVERGENT] or tally[STATUS_FAIL]:
+        out.append("")
+        out.append(
+            f"Only the {tally[STATUS_PASS]} `PASS` rows meet backend#3048's exit "
+            f"criterion. `DIVERGENT` means the loss stayed finite and did not "
+            f"descend (> {DIVERGENCE_FACTOR:g}x its first step, or not measurable "
+            f"over the steps run) -- finite is not the same as training."
+        )
     out.append("")
     out.append("| " + " | ".join(_HEADERS) + " |")
     out.append("|" + "|".join("---" for _ in _HEADERS) + "|")
@@ -904,7 +1043,7 @@ def markdown(report: Dict[str, Any]) -> str:
         grad = (
             "yes" if row.get("n_zero_grad") is None else f"yes ({row['n_zero_grad']} zero-grad)"
         )
-        if not row["mechanical"]:
+        if row["status"] == STATUS_FAIL:
             grad = "see failure"
         shape = row.get("observed_input_shape")
         resolution = (
@@ -915,7 +1054,7 @@ def markdown(report: Dict[str, Any]) -> str:
         cells = (
             f"`{row['template']}`",
             row["seeding"],
-            ("PASS" if row["mechanical"] else "**FAIL**")
+            (row["status"] if row["status"] == STATUS_PASS else f"**{row['status']}**")
             + (" (FLAKY)" if row.get("flaky") else ""),
             row["quality"],
             row["quality_cause"],
@@ -924,7 +1063,8 @@ def markdown(report: Dict[str, Any]) -> str:
             grad,
             str(row.get("n_preds", [])),
             resolution,
-            "; ".join(row.get("findings", [])) or "-",
+            "; ".join(list(row.get("findings", [])) + list(row.get("divergence", [])))
+            or "-",
         )
         out.append("| " + " | ".join(cells) + " |")
     out.append("")
@@ -943,6 +1083,23 @@ def markdown(report: Dict[str, Any]) -> str:
             )
         out.append("")
     return "\n".join(out)
+
+
+def exit_code(report: Dict[str, Any]) -> int:
+    """Non-zero unless every template PASSED.
+
+    DIVERGENT EXITS NON-ZERO ALONGSIDE FAIL. It does not satisfy backend#3048's
+    exit criterion, so a sweep containing one must not look like a clean run to
+    anything reading the exit status rather than the table -- which is what CI,
+    a Makefile target and a shell pipeline all do.
+
+    Pure and separate from `main` so it can be asserted without running a sweep.
+    """
+    return (
+        1
+        if any(r["status"] != STATUS_PASS for r in report["templates"])
+        else 0
+    )
 
 
 def main(argv=None) -> int:
@@ -994,11 +1151,15 @@ def main(argv=None) -> int:
         args.markdown.write_text(table + "\n", encoding="utf-8")
     print(table)
 
-    failed = [r["template"] for r in report["templates"] if not r["mechanical"]]
+    failed = [r["template"] for r in report["templates"] if r["status"] == STATUS_FAIL]
+    divergent = [
+        r["template"] for r in report["templates"] if r["status"] == STATUS_DIVERGENT
+    ]
     if failed:
-        print(f"\nmechanical FAILURES: {failed}", file=sys.stderr)
-        return 1
-    return 0
+        print(f"\nFAIL: {failed}", file=sys.stderr)
+    if divergent:
+        print(f"\nDIVERGENT (finite, not training): {divergent}", file=sys.stderr)
+    return exit_code(report)
 
 
 if __name__ == "__main__":

@@ -590,7 +590,7 @@ def test_the_markdown_report_is_per_template_and_names_what_ran() -> None:
             {
                 "template": "green_one",
                 "seeding": "scratch (random-init by design)",
-                "mechanical": True,
+                "status": "PASS",
                 "quality": "pending",
                 "quality_cause": "empty-payload",
                 "cycles_run": 16,
@@ -601,17 +601,34 @@ def test_the_markdown_report_is_per_template_and_names_what_ran() -> None:
                 "observed_input_shape": [2, 3, 800, 800],
                 "declared_image_size": 448,
                 "findings": [],
+                "divergence": [],
             },
             {
                 "template": "red_one",
                 "seeding": "scratch (seed declared, not hosted -- backend#2659)",
-                "mechanical": False,
+                "status": "FAIL",
                 "quality": "pending",
                 "quality_cause": "random-init-scores",
                 "cycles_run": 0,
                 "n_preds": [4],
                 "declared_image_size": 640,
                 "findings": ["step 0: loss 'cls' is nan, not finite"],
+                "divergence": [],
+            },
+            {
+                "template": "divergent_one",
+                "seeding": "scratch (random-init by design)",
+                "status": "DIVERGENT",
+                "quality": "pending",
+                "quality_cause": "empty-payload",
+                "cycles_run": 6,
+                "loss_first": 101.0,
+                "loss_last": 1.8e17,
+                "n_zero_grad": 5,
+                "n_preds": [0, 0],
+                "declared_image_size": 300,
+                "findings": [],
+                "divergence": ["loss DIVERGED: 101.0 -> 1.8e+17, 1.78e+15x its first step"],
             },
         ],
     }
@@ -619,6 +636,8 @@ def test_the_markdown_report_is_per_template_and_names_what_ran() -> None:
 
     assert "`green_one`" in table and "`red_one`" in table
     assert "**FAIL**" in table, "a red template is not marked as one"
+    assert "**DIVERGENT**" in table, "a diverging template is not marked as one"
+    assert "DIVERGED" in table, "the divergence note is not carried into the table"
     assert "not finite" in table, "#3048 requires the failure WITH its cause"
     assert "yolo_v1/model.py" in table, "the uncovered templates are not named"
     assert "slow_one" in table, "a skipped template is not named"
@@ -627,9 +646,14 @@ def test_the_markdown_report_is_per_template_and_names_what_ran() -> None:
         "the resolution the network actually saw is not recorded — a cost or metric "
         "figure at an unstated resolution is unreadable (backend#3058)"
     )
-    assert "1/2" in table, "the mechanical tally is not stated"
+    # THREE COUNTS, not a ratio: a "N/M pass" line is exactly what would let the
+    # top line read "2/3 mechanical" while one of them is diverging.
+    assert "1 pass, 1 divergent, 1 fail (of 3)" in table, table.splitlines()[8]
     # The report must never claim quality it does not have.
-    assert "quality: 0/2 measurable" in table
+    assert "quality: 0/3 measurable" in table
+    assert "Only the 1 `PASS` rows meet" in table, (
+        "the report does not say that DIVERGENT fails the exit criterion"
+    )
 
 
 def test_the_slow_skip_list_is_opt_in_and_named() -> None:
@@ -640,3 +664,159 @@ def test_the_slow_skip_list_is_opt_in_and_named() -> None:
     assert sweep_mod.SLOW_TEMPLATES
     unknown = sweep_mod.SLOW_TEMPLATES - keys
     assert not unknown, f"--skip-slow names templates that do not exist: {sorted(unknown)}"
+
+
+# ---------------------------------------------------------------------------
+# The divergence state (backend#3048's third mechanical status)
+# ---------------------------------------------------------------------------
+
+
+def test_a_loss_that_grows_101x_is_divergent_and_99x_is_not() -> None:
+    """The decision boundary, from both sides, on CONSTRUCTED inputs.
+
+    Deliberately not a roster row that happens to sit near the line: a template
+    drifting past a threshold would silently turn this into a test of that
+    template rather than of the threshold.
+    """
+    assert sweep_mod.divergence_findings(1.0, 101.0, steps_run=3)
+    assert sweep_mod.divergence_findings(1.0, 99.0, steps_run=3) == []
+
+    assert sweep_mod.classify_status([], sweep_mod.divergence_findings(1.0, 101.0, 3)) == (
+        sweep_mod.STATUS_DIVERGENT
+    )
+    assert sweep_mod.classify_status([], sweep_mod.divergence_findings(1.0, 99.0, 3)) == (
+        sweep_mod.STATUS_PASS
+    )
+
+
+def test_the_divergence_boundary_is_strict() -> None:
+    """``> DIVERGENCE_FACTOR``, exactly as the prose says.
+
+    Pinned because "more than 100x" and ">= 100x" differ by one row and the
+    difference is invisible unless someone asserts it.
+    """
+    factor = sweep_mod.DIVERGENCE_FACTOR
+    assert sweep_mod.divergence_findings(1.0, factor, steps_run=3) == []
+    assert sweep_mod.divergence_findings(1.0, factor * 1.000001, steps_run=3)
+
+
+def test_the_real_ssd_vgg16_numbers_are_divergent_and_the_real_passers_are_not() -> None:
+    """The observed values this state exists for, and its nearest true negative.
+
+    Measured on develop 2026-09-04 under the engine's own optimizer at declared
+    resolution. ``vfnet_resnet`` at 1.13x is the widest genuine RISE among
+    passing templates, so this also records that nothing legitimate sits within
+    two orders of magnitude of the line.
+    """
+    assert sweep_mod.divergence_findings(101.6198, 1.8000589330631885e17, steps_run=3)
+    assert sweep_mod.divergence_findings(2.3879, 2.6922, steps_run=3) == []
+    assert sweep_mod.divergence_findings(825.6479, 4.794597911645026e29, steps_run=3)
+
+
+def test_fail_takes_precedence_over_divergent() -> None:
+    """A NaN loss AND a grown loss is a FAIL, never softened to DIVERGENT."""
+    findings = ["step 2: loss 'heatmap' is nan, not finite"]
+    divergence = sweep_mod.divergence_findings(1.0, 1e30, steps_run=3)
+    assert divergence
+    assert sweep_mod.classify_status(findings, divergence) == sweep_mod.STATUS_FAIL
+    assert sweep_mod.classify_status(findings, []) == sweep_mod.STATUS_FAIL
+
+
+def test_a_one_step_run_is_not_a_clean_pass() -> None:
+    """``--steps 1`` makes the comparison vacuous, so it must not read as passed.
+
+    first and last are the same measurement, so a naive ``last > 100 * first``
+    reports every one-step run as non-divergent — a green on a check that never
+    ran, which is the false-green shape this whole file exists to prevent.
+    """
+    for steps in (0, 1):
+        notes = sweep_mod.divergence_findings(5.0, 5.0, steps_run=steps)
+        assert notes, f"steps_run={steps} was treated as a real measurement"
+        assert "UNCHECKED" in notes[0]
+        assert sweep_mod.classify_status([], notes) == sweep_mod.STATUS_DIVERGENT
+    # Two steps is enough to compare, and a flat loss is not divergent.
+    assert sweep_mod.divergence_findings(5.0, 5.0, steps_run=2) == []
+
+
+def test_a_non_positive_first_step_loss_is_undecidable_not_passed() -> None:
+    """The defensive branch, fired rather than left unexercised.
+
+    ``100 * first`` is zero or negative for a non-positive baseline, so the test
+    would fire on everything or nothing. These losses are sums of non-negative
+    terms, so it is unreachable on today's roster — which is exactly why it needs
+    a test rather than a comment.
+    """
+    for first in (0.0, -3.5):
+        notes = sweep_mod.divergence_findings(first, 10.0, steps_run=3)
+        assert notes, f"first={first} silently passed"
+        assert "UNDECIDABLE" in notes[0]
+        assert sweep_mod.classify_status([], notes) == sweep_mod.STATUS_DIVERGENT
+
+
+def test_a_missing_loss_history_is_not_a_pass() -> None:
+    notes = sweep_mod.divergence_findings(None, None, steps_run=3)
+    assert notes and "UNCHECKED" in notes[0]
+    assert sweep_mod.classify_status([], notes) == sweep_mod.STATUS_DIVERGENT
+
+
+def test_experiments_aggregate_worst_of_not_first_or_majority() -> None:
+    """The behaviour, not just the ordering constant.
+
+    This test previously asserted only that ``_STATUS_SEVERITY`` is ordered, and
+    a mutation replacing the whole aggregation with ``runs[0]["status"]`` left it
+    GREEN — a guard whose docstring claimed worst-of while the check tested a
+    dict. Asserting the function is what makes the claim true.
+
+    Every case here has the bad run in a position that first-of and majority
+    would both miss.
+    """
+    agg = sweep_mod.aggregate_status
+    PASS, DIV, FAIL = sweep_mod.STATUS_PASS, sweep_mod.STATUS_DIVERGENT, sweep_mod.STATUS_FAIL
+
+    assert agg([PASS, PASS]) == PASS
+    # first-of would say PASS; majority-of-3 would say PASS.
+    assert agg([PASS, DIV]) == DIV
+    assert agg([PASS, PASS, DIV]) == DIV
+    assert agg([PASS, PASS, FAIL]) == FAIL
+    # FAIL outranks DIVERGENT wherever it sits.
+    assert agg([DIV, FAIL]) == FAIL
+    assert agg([FAIL, DIV]) == FAIL
+    assert agg([DIV, DIV]) == DIV
+
+    sev = sweep_mod._STATUS_SEVERITY
+    assert sev[FAIL] > sev[DIV] > sev[PASS]
+
+
+def test_divergent_exits_non_zero_just_like_fail() -> None:
+    """A sweep containing a diverging template is not a clean run.
+
+    Asserted on the exit STATUS, not the table: CI, a Makefile target and a
+    shell pipeline all read the former. A three-state gate whose middle state
+    exits 0 would report the row honestly and still let every automated caller
+    treat the sweep as green.
+    """
+    def report(*statuses):
+        return {"templates": [{"status": st} for st in statuses]}
+
+    assert sweep_mod.exit_code(report("PASS", "PASS")) == 0
+    assert sweep_mod.exit_code(report("PASS", "DIVERGENT")) == 1
+    assert sweep_mod.exit_code(report("PASS", "FAIL")) == 1
+    assert sweep_mod.exit_code(report("DIVERGENT")) == 1
+    assert sweep_mod.exit_code(report()) == 0
+
+
+def test_sweep_aggregates_with_aggregate_status() -> None:
+    """`sweep` must actually CALL the worst-of helper.
+
+    Extracting `aggregate_status` made the rule testable, but it also made it
+    possible for `sweep` to stop using it and for every test above to stay green.
+    Read statically rather than by running a sweep, which needs torch and hours:
+    the point is only that the call site exists and that nothing has gone back to
+    indexing a run directly.
+    """
+    source = (ROOT / "tools" / "od_acceptance_sweep.py").read_text(encoding="utf-8")
+    assert 'row["status"] = aggregate_status(' in source, (
+        "sweep() no longer aggregates experiment statuses through aggregate_status; "
+        "worst-of is not being applied even though its unit test still passes"
+    )
+    assert 'row["status"] = runs[0]' not in source
