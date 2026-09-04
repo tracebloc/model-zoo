@@ -895,7 +895,28 @@ def guard_arch_table_is_live(module) -> None:
       every scale this template otherwise touches.
     * **X** (width 1.50) separates the rounding direction — ``make_divisible``
       is ``ceil``, and a nearest-rounding version agrees at n/s/m/l.
+
+    It also gives ``C3K_AT_SCALE_OVERRIDE_SCALES`` its only reader. That
+    constant records ``parse_model``'s ``if m is C3k2 and scale in "mlx"``
+    override, and the template ships one scale, so nothing in the template
+    itself consumes it — which would make it exactly the decorative constant
+    its own neighbours are guarded against being. The scales this guard has to
+    force ``c3k`` on to reach the published totals ARE that set, so comparing
+    the two makes the declaration falsifiable rather than documentary.
     """
+    forced_here = tuple(
+        scale for scale in "nsmlx" if scale in _PUBLISHED and _PUBLISHED[scale][3]
+    )
+    assert tuple(module.C3K_AT_SCALE_OVERRIDE_SCALES) == forced_here, (
+        f"{module.__name__}: C3K_AT_SCALE_OVERRIDE_SCALES declares "
+        f"{tuple(module.C3K_AT_SCALE_OVERRIDE_SCALES)}, but the scales that "
+        f"actually need every C3k2's c3k flag forced to reach their published "
+        f"totals are {forced_here}. That constant transcribes "
+        f"`parse_model`'s `if m is C3k2 and scale in \"mlx\"`, and this is the "
+        f"only thing that reads it — a wrong list here is a wrong claim about "
+        f"upstream sitting in a shipped template."
+    )
+
     for scale in sorted(set(_PUBLISHED) - {_SHIPPED_SCALE}):
         _, _, _, _, _, gradients = _PUBLISHED[scale]
         with _at_published_scale(module, scale):
@@ -3135,6 +3156,12 @@ MUTATIONS = [
         "channel_cap_hardcoded_at_the_shipped_value",
         "    scaled = min(channels, MAX_CHANNELS) * WIDTH_MULT",
         "    scaled = min(channels, 1024) * WIDTH_MULT",
+        "arch_table_is_live",
+    ),
+    (
+        "c3k_override_scales_misstate_upstream",
+        'C3K_AT_SCALE_OVERRIDE_SCALES = ("m", "l", "x")',
+        'C3K_AT_SCALE_OVERRIDE_SCALES = ("l", "x")',
         "arch_table_is_live",
     ),
     (
