@@ -120,6 +120,48 @@ def _read_model_type(path: pathlib.Path) -> str | None:
     return match.group(1) if match else None
 
 
+def _other_family_values() -> frozenset[str]:
+    """Accepted values routing to a family that is NOT this one.
+
+    The schema says object detection has exactly two families, so this plus
+    ``FAMILY_VALUES`` partitions the vocabulary — which is what lets the guard
+    below check COVERAGE without a hand-recomputed floor. Derived from the same
+    vendored file, so a third family appearing there widens this automatically
+    instead of quietly making the partition a lie.
+    """
+    schema = json.loads(_schema_path().read_text(encoding="utf-8"))
+    values: set[str] = set()
+    for entry in schema["families"]:
+        if entry["family"] == FAMILY:
+            continue
+        values |= {entry["family"], *entry.get("aliases", [])}
+    return frozenset(v.strip().lower() for v in values)
+
+
+OTHER_FAMILY_VALUES = _other_family_values()
+
+
+def _declares_framework(path: pathlib.Path) -> str | None:
+    """The module-level ``framework``, or ``None``.
+
+    This is what separates a TEMPLATE ENTRY POINT from a support module: the
+    metadata contract in CLAUDE.md requires it of every model file, and the
+    ``yolo_*/loss.py`` helpers declare none. Read with a second, independent
+    regex rather than inferred from ``model_type`` — a broken ``_read_model_type``
+    must not be able to shrink the roster and the expected roster together.
+    """
+    try:
+        text = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return None
+    match = re.search(r'^\s*framework\s*=\s*["\'](\w*)["\']', text, re.MULTILINE)
+    return match.group(1) if match else None
+
+
+def _od_templates() -> list[pathlib.Path]:
+    return [p for p in sorted(OD_ROOT.rglob("*.py")) if _declares_framework(p)]
+
+
 def _family_templates() -> list[pathlib.Path]:
     return [
         p
@@ -153,11 +195,28 @@ def _targets(torch, num_classes: int) -> list[dict]:
     mask a real failure behind an input error. The second entry is the engine's
     zero-object target for an unannotated image, shapes and dtypes matched to
     ``image_detection_dataset_pytorch``.
+
+    **Labels span the full model-space range, ``1`` to ``num_classes``.** The
+    engine's ``TorchvisionDetectionHandler`` shifts a dataset-space label
+    ``[0, C-1]`` up past torchvision's background index before the model sees it
+    (backend#3062), so a template in this family is handed ``[1, C]`` and must
+    allocate ``C + 1`` head channels — which every one of them does, as
+    ``num_classes = num_classes + 1  # 1 for background``.
+
+    These labels used to be ``[1, max(1, num_classes - 1)]``: already
+    background-avoiding, so this file would have been red on the pre-#3062
+    contract too, but spanning only ``[1, C-1]`` and never the top of the range.
+    A template that allocated ``num_classes`` channels instead of
+    ``num_classes + 1`` therefore passed here and then raised on the LAST class
+    at training time — the one class the old range could not reach. Using
+    ``num_classes`` itself makes the ``+ 1`` head width a required property
+    rather than an accident, which is what closes that hole for templates not
+    written yet and for customer-supplied models.
     """
     return [
         {
             "boxes": torch.tensor([[10.0, 10.0, 60.0, 60.0], [70.0, 70.0, 110.0, 120.0]]),
-            "labels": torch.tensor([1, max(1, num_classes - 1)], dtype=torch.int64),
+            "labels": torch.tensor([1, num_classes], dtype=torch.int64),
         },
         {
             "boxes": torch.zeros((0, 4), dtype=torch.float32),
@@ -217,17 +276,74 @@ def test_family_templates_were_found() -> None:
     """Guard the guard: the parametrized test below is driven by a file scan, so
     an empty scan would make the whole file pass by checking nothing — the
     silent-green shape of backend#1859. Also asserts the alias is in play, since
-    dropping it is what would silently narrow the scan to nothing useful."""
+    dropping it is what would silently narrow the scan to nothing useful.
+
+    THIS USED TO BE A FLOOR (``len(FAMILY_TEMPLATES) >= 3``) whose comment told
+    the next author to "raise it with backend#2982's Tier 0". A floor that every
+    roster PR is invited to raise is a shared literal, and it has the same
+    serialisation cost as the census did: with several roster PRs open, all of
+    them edit this line and all of them conflict (see the write-up on
+    backend#2982). It is now a PARTITION instead, derived from the vendored
+    schema: object detection has exactly two families, so every OD template
+    belongs to this one or to the other, and this file must cover all of the
+    former. Adding a template moves both sides at once — nothing to raise.
+    """
     assert "rcnn" in FAMILY_VALUES, (
         f"{_schema_path().name}: {FAMILY!r} lost its legacy 'rcnn' alias — if the "
         f"engine really dropped it, update FAMILY_VALUES' users; if not, this "
         f"scan just stopped covering every template declaring it"
     )
-    assert len(FAMILY_TEMPLATES) >= 3, (
-        f"expected the {FAMILY} roster under {OD_ROOT}, found "
-        f"{[p.name for p in FAMILY_TEMPLATES]} — did the tree move? The floor "
-        f"tracks the live roster: raise it with backend#2982's Tier 0."
+    templates = _od_templates()
+    assert templates, (
+        f"no file under {OD_ROOT} declares `framework` — the scan lost the tree, "
+        f"and everything below would pass by checking nothing"
     )
+    other = {
+        p
+        for p in templates
+        if (_read_model_type(p) or "").strip().lower() in OTHER_FAMILY_VALUES
+    }
+    assert other, (
+        f"no OD template routes to a family other than {FAMILY!r}; the yolo "
+        f"roster is part of the tree, so this means model_type reading broke"
+    )
+    expected = set(templates) - other
+    uncovered = sorted(str(p.relative_to(ROOT)) for p in expected - set(FAMILY_TEMPLATES))
+    unexpected = sorted(str(p.relative_to(ROOT)) for p in set(FAMILY_TEMPLATES) - expected)
+    assert not uncovered, (
+        f"OD template(s) that are not in the {FAMILY!r} roster this file trains, "
+        f"and not in any other family either — they declare a model_type outside "
+        f"the schema's vocabulary, or none at all, and so are covered by nothing: "
+        f"{uncovered}"
+    )
+    assert not unexpected, (
+        f"the {FAMILY!r} roster contains files that do not declare `framework` — "
+        f"a support module cannot be a template: {unexpected}"
+    )
+    assert FAMILY_TEMPLATES, (
+        f"the {FAMILY!r} roster is empty; every OD template routed elsewhere"
+    )
+
+
+def test_the_two_readers_are_independent_and_discriminate(tmp_path) -> None:
+    """The partition above is only non-vacuous while its two readers disagree.
+
+    If ``_declares_framework`` and ``_read_model_type`` both collapsed to
+    "always None", the roster and the expected roster would both go empty and the
+    set comparison would pass on nothing. Assert each says NO to a file lacking
+    its own declaration and YES to one carrying it.
+    """
+    support = tmp_path / "loss.py"
+    support.write_text("import torch\n\n\ndef loss(a, b):\n    return a - b\n", "utf-8")
+    assert _declares_framework(support) is None
+    assert _read_model_type(support) is None
+
+    template = tmp_path / "model.py"
+    template.write_text(
+        'framework = "pytorch"\nmodel_type = "torchvision_detection"\n', "utf-8"
+    )
+    assert _declares_framework(template) == "pytorch"
+    assert _read_model_type(template) == "torchvision_detection"
 
 
 @pytest.mark.parametrize(
@@ -273,4 +389,55 @@ def test_guard_rejects_a_mask_headed_model() -> None:
         f"a mask-headed detector failed the contract, but not on the masks key: "
         f"{excinfo.value!r} — if torchvision changed its message, update this "
         f"assertion; if it stopped requiring masks, see backend#795"
+    )
+
+
+def test_guard_rejects_a_head_that_omits_the_background_channel() -> None:
+    """The label-range half of the guard, shown going red (backend#3062).
+
+    Same convention as the mask-headed probe above: a check whose whole value is
+    going red has to be demonstrated going red, or widening ``_targets`` to
+    ``[1, num_classes]`` would be an untested edit that looks like a guard.
+
+    This builds the mistake the widened range exists to catch — a detector in
+    this family whose classification head has exactly ``num_classes`` channels
+    instead of ``num_classes + 1``, i.e. a template that forgot the
+    ``# 1 for background`` line. It must FAIL, and specifically on the top of
+    the label range: under the old ``[1, num_classes - 1]`` labels this same
+    model passed, which is exactly why the hole was invisible.
+
+    RetinaNet rather than Faster R-CNN on purpose: the sigmoid focal head
+    one-hots the label directly into its channel dimension, so the out-of-range
+    class raises in the loss itself rather than inside cross-entropy, which
+    keeps the failure legible.
+    """
+    torch = pytest.importorskip("torch", reason="pytorch not installed in this CI job")
+    pytest.importorskip("torchvision", reason="torchvision not installed in this CI job")
+
+    from torchvision.models import resnet18
+    from torchvision.models.detection.backbone_utils import _resnet_fpn_extractor
+    from torchvision.models.detection.retinanet import RetinaNet
+
+    num_classes = 3
+
+    # resnet18, not the templates' resnet50: this asserts a LIBRARY behaviour,
+    # so the smallest backbone that exercises it is the right one for CI.
+    def _under_allocated():
+        backbone = _resnet_fpn_extractor(resnet18(weights=None), trainable_layers=1)
+        # The bug: num_classes, NOT num_classes + 1.
+        return RetinaNet(backbone, num_classes=num_classes)
+
+    with pytest.raises((IndexError, RuntimeError)):
+        _assert_speaks_handler_contract(
+            torch, _under_allocated(), "RetinaNet(no-background-channel)", num_classes
+        )
+
+    # Positive control: the SAME model, the SAME assertions, with the label
+    # range this file used before backend#3062. It passes — so the red above is
+    # produced by the widened range and by nothing else.
+    _assert_speaks_handler_contract(
+        torch,
+        _under_allocated(),
+        "RetinaNet(no-background-channel, old label range)",
+        num_classes - 1,
     )

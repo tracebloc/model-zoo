@@ -20,6 +20,7 @@ on:
       - "tools/seed_contract.py"
       - "tools/seed_index.py"
       - "tools/check_dump_coverage.py"
+      - "tools/sync_zoo_weights.py"
       - "tools/requirements-engine-pin.txt"
       - "manifest.json"
       - ".github/workflows/verify-dumps-engine-pin.yml"
@@ -34,6 +35,7 @@ on:
       - "tools/seed_contract.py"
       - "tools/seed_index.py"
       - "tools/check_dump_coverage.py"
+      - "tools/sync_zoo_weights.py"
       - "tools/requirements-engine-pin.txt"
       - "manifest.json"
       - ".github/workflows/verify-dumps-engine-pin.yml"
@@ -170,6 +172,17 @@ jobs:
       # owns the fail-closed decision (armed-green on an ABSENT manifest, red on
       # a manifest present with dumps it cannot account for), and duplicating
       # that judgement here is how the two drift apart.
+      #
+      # WHICH BRANCH IS TAKEN TODAY, and it is the first one: nothing in THIS
+      # job puts a manifest.json in the checkout. The manifest lives in
+      # `backend` and reaches CI as the `dump-manifest` artifact minted by job
+      # 4a — which only `dump-coverage` (4b) consumes. Wiring 4a's artifact in
+      # here is NOT a free arming: the committed manifest is keyed `entries`
+      # while verify_dumps_against_engine_pin.py reads `dumps`, so consuming it
+      # unchanged would take that tool's "manifest present but declares no
+      # dumps" fail-closed path and turn this job red on a schema mismatch, not
+      # on a bad dump. The schema is backend#3059's; so the first branch now
+      # SAYS it is structural instead of implying a manifest could arrive.
       - name: Obtain staged dumps from the model store
         env:
           # The store URI is backend#2659's decision, so it is configuration and
@@ -180,9 +193,13 @@ jobs:
           set -euo pipefail
           mkdir -p dist
           if [ ! -f manifest.json ]; then
-            echo "SKIP (no manifest): no manifest.json in the checkout, so no"
-            echo "  dumps are declared for verification. The gate is armed and"
-            echo "  activates when a manifest lands. Not a defect."
+            echo "SKIP (no manifest): no manifest.json in this checkout, so no"
+            echo "  dumps are declared for verification here. This branch is"
+            echo "  STRUCTURAL, not incidental: no step in this job puts one"
+            echo "  here. The manifest lives in backend under tools/offline_weights"
+            echo "  and reaches CI as the dump-manifest artifact, which only the"
+            echo "  dump-coverage job consumes. Until this job consumes it too,"
+            echo "  this skip is taken on every run (see backend#3060)."
           elif [ ! -f tools/sync_zoo_weights.py ]; then
             echo "SKIP (no sync tool): manifest.json declares dumps, but the"
             echo "  fetch hook tools/sync_zoo_weights.py is NOT in this checkout."
