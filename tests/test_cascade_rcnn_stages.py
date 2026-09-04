@@ -674,9 +674,11 @@ def test_no_trainable_parameter_is_unreachable_by_the_loss():
     """MUTATION: build a head, or a whole stage, and never call it.
 
     ``requires_grad``-aware on purpose: ``p.grad is None`` alone false-flags the
-    deliberately frozen ResNet stem and the FrozenBatchNorm statistics, which
-    are meant to be untouched. The defect is a TRAINABLE parameter the loss
-    never reaches.
+    deliberately frozen ResNet stem and ``layer1`` (``trainable_layers=3``),
+    whose parameters -- including their GroupNorm affine values, since
+    backend#3093 moved the backbone off FrozenBatchNorm2d and those values are
+    now parameters rather than buffers -- are meant to be untouched. The defect
+    is a TRAINABLE parameter the loss never reaches.
     """
     torch.manual_seed(0)
     model = MODULE.MyModel(3)
@@ -841,44 +843,69 @@ def test_each_stage_head_matches_the_published_head_arithmetic():
         del model
 
 
+#: ResNet-50 normalises this many channels. Referenced only to SIZE the
+#: regression the reconciliation below would see if the backbone went back to
+#: FrozenBatchNorm2d, which holds the two-per-channel affine values as buffers
+#: instead of parameters (backend#3093).
+RESNET50_NORMALISED_CHANNELS = 26560
+
+
 def test_the_whole_model_reconciles_against_the_two_oracles():
     """The end-to-end number, with every term sourced from outside this file.
 
-    ``total = oracle backbone + oracle RPN + 3 x derived stage - 53,120``.
+    ``total = oracle backbone + oracle RPN + 3 x derived stage``, with NO
+    correction term.
 
-    The correction is exact and explained, which is what makes it admissible
-    rather than a fudge: this template uses ``FrozenBatchNorm2d``, which holds
-    weight and bias as BUFFERS, while torchvision's untrained builder uses live
-    ``BatchNorm2d``, which holds them as PARAMETERS. ResNet-50 normalises 26,560
-    channels, so exactly ``2 x 26,560 = 53,120`` affine values move from
-    parameters to buffers. Both halves of that are asserted below, so the
-    correction cannot silently absorb a real discrepancy.
+    It used to carry one. While this template built ``FrozenBatchNorm2d`` --
+    which holds ``weight``/``bias`` as BUFFERS where torchvision's untrained
+    builder holds them as PARAMETERS -- the two backbones differed by exactly
+    ``2 x 26,560 = 53,120`` affine values, and that had to be subtracted here.
+    backend#3093 replaced frozen BN with GroupNorm, whose ``weight``/``bias``
+    ARE parameters of the same shapes, so the correction is now zero and the
+    reconciliation is exact against the oracle. The 53,120 is kept as a named
+    constant only to SIZE that regression in the failure message, not as a term
+    in the arithmetic.
+
+    Both halves of the old correction still have a claim asserted below, in
+    their post-fix form: the backbone's parameter count must MATCH
+    torchvision's, and the backbone must hold NO buffers at all -- GroupNorm
+    has no running statistics for the averaging service to ship each federated
+    round, which is the property frozen BN was reached for and the reason this
+    is not simply live ``BatchNorm2d``.
     """
     mine = MODULE.MyModel(3)
     oracle = _oracle()
 
-    normalised_channels = 26560
-    frozen_affine = 2 * normalised_channels
-
     oracle_backbone = sum(p.numel() for p in oracle.backbone.parameters())
     oracle_rpn = sum(p.numel() for p in oracle.rpn.parameters())
-    expected = oracle_backbone + oracle_rpn + 3 * _derived_stage_parameters(4) - frozen_affine
+    expected = oracle_backbone + oracle_rpn + 3 * _derived_stage_parameters(4)
 
     measured = sum(p.numel() for p in mine.parameters())
     assert measured == expected, (
         f"the model has {measured} parameters; torchvision's backbone + RPN "
-        f"plus three published-width stages minus the {frozen_affine} frozen "
-        f"affine values gives {expected} (difference {measured - expected})"
+        f"plus three published-width stages gives {expected} (difference "
+        f"{measured - expected}). A GroupNorm backbone has the same parameter "
+        f"count as torchvision's BatchNorm one, so this needs no correction "
+        f"term; a shortfall of exactly "
+        f"{2 * RESNET50_NORMALISED_CHANNELS} would mean the backbone went back "
+        f"to FrozenBatchNorm2d (backend#3093)"
     )
 
-    # The correction, both halves, so it cannot be a coincidence of the right
-    # size: the affine values must be ABSENT from the parameters and PRESENT in
-    # the buffers, and FrozenBatchNorm2d keeps four buffers per channel
-    # (weight, bias, running_mean, running_var) where BatchNorm2d keeps two
-    # plus a scalar num_batches_tracked.
-    assert oracle_backbone - sum(p.numel() for p in mine.backbone.parameters()) == frozen_affine
-    assert sum(b.numel() for b in mine.backbone.buffers()) == 4 * normalised_channels, (
-        "FrozenBatchNorm2d should hold four buffers per normalised channel"
+    # Both halves, so a matching total cannot be a coincidence of the right
+    # size: the affine values must be PRESENT in the parameters, and the
+    # backbone must hold no buffers at all.
+    mine_backbone = sum(p.numel() for p in mine.backbone.parameters())
+    assert mine_backbone == oracle_backbone, (
+        f"the backbone has {mine_backbone} parameters against torchvision's "
+        f"{oracle_backbone}; GroupNorm holds weight/bias as parameters of the "
+        f"same shapes as BatchNorm2d, so these must be equal. A shortfall of "
+        f"{2 * RESNET50_NORMALISED_CHANNELS} is FrozenBatchNorm2d holding them "
+        f"as buffers instead (backend#3093)"
+    )
+    assert sum(b.numel() for b in mine.backbone.buffers()) == 0, (
+        "a GroupNorm backbone holds no buffers: no running statistics for the "
+        "averaging service to ship each federated round, and none of "
+        "FrozenBatchNorm2d's four-per-channel either"
     )
 
 

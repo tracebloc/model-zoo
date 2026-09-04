@@ -731,8 +731,10 @@ PUBLISHED_REG_LAYERS = 3
 PUBLISHED_ROI_EDGE = 7
 PUBLISHED_PROPOSALS = 100
 PUBLISHED_STAGES = 6
-#: ResNet-50 normalises this many channels, so FrozenBatchNorm2d moves exactly
-#: 2x this many affine values from parameters to buffers.
+#: ResNet-50 normalises this many channels. Referenced only to SIZE the
+#: regression the backbone comparison below would see if the backbone went back
+#: to FrozenBatchNorm2d, which holds the two-per-channel affine values as
+#: buffers instead of parameters (backend#3093).
 RESNET50_NORMALISED_CHANNELS = 26560
 
 
@@ -787,11 +789,15 @@ def test_the_backbone_matches_torchvisions_faster_rcnn_backbone():
     this template makes — so the comparison is not just "did I pass the same
     arguments twice".
 
-    torchvision's untrained builder uses live ``BatchNorm2d`` where this
-    template uses ``FrozenBatchNorm2d``, which holds weight and bias as buffers.
-    ResNet-50 normalises 26,560 channels, so the parameter counts differ by
-    exactly ``2 x 26,560``. Both halves of that are asserted, so the correction
-    cannot absorb a real discrepancy.
+    The two backbones' parameter counts must now be EQUAL, with no correction
+    term. They used to differ by exactly ``2 x 26,560``: torchvision's
+    untrained builder uses live ``BatchNorm2d`` where this template used
+    ``FrozenBatchNorm2d``, which holds weight and bias as buffers. backend#3093
+    replaced frozen BN with GroupNorm, whose weight and bias ARE parameters of
+    the same shapes, so the difference is zero and the comparison is exact.
+    Both halves are still asserted below in their post-fix form -- equal
+    parameters, and no buffers at all -- so a re-introduced norm mismatch fails
+    here rather than being absorbed.
     """
     from torchvision.models.detection import fasterrcnn_resnet50_fpn
 
@@ -808,16 +814,19 @@ def test_the_backbone_matches_torchvisions_faster_rcnn_backbone():
         f"{next((a, b) for a, b in zip(conv_shapes(model.backbone), conv_shapes(oracle.backbone)) if a != b)}"
     )
 
-    frozen_affine = 2 * RESNET50_NORMALISED_CHANNELS
     mine = sum(p.numel() for p in model.backbone.parameters())
     theirs = sum(p.numel() for p in oracle.backbone.parameters())
-    assert theirs - mine == frozen_affine, (
+    assert mine == theirs, (
         f"the backbone has {mine} parameters against torchvision's {theirs}; "
-        f"the FrozenBatchNorm2d difference should be exactly {frozen_affine}"
+        f"GroupNorm holds weight/bias as parameters of the same shapes as "
+        f"BatchNorm2d, so these must be equal. A shortfall of exactly "
+        f"{2 * RESNET50_NORMALISED_CHANNELS} is FrozenBatchNorm2d holding them "
+        f"as buffers instead (backend#3093)"
     )
-    assert sum(b.numel() for b in model.backbone.buffers()) == 4 * RESNET50_NORMALISED_CHANNELS, (
-        "FrozenBatchNorm2d should hold four buffers per normalised channel "
-        "(weight, bias, running_mean, running_var)"
+    assert sum(b.numel() for b in model.backbone.buffers()) == 0, (
+        "a GroupNorm backbone holds no buffers: no running statistics for the "
+        "averaging service to ship each federated round, and none of "
+        "FrozenBatchNorm2d's four-per-channel either"
     )
     # P2 is load-bearing for this architecture: the proposals start as the whole
     # image, so the finest level is what a specialised proposal eventually pools
@@ -902,7 +911,8 @@ def test_no_trainable_parameter_is_unreachable_by_the_loss():
     """MUTATION: build a stage, or a head, and never call it.
 
     ``requires_grad``-aware on purpose: ``p.grad is None`` alone false-flags the
-    deliberately frozen ResNet stem and the FrozenBatchNorm statistics. The
+    deliberately frozen ResNet stem and ``layer1`` -- whose GroupNorm affine
+    values are parameters since backend#3093, not buffers. The
     defect is a TRAINABLE parameter the loss never reaches.
     """
     torch.manual_seed(0)

@@ -125,15 +125,18 @@ Federated note (GroupNorm, not BatchNorm)
 -----------------------------------------
 Norm layers are GroupNorm. Upstream uses BatchNorm (SyncBN when distributed),
 and an earlier revision defended that as "the same trade every torchvision
-detector in this family already carries" -- FALSE, and caught in review: the
-shipped family uses ``norm_layer=misc_nn_ops.FrozenBatchNorm``, whose running
-statistics never update. This template carried 24,978 live buffer elements,
-each shipped and averaged every federated round.
+detector in this family already carries" -- FALSE, and caught in review: at
+the time the torchvision family used ``norm_layer=misc_nn_ops.FrozenBatchNorm``,
+whose running statistics never update. This template carried 24,978 live buffer
+elements, each shipped and averaged every federated round.
 
 GroupNorm rather than FrozenBatchNorm2d because Frozen BN moves
 ``weight``/``bias`` into buffers and would change the parameter count,
 invalidating the published-architecture guard. GroupNorm keeps them as
-parameters and carries no running statistics.
+parameters and carries no running statistics. Frozen BN was also a no-op on
+every from-scratch build (backend#3093), and the torchvision family moved to
+GroupNorm in model-zoo#262 -- so the roster is now GroupNorm throughout, and
+this template's choice is the one that generalised.
 
 The head's per-level norms remain per-level, which is the point of RTMDet's
 "SepBN" head: one conv tower's weights serving three levels, each level
