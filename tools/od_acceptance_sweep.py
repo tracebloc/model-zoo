@@ -873,11 +873,15 @@ def sweep(
     engine_root: Optional[Path] = None,
 ) -> Dict[str, Any]:
     """Run the sweep and return the report structure."""
-    try:
-        import torch
-    except ImportError as error:  # pragma: no cover -- environment, not logic
-        raise SystemExit(f"this sweep needs torch: {error}") from error
-
+    # SELECTION IS VALIDATED BEFORE TORCH IS IMPORTED, deliberately.
+    #
+    # Two reasons. It fails fast on a typo without needing a multi-gigabyte
+    # dependency installed to be told the name is wrong. And it makes these
+    # guards TESTABLE: model-zoo CI runs the suite once per framework env, and in
+    # the sklearn and survival envs there is no torch -- so guards placed after
+    # the import could only ever be exercised in one of three jobs. My first
+    # version of this put them after, and the two tests asserting their messages
+    # failed in both torch-less envs against `this sweep needs torch`.
     accepted = family_values()
     covered = family_templates(accepted)
     if not covered:
@@ -942,6 +946,13 @@ def sweep(
                 else ""
             )
         )
+
+    # Only now is torch actually needed: everything above is file reading and
+    # argument validation.
+    try:
+        import torch
+    except ImportError as error:  # pragma: no cover -- environment, not logic
+        raise SystemExit(f"this sweep needs torch: {error}") from error
 
     rows: List[Dict[str, Any]] = []
     for path in selected:
