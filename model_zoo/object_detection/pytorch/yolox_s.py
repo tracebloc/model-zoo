@@ -74,16 +74,34 @@ exactly this edge.
 
 Label space
 -----------
-Both platform producers emit **0-based** class indices: the engine's dataset
-resolves ``<name>`` to ``classes.index(name)`` in ``[0, C-1]``
-(``core/datasets/image_detection_dataset_pytorch.py``) and the SDK's dummy OD
-dataset draws ``random.randint(0, num_classes - 1)``. The head therefore
-allocates ``output_classes + 1`` sigmoid channels and uses the incoming label
-**directly** as the channel index, so index 0 is a real class and a 1-based
-producer (whose maximum label is ``C``) is in range too. Nothing is silently
-folded into a background slot — worth stating, because the two-stage
-torchvision templates in this family add their ``+1`` for a softmax background
-class and so learn a 0-labelled object as background.
+The head allocates ``output_classes + 1`` sigmoid channels and uses the
+incoming label **directly** as the channel index — no offset arithmetic in this
+file, in either direction.
+
+What fills those channels is the family handler's business, and as of
+backend#3062 it hands this model label space ``[1, C]``: the platform's
+producers emit 0-based dataset indices, and the handler shifts them up by
+``BACKGROUND_LABEL_OFFSET`` before training and back down after inference. The
+``+1`` channel is what makes that shift representable, so a label of ``C`` is
+in range.
+
+⚠️ The consequence, and it is a real coupling rather than a note: **channel 0
+is never a positive target.** It is trained only as a negative, so emitting it
+would produce detections carrying dataset class ``-1`` once the handler shifts
+back. ``_predictions`` therefore drops it **before** the score threshold and
+the top-k, not after — the engine does filter these out downstream, but that
+filter runs after this function has already spent detection slots on them.
+
+This template consequently REQUIRES the family handler's shift. Fed raw
+0-based dataset labels it would discard the first class. That is the contract
+as of backend#3062, and the zoo's own family train-step test asserts the
+``[1, C]`` range (model-zoo#245).
+
+This section previously described the opposite contract — "index 0 is a real
+class", "nothing is silently folded into a background slot" — which was true
+before the channel-0 drop landed and stale after it. These templates ship as a
+single uploaded ``.py``, so the docstring is the spec; it was corrected in
+review (model-zoo#237).
 
 Federated note (GroupNorm, not BatchNorm)
 -----------------------------------------
@@ -160,10 +178,36 @@ CENTER_RADIUS = 2.5  # candidate anchors within +-2.5 strides of a GT centre
 SIMOTA_TOPK = 10  # IoUs summed to pick each GT's dynamic k
 SIMOTA_IOU_COST_WEIGHT = 3.0
 #: Penalty added to the cost of a candidate that is outside the GT box AND
-#: outside its centre region. Large enough to never be selected while any
-#: geometrically valid candidate remains, but finite so the matrix stays
-#: comparable — inf would make ``topk`` return arbitrary ties.
-SIMOTA_OUTSIDE_PENALTY = 1.0e8
+#: outside its centre region. Two-sided, and BOTH sides are load-bearing:
+#:
+#: * large enough that a penalised candidate never outranks an unpenalised one
+#:   — so it must exceed the largest cost this matrix can attain, which is
+#:   ``num_classes * -log(_EPS)`` from the classification BCE plus
+#:   ``SIMOTA_IOU_COST_WEIGHT * -log(_EPS)`` from the IoU term;
+#: * small enough that ``penalty + cost`` is still *representable* in float32,
+#:   because the whole justification for a finite value over ``inf`` is that
+#:   the matrix stays comparable — ``inf`` would make ``topk`` return arbitrary
+#:   ties.
+#:
+#: This was ``1.0e8``, which satisfies the first and silently destroys the
+#: second (model-zoo#237 review). float32's ULP at 1e8 is **8.0**, so
+#: ``1e8 + x == 1e8`` for every ``x <= 4.0`` — the comment claimed
+#: comparability while the arithmetic erased it. Where it bites is a ground
+#: truth with no anchor centre inside it at any level: ``inside_both`` is then
+#: all-False, *every* candidate carries the penalty, and selection falls to
+#: 8-unit quantisation plus index order instead of to IoU and classification
+#: cost. Measured on two candidates 0.373 apart in cost, at 1e8 SimOTA picked
+#: the IoU-0.30 anchor over the IoU-0.34 one purely because it came first.
+#:
+#: 1e5 is the value: ULP 0.0078125, fine enough to preserve a cost delta of
+#: 0.01 (roughly a 0.01 IoU difference near IoU 0.5), while still ~340x above
+#: the attainable cost ceiling at this template's class count. Upstream YOLOX
+#: has used both 1e6 (current ``main``, ULP 0.0625) and 1e5 (the long-lived
+#: value still in the widely mirrored forks); 1e6's ULP is too coarse for the
+#: 0.01 criterion, so this takes the finer of the two.
+#: ``guard_yolox_outside_penalty_survives_float32`` asserts both sides rather
+#: than trusting this comment.
+SIMOTA_OUTSIDE_PENALTY = 1.0e5
 
 #: Regression-loss weight in the total (paper: 5.0).
 REG_LOSS_WEIGHT = 5.0
@@ -211,7 +255,15 @@ def _round_depth(blocks: int) -> int:
 
 
 class ConvBNAct(nn.Module):
-    """conv -> BatchNorm -> SiLU, the unit every block here is built from."""
+    """conv -> GroupNorm -> SiLU, the unit every block here is built from.
+
+    Named ``ConvBNAct`` after the upstream block it stands in for; the norm
+    is GroupNorm, not BatchNorm. This docstring said "BatchNorm" until
+    model-zoo#237 review caught it -- the class name is a deliberate
+    upstream-parity name, the docstring was simply stale, and these
+    templates ship as a single uploaded ``.py`` where the docstring IS the
+    spec. See the federated note in the module docstring for why GroupNorm.
+    """
 
     def __init__(self, in_ch, out_ch, ksize=1, stride=1, groups=1, act=True):
         super().__init__()
@@ -872,8 +924,23 @@ class YOLOXS(nn.Module):
             # only `labels >= BACKGROUND_LABEL_OFFSET`. But that is downstream
             # of THIS function's score threshold and top-k, so a channel-0
             # candidate still consumes a detection slot a real object should
-            # have had. Acute here: SCORE_THRESH is 0.001 against a 0.01 prior,
-            # so channel 0 clears it constantly at initialisation.
+            # have had.
+            #
+            # NOT acute at initialisation on THIS template, and the sentence
+            # here used to claim it was: "SCORE_THRESH is 0.001 against a 0.01
+            # prior, so channel 0 clears it constantly". Both halves were the
+            # rtmdet twin's, copied verbatim (model-zoo#237 review). YOLOX's
+            # SCORE_THRESH is 0.01, and its score is
+            # `obj.sigmoid() * cls.sigmoid()` = 1e-2 * 1e-2 = 1e-4 at the
+            # prior -- two orders of magnitude BELOW its own threshold, where
+            # rtmdet ranks on a single sigmoid. Measured on the built model at
+            # `output_classes=12`: a forward pass at initialisation returns 2
+            # detections here (random conv init scatters a few anchors over
+            # the line) against rtmdet's saturated 300.
+            #
+            # The drop is still right to have: channel 0 can score high after
+            # training, and correctness does not depend on how often it does.
+            # But the justification is the sibling's and does not transfer.
             #
             # Consequence worth stating plainly: this template now REQUIRES the
             # family handler's shift. Fed raw 0-based dataset labels it would

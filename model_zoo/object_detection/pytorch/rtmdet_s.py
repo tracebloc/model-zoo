@@ -69,14 +69,38 @@ exactly this edge.
 
 Label space
 -----------
-Both platform producers emit **0-based** class indices — the engine resolves
-``<name>`` to ``classes.index(name)`` in ``[0, C-1]``, the SDK's dummy OD
-dataset draws ``random.randint(0, num_classes - 1)``. The head allocates
-``output_classes + 1`` sigmoid channels and uses the incoming label
-**directly** as the channel index, so index 0 is a real class and a 1-based
-producer (maximum label ``C``) is in range too. Background is not a channel at
-all here: it is the sentinel index ``num_classes`` in the label vector, which
-the quality-focal loss treats as "all channels target 0".
+The head allocates ``output_classes + 1`` sigmoid channels and uses the
+incoming label **directly** as the channel index — no offset arithmetic in this
+file, in either direction.
+
+As of backend#3062 the family handler hands this model label space ``[1, C]``:
+the platform's producers emit 0-based dataset indices, and the handler shifts
+them up by ``BACKGROUND_LABEL_OFFSET`` before training and back down after
+inference. The ``+1`` channel is what makes that shift representable, so a
+label of ``C`` is in range.
+
+⚠️ **Channel 0 is therefore never a positive target** — trained only as a
+negative — and ``_predictions`` drops it **before** the score threshold and
+the top-k rather than leaving it to the engine's downstream filter, which runs
+after this function has already spent detection slots. Acute on this template
+specifically: ``SCORE_THRESH`` is 0.001 against the head's 1e-2 prior, so at
+initialisation channel 0 clears the threshold at every prior.
+
+Two things are true at once about "background" here and this section used to
+conflate them, describing only the second:
+
+* in the **loss**, background is not a channel — it is the sentinel index
+  ``num_classes`` in the label vector, which the quality-focal loss treats as
+  "all channels target 0";
+* at **inference**, channel 0 IS a channel that gets dropped, because the
+  handler's shift leaves it unclaimed by any dataset class.
+
+This template consequently REQUIRES the handler's shift; fed raw 0-based
+labels it would discard the first class (backend#3062, asserted by
+model-zoo#245). The pre-fix wording — "index 0 is a real class",
+"background is not a channel at all here" — was stale and is corrected here
+(model-zoo#237 review); these templates ship as a single uploaded ``.py``, so
+the docstring is the spec.
 
 Regression parameterisation
 ---------------------------
@@ -184,6 +208,10 @@ BBOX_LOSS_WEIGHT = 2.0
 SCORE_THRESH = 0.001
 NMS_THRESH = 0.65
 DETECTIONS_PER_IMAGE = 300
+#: Pre-NMS top-k, mmdet's rtmdet ``test_cfg.nms_pre``. See the note in
+#: ``_predictions`` — without it 100,778 boxes reach ``batched_nms`` at
+#: initialisation and torchvision falls back to its per-class Python loop.
+NMS_PRE = 30000
 
 IMAGE_MEAN = [0.485, 0.456, 0.406]
 IMAGE_STD = [0.229, 0.224, 0.225]
@@ -220,7 +248,12 @@ def _deepen(blocks: int) -> int:
 
 
 class ConvBNAct(nn.Module):
-    """conv -> BatchNorm -> SiLU."""
+    """conv -> GroupNorm -> SiLU.
+
+    Named ``ConvBNAct`` after the upstream block it stands in for; the norm
+    is GroupNorm, not BatchNorm (model-zoo#237 review caught this docstring
+    still claiming BN). See the federated note in the module docstring.
+    """
 
     def __init__(self, in_ch, out_ch, ksize=1, stride=1, groups=1, act=True):
         super().__init__()
@@ -291,10 +324,32 @@ class CSPNeXtBlock(nn.Module):
 
 
 class CSPLayer(nn.Module):
-    """CSPNeXt stage: split, run ``n`` blocks on one half, gate the concatenation
-    with channel attention, fuse."""
+    """CSPNeXt stage: split, run ``n`` blocks on one half, optionally gate the
+    concatenation with channel attention, fuse.
 
-    def __init__(self, in_ch, out_ch, n=1, add_identity=True, expand_ratio=0.5):
+    ``channel_attention`` is a REQUIRED keyword, deliberately — it has no
+    default at all. Published RTMDet puts channel attention in the
+    **backbone only**: mmdet's ``CSPLayer`` takes ``channel_attention: bool =
+    False``, ``CSPNeXt`` passes it through (its own default is ``True``), and
+    ``CSPNeXtPAFPN`` passes no such argument at either of its ``CSPLayer``
+    call sites. This template originally built ``ChannelAttention``
+    unconditionally, so the four PAFPN stages carried attention the published
+    model does not: **+410,752 parameters, 4.59% over published RTMDet-S**
+    (model-zoo#237 review).
+
+    A *defaulted* flag would have fixed only the instance. The reason it went
+    unnoticed for four review passes is that nothing forced either call site
+    to state its intent, and the same trap is one copy-paste away for every
+    future CSP stage on this roster. Requiring the keyword makes the neck's
+    "no attention" an explicit, reviewable claim at each of the four sites
+    rather than an inherited default — the same shape review asked for when
+    ``Bottleneck.expansion`` became required on the YOLOX twin, and for the
+    same reason: it kills the class, not the instance.
+    """
+
+    def __init__(
+        self, in_ch, out_ch, n=1, add_identity=True, expand_ratio=0.5, *, channel_attention
+    ):
         super().__init__()
         mid = max(2, int(out_ch * expand_ratio))
         self.main_conv = ConvBNAct(in_ch, mid, 1, stride=1)
@@ -302,12 +357,14 @@ class CSPLayer(nn.Module):
         self.blocks = nn.Sequential(
             *[CSPNeXtBlock(mid, mid, add_identity) for _ in range(n)]
         )
-        self.attention = ChannelAttention(2 * mid)
+        self.attention = ChannelAttention(2 * mid) if channel_attention else None
         self.final_conv = ConvBNAct(2 * mid, out_ch, 1, stride=1)
 
     def forward(self, x):
         merged = torch.cat((self.blocks(self.main_conv(x)), self.short_conv(x)), dim=1)
-        return self.final_conv(self.attention(merged))
+        if self.attention is not None:
+            merged = self.attention(merged)
+        return self.final_conv(merged)
 
 
 class SPPFBottleneck(nn.Module):
@@ -348,7 +405,16 @@ class CSPNeXt(nn.Module):
             if use_spp:
                 layers.append(SPPFBottleneck(out_ch, out_ch))
             layers.append(
-                CSPLayer(out_ch, out_ch, n=_deepen(blocks), add_identity=add_identity)
+                CSPLayer(
+                    out_ch,
+                    out_ch,
+                    n=_deepen(blocks),
+                    add_identity=add_identity,
+                    # The backbone is the ONE place published RTMDet puts
+                    # channel attention (mmdet `CSPNeXt` defaults it to True
+                    # and passes it down). The neck must not — see CSPLayer.
+                    channel_attention=True,
+                )
             )
             stages.append(nn.Sequential(*layers))
             out_channels.append(out_ch)
@@ -377,15 +443,28 @@ class CSPNeXtPAFPN(nn.Module):
         blocks = _deepen(3)
         self.upsample = nn.Upsample(scale_factor=2, mode="nearest")
 
+        # channel_attention=False at all four stages: mmdet's `CSPNeXtPAFPN`
+        # passes no `channel_attention` to either of its `CSPLayer` call sites,
+        # so published RTMDet-S has none in the neck. Building it here cost
+        # +410,752 parameters (4.59% over the published 8.89M) and was invisible
+        # because the reference transcription had copied the same mistake.
         self.reduce_c5 = ConvBNAct(c5, c4, 1, stride=1)
-        self.top_down_c4 = CSPLayer(2 * c4, c4, n=blocks, add_identity=False)
+        self.top_down_c4 = CSPLayer(
+            2 * c4, c4, n=blocks, add_identity=False, channel_attention=False
+        )
         self.reduce_c4 = ConvBNAct(c4, c3, 1, stride=1)
-        self.top_down_c3 = CSPLayer(2 * c3, c3, n=blocks, add_identity=False)
+        self.top_down_c3 = CSPLayer(
+            2 * c3, c3, n=blocks, add_identity=False, channel_attention=False
+        )
 
         self.downsample_p3 = ConvBNAct(c3, c3, 3, stride=2)
-        self.bottom_up_p4 = CSPLayer(2 * c3, c4, n=blocks, add_identity=False)
+        self.bottom_up_p4 = CSPLayer(
+            2 * c3, c4, n=blocks, add_identity=False, channel_attention=False
+        )
         self.downsample_p4 = ConvBNAct(c4, c4, 3, stride=2)
-        self.bottom_up_p5 = CSPLayer(2 * c4, c5, n=blocks, add_identity=False)
+        self.bottom_up_p5 = CSPLayer(
+            2 * c4, c5, n=blocks, add_identity=False, channel_attention=False
+        )
 
         self.out_convs = nn.ModuleList(
             [ConvBNAct(channels, out_channels, 3, stride=1) for channels in in_channels]
@@ -868,6 +947,30 @@ class RTMDetS(nn.Module):
                 labels[keep],
                 box_index[keep],
             )
+            # Pre-NMS top-k, upstream's `nms_pre`. Without it every candidate
+            # that clears `score_thresh` enters `batched_nms`, and this
+            # template's 0.001 threshold against the head's 1e-2 prior means
+            # essentially all of them do: MEASURED 100,778 boxes at
+            # initialisation, i.e. 8,400 priors x 12 real class channels
+            # (model-zoo#237 review).
+            #
+            # torchvision dispatches `batched_nms` on `boxes.numel() > 4000` on
+            # CPU -- 1,000 boxes -- so past that it takes
+            # `_batched_nms_vanilla`, a Python loop running one NMS pass per
+            # class label present. `detections_per_image` caps only the OUTPUT,
+            # so it does nothing about that work.
+            #
+            # The value is mmdet's own rtmdet test_cfg `nms_pre=30000` rather
+            # than a tighter number invented here: it is the published
+            # post-processing config, it sits two orders above the 300-detection
+            # output cap so it cannot cost recall in practice, and picking
+            # something smaller would be a recall decision this template has no
+            # basis to make. YOLOX is unaffected either way -- its score is
+            # `obj.sigmoid() * cls.sigmoid()`, 1e-4 at the prior against its own
+            # 0.01 threshold -- but it gets the same cap for symmetry.
+            if flat_scores.numel() > NMS_PRE:
+                flat_scores, order = flat_scores.topk(NMS_PRE)
+                labels, box_index = labels[order], box_index[order]
             candidate_boxes = image_boxes[box_index]
 
             keep = batched_nms(candidate_boxes, flat_scores, labels, self.nms_thresh)

@@ -44,6 +44,7 @@ trips one of those instead of the guard proper.
 """
 
 import importlib.util
+import math
 import pathlib
 import re
 import tempfile
@@ -497,7 +498,9 @@ _PINNED_TOTALS = {
     # averages every round. A non-zero reading here means a BatchNorm (or
     # another stateful norm) came back.
     "YOLOXS": {"buffers": 0, "tensors": 240},
-    "RTMDetS": {"buffers": 0, "tensors": 274},
+    # 274 -> 266 when the four PAFPN stages stopped building ChannelAttention
+    # (model-zoo#237 review): four Conv2d, weight and bias each.
+    "RTMDetS": {"buffers": 0, "tensors": 266},
 }
 
 
@@ -571,7 +574,7 @@ def guard_rtmdet_csp_block_runs_at_full_branch_width(module) -> None:
     identified — so it gets the guard too, or the next edit can silently move
     the asymmetry to this side instead.
     """
-    layer = module.CSPLayer(64, 64, n=1)
+    layer = module.CSPLayer(64, 64, n=1, channel_attention=False)
     branch = layer.main_conv.conv.out_channels
     inner = layer.blocks[0].conv1.conv.out_channels
     assert inner == branch, (
@@ -579,6 +582,73 @@ def guard_rtmdet_csp_block_runs_at_full_branch_width(module) -> None:
         f"CSPNeXtBlock squeezes to {inner}. mmdet passes expansion=1.0 to the "
         f"block, so its 3x3 runs at full branch width. Squeezing again narrows "
         f"the whole backbone and neck, silently."
+    )
+
+
+def guard_rtmdet_channel_attention_is_backbone_only(module) -> None:
+    """``ChannelAttention`` belongs to the backbone's CSP stages, and to no
+    other.
+
+    The published design puts it there and only there: mmdet's ``CSPLayer``
+    takes ``channel_attention: bool = False``, ``CSPNeXt`` passes it down (its
+    own default is ``True``), and ``CSPNeXtPAFPN`` passes no such argument at
+    either of its two ``CSPLayer`` call sites. This template built it
+    unconditionally, so all four PAFPN stages carried it — **+410,752
+    parameters, 4.59% over the published 8.89M** (model-zoo#237 review).
+
+    ``published_architecture`` now also sees this, because the reference
+    transcription was gated in the same change. This guard exists anyway
+    because that one is an *arithmetic* witness: it fails on the delta, so any
+    future compensating width change hides the structure again while the total
+    balances. This one states the structure.
+    """
+    model = _build(module, module.output_classes)
+
+    def stages(root):
+        return [
+            (name, sub)
+            for name, sub in root.named_modules()
+            if type(sub).__name__ == "CSPLayer"
+        ]
+
+    backbone = stages(model.backbone)
+    neck = stages(model.neck)
+    assert len(backbone) == 4 and len(neck) == 4, (
+        f"rtmdet_s: expected 4 CSPLayer stages in each of backbone and neck, "
+        f"found {len(backbone)} and {len(neck)}. The fixture no longer "
+        f"describes the model, so the assertions below mean nothing."
+    )
+
+    # FIXTURE DEGENERACY, asserted rather than assumed. "The neck has no
+    # ChannelAttention" is also satisfied by a template that cannot build one
+    # at all -- deleting the class, or hardwiring the flag off -- and that
+    # would be a silent architecture change the backbone assertion below is
+    # supposed to catch but the neck one would applaud. So pin that the
+    # capability is present and switchable before checking where it is used.
+    assert hasattr(module, "ChannelAttention"), (
+        "rtmdet_s: ChannelAttention is gone entirely, so 'the neck has none' "
+        "is vacuously true and the backbone has lost a published component"
+    )
+    probe = module.CSPLayer(32, 32, n=1, channel_attention=True)
+    assert type(getattr(probe, "attention", None)).__name__ == "ChannelAttention", (
+        "rtmdet_s: CSPLayer(channel_attention=True) built no ChannelAttention, "
+        "so the flag is dead and every assertion here is vacuous"
+    )
+
+    missing = [name for name, stage in backbone if stage.attention is None]
+    assert not missing, (
+        f"rtmdet_s: backbone CSP stage(s) {missing} have no ChannelAttention. "
+        f"mmdet's CSPNeXt defaults channel_attention=True and passes it into "
+        f"every stage, so dropping it here ships a lighter backbone than "
+        f"published RTMDet-S."
+    )
+    extra = [name for name, stage in neck if stage.attention is not None]
+    assert not extra, (
+        f"rtmdet_s: neck CSP stage(s) {extra} build ChannelAttention. "
+        f"mmdet's CSPNeXtPAFPN passes no channel_attention to either CSPLayer "
+        f"call site, so published RTMDet-S has none in the neck; each stage "
+        f"here adds 2*mid*(2*mid+1) parameters the published model does not "
+        f"have (all four came to +410,752, 4.59% over 8.89M)."
     )
 
 
@@ -623,12 +693,19 @@ def _bn(channels):
 
 
 def _cba(in_ch, out_ch, kernel, groups=1):
-    """conv -> BatchNorm (affine); the activation has no parameters."""
+    """conv -> affine norm; the activation has no parameters.
+
+    The templates build GroupNorm rather than the BatchNorm upstream uses,
+    which is parameter-identical (weight + bias per channel) -- that
+    equivalence is why the published-spec derivation is unaffected by the
+    swap, and it is asserted separately by ``module_tree_size`` holding
+    buffers at 0.
+    """
     return _conv(in_ch, out_ch, kernel, groups) + _bn(out_ch)
 
 
 def _dws(in_ch, out_ch, kernel):
-    """Depthwise kxk then pointwise 1x1, each with its own BatchNorm."""
+    """Depthwise kxk then pointwise 1x1, each with its own affine norm."""
     return _cba(in_ch, in_ch, kernel, groups=in_ch) + _cba(in_ch, out_ch, 1)
 
 
@@ -689,20 +766,33 @@ def _reference_yolox_s_parameters(class_channels):
     return total
 
 
+#: mmdetection's own ``configs/rtmdet/README.md`` COCO results table: the
+#: ``RTMDet-s`` row reads **8.89M** parameters at input size 640 (44.6 box AP,
+#: 14.8 GFLOPs). Fetched from the upstream source, not recalled — and from
+#: OUTSIDE this repo, which is the entire point: while this was ``None`` the
+#: transcription below and the built tree only ever agreed with EACH OTHER,
+#: and that is exactly what hid an un-gated ``ChannelAttention`` in all four
+#: PAFPN stages (+410,752 parameters, 4.59% over published) through four
+#: review passes.
+#:
+#: Unlike the DFL-headed siblings on this roster (``yolov8_s``, ``yolov9_s``),
+#: RTMDet-S has no distribution-focal projection buffer, so there is no
+#: ``torch.arange``-vs-stored-tensor gap to account for here: the derivation
+#: below and the built module tree agree to the parameter.
+_PUBLISHED_RTMDET_S_PARAMETERS = 8_890_000
+
+
 def _reference_rtmdet_s_parameters(class_channels):
     """RTMDet-S parameter count, derived from the published spec alone.
 
     CSPNeXt P5 arch table at widen 0.5 / deepen 0.33, CSPNeXt-PAFPN to 128
     channels, RTMDetSepBNHead with share_conv=True.
 
-    NOTE — no published-total anchor for this one, deliberately. The YOLOX-S
-    figure above is one I can point at; for RTMDet-S I could not confirm a
-    published parameter count from a source independent of this session, so
-    asserting one would be exactly the mistake this whole block exists to
-    prevent — a number presented as evidence that is really just a guess. What
-    IS pinned is that this transcription of the arch table and the built module
-    tree agree to the parameter, plus the per-stage widths and block counts
-    below. If someone can anchor the published figure, add it here.
+    Anchored against mmdet's published 8.89M — see
+    ``_PUBLISHED_RTMDET_S_PARAMETERS``. This docstring used to carry a NOTE
+    declining to assert a published figure because none could be sourced
+    independently; that was the honest call at the time and it is now
+    superseded, because the figure is in mmdet's own config README.
     """
     def block(channels):  # CSPNeXtBlock, mmdet expansion 1.0
         return _cba(channels, channels, 3) + _dws(channels, channels, 5)
@@ -710,13 +800,18 @@ def _reference_rtmdet_s_parameters(class_channels):
     def attention(channels):
         return _conv(channels, channels, 1, bias=True)
 
-    def csp(in_ch, out_ch, blocks):
+    def csp(in_ch, out_ch, blocks, channel_attention):
+        # `channel_attention` is REQUIRED here for the same reason it is
+        # required on the template's own CSPLayer: this transcription had
+        # copied the defect it was supposed to catch, adding attention(2 * mid)
+        # at all eight call sites. A defaulted flag would have let the neck
+        # rows keep inheriting it silently.
         mid = out_ch // 2
         return (
             _cba(in_ch, mid, 1)
             + _cba(in_ch, mid, 1)
             + blocks * block(mid)
-            + attention(2 * mid)
+            + (attention(2 * mid) if channel_attention else 0)
             + _cba(2 * mid, out_ch, 1)
         )
 
@@ -731,13 +826,17 @@ def _reference_rtmdet_s_parameters(class_channels):
         total += _cba(in_ch, out_ch, 3)
         if use_spp:
             total += sppf(out_ch)
-        total += csp(out_ch, out_ch, blocks)
+        # BACKBONE: mmdet's CSPNeXt defaults channel_attention=True and passes
+        # it into every stage.
+        total += csp(out_ch, out_ch, blocks, channel_attention=True)
 
+    # NECK: mmdet's CSPNeXtPAFPN passes no channel_attention to either of its
+    # CSPLayer call sites, so all four PAFPN stages are un-gated.
     c3, c4, c5, blocks, out = 128, 256, 512, 1, 128
-    total += _cba(c5, c4, 1) + csp(2 * c4, c4, blocks)
-    total += _cba(c4, c3, 1) + csp(2 * c3, c3, blocks)
-    total += _cba(c3, c3, 3) + csp(2 * c3, c4, blocks)
-    total += _cba(c4, c4, 3) + csp(2 * c4, c5, blocks)
+    total += _cba(c5, c4, 1) + csp(2 * c4, c4, blocks, channel_attention=False)
+    total += _cba(c4, c3, 1) + csp(2 * c3, c3, blocks, channel_attention=False)
+    total += _cba(c3, c3, 3) + csp(2 * c3, c4, blocks, channel_attention=False)
+    total += _cba(c4, c4, 3) + csp(2 * c4, c5, blocks, channel_attention=False)
     total += _cba(c3, out, 3) + _cba(c4, out, 3) + _cba(c5, out, 3)  # out_convs
 
     # share_conv=True: the tower convs are ONE set of weights for all three
@@ -767,9 +866,43 @@ _REFERENCE = {
         "backbone_out": (128, 256, 512),
         "neck_out": (128, 128, 128),
         "csp_blocks": (1, 2, 2, 1),
-        "published": None,  # see the note in the reference function
+        "published": _PUBLISHED_RTMDET_S_PARAMETERS,
     },
 }
+
+
+#: Number of classes the published parameter figures are quoted at. Both
+#: anchors (YOLOX-S 9.0M, RTMDet-S 8.89M) are COCO numbers, and COCO is 80
+#: classes with no background channel — the templates' own ``+1`` label-space
+#: channel is a tracebloc convention and must NOT be added when comparing
+#: against a published total.
+_PUBLISHED_CLASS_COUNT = 80
+
+
+def _published_drift(reference):
+    """``(derived, |derived - published| / published)`` for ONE reference row.
+
+    Takes the whole reference dict and reads ``reference["parameters"]`` out of
+    it, so it is structurally incapable of evaluating a different entry's
+    transcription. That is the fix for a real defect, not a style preference:
+    this comparison was inlined in
+    ``guard_matches_the_published_architecture`` and hardcoded
+    ``_reference_yolox_s_parameters(80)`` while interpolating ``entry_name``
+    into the failure message. It was dormant only while RTMDet's ``published``
+    was ``None``; anchoring RTMDet to 8.89M in this same change would have
+    made it compare **YOLOX's** derived total against **RTMDet's** published
+    figure, land at 0.88% — inside the 2% tolerance — and pass green having
+    never evaluated the RTMDet transcription at all.
+
+    That is the exact bug class this file exists to catch, so the tolerance
+    cannot be what guards it: 0.88% passes. What guards it is that the wrong
+    number is now unreachable from here, plus
+    ``test_published_drift_reads_the_reference_it_is_given`` below, which is
+    red if this function reaches for any particular transcription.
+    """
+    published = reference["published"]
+    derived = reference["parameters"](_PUBLISHED_CLASS_COUNT)
+    return derived, abs(derived - published) / published
 
 
 def _built_csp_block_counts(model):
@@ -838,10 +971,10 @@ def guard_matches_the_published_architecture(module) -> None:
 
     published = reference["published"]
     if published is not None:
-        drift = abs(_reference_yolox_s_parameters(80) - published) / published
+        derived, drift = _published_drift(reference)
         assert drift <= _PUBLISHED_TOLERANCE, (
             f"the spec transcription for {entry_name} derives "
-            f"{_reference_yolox_s_parameters(80):,} parameters at 80 classes, "
+            f"{derived:,} parameters at 80 classes, "
             f"{drift:.1%} from the published {published:,}. The transcription "
             f"itself has drifted — fix it against the paper before trusting "
             f"the comparison above."
@@ -1059,6 +1192,18 @@ def guard_yolox_decode_is_per_image_and_aligned(module) -> None:
         f"{sorted(set(bg_labels.tolist()))}. It is trained only as a negative "
         f"and must be dropped BEFORE the score threshold, not left to the "
         f"engine -- the top-k budget is spent here."
+    )
+    # The label column must be OFFSET, not merely non-zero -- see the rtmdet
+    # twin for why: flipping only the slice to `[:, 0:]` yields labels
+    # 1..classes, mislabelled but never zero, so the assertion above alone
+    # does not discriminate between the two halves of the fix.
+    bg_best = int(bg_results[0]["scores"].argmax())
+    assert int(bg_labels[bg_best]) == classes - 1, (
+        f"yolox_s: the top background-fixture detection is label "
+        f"{int(bg_labels[bg_best])}, expected {classes - 1}. The channel-0 "
+        f"drop and the `arange(1, num_classes + 1)` label offset are two "
+        f"halves of one fix; keeping the slice while reverting the offset "
+        f"shifts every label down by one and never emits a zero."
     )
 
     assert isinstance(results, list) and len(results) == 2, (
@@ -1354,6 +1499,114 @@ def guard_yolox_penalises_candidates_outside_the_box(module) -> None:
     )
 
 
+def guard_yolox_outside_penalty_survives_float32(module) -> None:
+    """The outside-the-box penalty must dominate real costs AND stay
+    representable alongside them in float32.
+
+    ``SIMOTA_OUTSIDE_PENALTY`` is finite rather than ``inf`` for one stated
+    reason: so the matrix stays comparable, because ``inf`` makes ``topk``
+    return arbitrary ties. At ``1.0e8`` float32 destroyed exactly that (ULP
+    8.0, so ``1e8 + x == 1e8`` for every ``x <= 4.0``) — the value was above
+    the resolution of the numbers it was added to, and the guarantee in the
+    comment was false (model-zoo#237 review).
+
+    Three assertions, because the two constraints pull in opposite directions
+    and a value satisfying only one is what shipped:
+
+    1. the penalty exceeds the largest cost this matrix can attain, so a
+       penalised candidate never outranks a valid one — DERIVED from ``_EPS``,
+       the IoU weight and the class count, not pinned;
+    2. adding a small real cost to it is still observable in float32;
+    3. behaviourally: with *every* candidate penalised, the better-localised
+       one still wins.
+
+    Assertion 3 is the one that made this finding concrete, and it needs a
+    fixture the suite did not have. ``centre_region_candidates`` also drives
+    the all-penalised path, but its candidates' costs are 55 apart — nearly
+    seven ULPs even at 1e8 — so the ordering survives there and that fixture
+    cannot see this. These two are 0.373 apart, which is under one ULP at 1e8
+    and eight ULPs at 1e5.
+    """
+    import torch
+
+    model = _build(module, 2)
+    penalty = module.SIMOTA_OUTSIDE_PENALTY
+
+    # (1) dominates every attainable real cost, re-derived from the template's
+    # own constants rather than pinned to a number someone read once.
+    worst_cls = model.num_classes * -math.log(module._EPS)
+    worst_iou = module.SIMOTA_IOU_COST_WEIGHT * -math.log(module._EPS)
+    ceiling = worst_cls + worst_iou
+    assert penalty > ceiling, (
+        f"yolox_s: SIMOTA_OUTSIDE_PENALTY is {penalty:,.0f} but the cost "
+        f"matrix can reach {ceiling:,.1f} (classification BCE "
+        f"{worst_cls:,.1f} at {model.num_classes} channels plus IoU "
+        f"{worst_iou:,.1f}, both at the _EPS clamp). A penalised candidate "
+        f"can then outrank a geometrically valid one."
+    )
+
+    # (2) still resolvable in float32 next to a realistic cost delta. 0.01 is
+    # about the cost difference a 0.01 IoU change makes near IoU 0.5
+    # (3 * (log(0.51) - log(0.50)) = 0.059), so it is the coarsest delta that
+    # must survive. float32 is asserted explicitly because that is the dtype
+    # the head emits and the cost matrix inherits.
+    smallest = 0.01
+    penalised = torch.tensor([0.0, smallest], dtype=torch.float32) + penalty
+    assert float(penalised[1]) != float(penalised[0]), (
+        f"yolox_s: SIMOTA_OUTSIDE_PENALTY is {penalty:,.0f}, whose float32 ULP "
+        f"is {float(torch.tensor(penalty, dtype=torch.float32).nextafter(torch.tensor(float('inf'))) - penalty):g} "
+        f"— a real cost difference of {smallest} vanishes when added to it. "
+        f"The value is finite instead of inf precisely so the matrix stays "
+        f"comparable; above float32's resolution it is inf with extra steps, "
+        f"and topk falls back to index order."
+    )
+
+    # (3) behaviour, with the whole candidate set penalised.
+    grids = _grid(torch, [(0, 0), (1, 1)], 8)
+    gt_boxes = torch.tensor([[10.0, 10.0, 2.0, 2.0]])
+    gt_labels = torch.tensor([0], dtype=torch.int64)
+    # Index 0 is the WORSE box (IoU 0.30); index 1 is better (IoU 0.34). Order
+    # matters: topk breaks an exact tie towards the lower index, so the better
+    # candidate has to sit second for a collapsed matrix to pick wrongly.
+    decoded = torch.tensor([[10.0, 10.0, 3.65, 3.65], [10.0, 10.0, 3.43, 3.43]])
+
+    candidate_mask, inside_both = model._candidate_masks(gt_boxes, grids)
+    assert int(candidate_mask.sum()) == 2 and not bool(inside_both.any()), (
+        f"fixture is degenerate: both anchors must be candidates with NEITHER "
+        f"inside the box, so every candidate carries the penalty — got "
+        f"{int(candidate_mask.sum())} candidates, inside_both="
+        f"{inside_both.tolist()}"
+    )
+    ious = module._pairwise_iou_cxcywh(gt_boxes, decoded)[0]
+    assert float(ious[1]) > float(ious[0]), (
+        f"fixture is degenerate: anchor 1 must have the better IoU, got "
+        f"{ious.tolist()}"
+    )
+    spread = float(
+        module.SIMOTA_IOU_COST_WEIGHT
+        * abs(math.log(float(ious[0]) + module._EPS) - math.log(float(ious[1]) + module._EPS))
+    )
+    assert spread < 4.0, (
+        f"fixture is degenerate: the two candidates' costs are {spread:.3f} "
+        f"apart, which is above the 4.0 that float32 erases at 1e8, so this "
+        f"fixture would pass under the defective value too"
+    )
+
+    fg_mask, _, _, matched_ious = _yolox_assign(
+        module, model, gt_boxes, gt_labels, decoded, grids
+    )
+    assert fg_mask.tolist() == [False, True], (
+        f"yolox_s: with every candidate outside the box, SimOTA selected "
+        f"{fg_mask.nonzero().flatten().tolist()} rather than anchor 1, whose "
+        f"IoU is {float(ious[1]):.4f} against {float(ious[0]):.4f}. The two "
+        f"costs differ by {spread:.3f}; if SIMOTA_OUTSIDE_PENALTY is above "
+        f"float32's resolution that difference is erased and topk falls to "
+        f"index order, so small objects get an arbitrary anchor with every "
+        f"other guard green and the loss finite."
+    )
+    assert float(matched_ious[0]) == pytest.approx(float(ious[1]), abs=1e-6)
+
+
 def guard_yolox_prefers_the_better_localised_anchor(module) -> None:
     """Between two geometrically identical candidates, the better box wins.
 
@@ -1450,7 +1703,7 @@ def _rtmdet_tower_tensor(model, group: str, level: int, index: int, part: str):
 
 
 def guard_rtmdet_head_shares_convs_and_separates_bns(module) -> None:
-    """The head's conv weights are shared across levels; its BatchNorms are not.
+    """The head's conv weights are shared across levels; its norms are not.
 
     That is RTMDet's "SepBN" head and its defining structural feature — one
     conv tower's worth of weights serving three levels, each level keeping its
@@ -1579,6 +1832,48 @@ def guard_rtmdet_decode_is_per_image_and_aligned(module) -> None:
 
     results = model._predictions(cls_logits, boxes, [(64, 64), (64, 64)])
 
+    # ⚠️ SECOND SCENARIO, mirroring the YOLOX twin: the BACKGROUND channel
+    # strongest. The fixture above cannot see a channel-0 leak — it puts its
+    # confident logit on channel 2, which decodes to label 2 with the
+    # `class_scores[:, 1:]` slice AND without it, and its -10.0 filler keeps
+    # channel 0 under score_thresh. Reverting the slice and the `arange(1, ...)`
+    # offset therefore left this whole file green (model-zoo#237 review), while
+    # the YOLOX twin went red on its dedicated fixture. The fix was duplicated
+    # across the two templates; its test was not — which is the exact failure
+    # mode `rtmdet_s.py`'s own module docstring names.
+    #
+    # Acute on this template specifically: SCORE_THRESH is 0.001 against the
+    # head's 1e-2 prior, so at initialisation channel 0 clears the threshold at
+    # every one of the 8,400 priors and spends the 300-detection budget.
+    bg = torch.full((1, 6, classes), -10.0)
+    bg[0, 2, 0] = 12.0                # background channel, strongest
+    bg[0, 2, classes - 1] = 8.0       # a real class, weaker
+    bg_results = model._predictions(bg, boxes[:1], [(64, 64)])
+    bg_labels = bg_results[0]["labels"]
+    assert bg_labels.numel(), (
+        "rtmdet_s: the background-channel fixture decoded to nothing, so the "
+        "assertion below is vacuous -- check the scores clear score_thresh"
+    )
+    assert not bool((bg_labels == 0).any()), (
+        f"rtmdet_s: decode returned label 0, the background channel: "
+        f"{sorted(set(bg_labels.tolist()))}. It is trained only as a negative "
+        f"and must be dropped BEFORE the score threshold, not left to the "
+        f"engine -- the top-k budget is spent here."
+    )
+    # And the label column must be OFFSET, not merely non-zero. Flipping only
+    # the slice to `[:, 0:]` yields labels 1..classes -- mislabelled but never
+    # zero -- so the assertion above alone does not discriminate between the
+    # two halves of the fix (model-zoo#237 review). The strongest real class
+    # here is the last channel, which must decode to `classes - 1`.
+    best = int(bg_results[0]["scores"].argmax())
+    assert int(bg_labels[best]) == classes - 1, (
+        f"rtmdet_s: the top background-fixture detection is label "
+        f"{int(bg_labels[best])}, expected {classes - 1}. The channel-0 drop "
+        f"and the `arange(1, num_classes + 1)` label offset are two halves of "
+        f"one fix; keeping the slice while reverting the offset shifts every "
+        f"label down by one and never emits a zero."
+    )
+
     assert isinstance(results, list) and len(results) == 2, (
         f"rtmdet_s: decoding two images returned "
         f"{len(results) if isinstance(results, list) else type(results).__name__} "
@@ -1605,6 +1900,100 @@ def guard_rtmdet_decode_is_per_image_and_aligned(module) -> None:
             f"{centre_x:.1f}, expected {expected_x:.1f} — the confident prior "
             f"was paired with another prior's box."
         )
+
+
+def guard_rtmdet_decode_caps_candidates_before_nms(module) -> None:
+    """At most ``NMS_PRE`` candidates reach ``batched_nms``, and it is a
+    top-k rather than a truncation.
+
+    ``detections_per_image`` caps only the OUTPUT. Without a pre-NMS cap every
+    candidate clearing ``score_thresh`` enters NMS, and this template's 0.001
+    threshold against the head's 1e-2 prior means essentially all of them do —
+    measured 100,778 boxes at initialisation (model-zoo#237 review), 25x past
+    the ``boxes.numel() > 4000`` point where torchvision drops to
+    ``_batched_nms_vanilla`` and runs one NMS pass per class in Python.
+
+    The second half matters as much as the first: a *truncation* (slicing the
+    first ``NMS_PRE``) would cap the work and silently discard the
+    highest-scoring detections, because the candidate list is ordered by prior
+    index and class channel, not by score. So this asserts the retained set
+    contains the top scores.
+    """
+    import torch
+
+    model = _build(module, 2)
+    classes = model.num_classes
+
+    # The SHIPPED value, asserted separately from the mechanism below. It has
+    # to sit above the output cap or the pre-NMS stage becomes the real limit
+    # on detections, which would be a recall change disguised as a saving.
+    assert module.NMS_PRE >= module.DETECTIONS_PER_IMAGE, (
+        f"rtmdet_s: NMS_PRE {module.NMS_PRE} is below DETECTIONS_PER_IMAGE "
+        f"{module.DETECTIONS_PER_IMAGE}, so the pre-NMS cap now bounds the "
+        f"output and costs recall rather than work"
+    )
+
+    # The MECHANISM, driven with the cap lowered so a 64-prior fixture can
+    # exceed it. Driving the shipped 30,000 directly would need >30k
+    # candidates built on every run to discriminate at all -- and a fixture
+    # that stays under the cap is satisfied by a template with NO cap, which
+    # is exactly the degeneracy this file keeps catching. `_predictions` reads
+    # the module global at call time, so lowering it here exercises the real
+    # code path.
+    priors = 64
+    cap = 8
+    available = priors * (classes - 1)  # channel 0 is dropped before this
+    assert available > cap, (
+        f"fixture is degenerate: {available} candidates against a cap of "
+        f"{cap} — the cap must be exceeded or an uncapped template passes"
+    )
+
+    # Every logit above score_thresh, so the pre-NMS cap is the only thing
+    # that can reduce the candidate count.
+    cls_logits = torch.full((1, priors, classes), 5.0)
+    # One unmistakably best candidate, on the LAST prior, so a truncation by
+    # index loses it while a top-k by score keeps it.
+    cls_logits[0, priors - 1, classes - 1] = 20.0
+    boxes = torch.stack(
+        [torch.tensor([[float(i), 0.0, float(i) + 8.0, 8.0] for i in range(priors)])]
+    )
+
+    seen = []
+    original_nms = module.batched_nms
+    original_cap = module.NMS_PRE
+
+    def spy(boxes_in, scores_in, idxs_in, iou):
+        seen.append(int(boxes_in.shape[0]))
+        return original_nms(boxes_in, scores_in, idxs_in, iou)
+
+    module.batched_nms = spy
+    module.NMS_PRE = cap
+    try:
+        results = model._predictions(cls_logits, boxes, [(1024, 1024)])
+    finally:
+        module.batched_nms = original_nms
+        module.NMS_PRE = original_cap
+
+    assert seen, "rtmdet_s: batched_nms was never called, so nothing was measured"
+    assert seen[0] == cap, (
+        f"rtmdet_s: {seen[0]:,} candidates entered batched_nms with "
+        f"{available:,} available and a cap of {cap:,}. "
+        f"detections_per_image caps only the OUTPUT, so without a pre-NMS "
+        f"top-k every candidate over score_thresh is fed to NMS -- measured "
+        f"100,778 of them at initialisation on the real head, 25x past the "
+        f"boxes.numel() > 4000 point where torchvision drops to "
+        f"_batched_nms_vanilla and runs one NMS pass per class in Python."
+    )
+    labels = results[0]["labels"]
+    assert labels.numel(), "rtmdet_s: the fixture decoded to nothing"
+    best = int(results[0]["scores"].argmax())
+    assert int(labels[best]) == classes - 1, (
+        f"rtmdet_s: the top detection is label {int(labels[best])}, expected "
+        f"{classes - 1} -- the candidate with the highest score was dropped "
+        f"before NMS. A pre-NMS cap must be a top-k on score; slicing the "
+        f"first NMS_PRE entries discards by prior index and class channel "
+        f"instead, which is a silent recall loss rather than a saving."
+    )
 
 
 def guard_rtmdet_quality_focal_loss_targets_the_matched_iou(module) -> None:
@@ -1880,6 +2269,7 @@ YOLOX_GUARDS = {
     "prefers_better_iou": guard_yolox_prefers_the_better_localised_anchor,
     "iou_scaled_class_target": guard_yolox_class_target_is_scaled_by_the_matched_iou,
     "outside_box_penalty": guard_yolox_penalises_candidates_outside_the_box,
+    "outside_penalty_float32": guard_yolox_outside_penalty_survives_float32,
     "centre_radius_stride": guard_yolox_centre_radius_scales_with_stride,
     "tie_break": guard_yolox_breaks_ties_between_ground_truths,
     "positives_reach_box_branch": guard_positives_reach_the_box_regression_branch,
@@ -1895,8 +2285,10 @@ RTMDET_GUARDS = {
     "shared_conv_separate_bn": guard_rtmdet_head_shares_convs_and_separates_bns,
     "soft_quality_target": guard_rtmdet_quality_focal_loss_targets_the_matched_iou,
     "csp_bottleneck_width": guard_rtmdet_csp_block_runs_at_full_branch_width,
+    "channel_attention_backbone_only": guard_rtmdet_channel_attention_is_backbone_only,
     "head_flatten_order": guard_rtmdet_head_flatten_order_matches_the_priors,
     "decode_per_image": guard_rtmdet_decode_is_per_image_and_aligned,
+    "nms_pre_cap": guard_rtmdet_decode_caps_candidates_before_nms,
     "dynamic_k": guard_rtmdet_dynamic_k_is_dynamic,
     "soft_centre_prior": guard_rtmdet_soft_centre_prior_beats_a_better_iou,
     "centre_prior_stride": guard_rtmdet_centre_prior_scales_with_stride,
@@ -2061,6 +2453,27 @@ MUTATIONS = [
         "            *[Bottleneck(hidden, hidden, 1.0, shortcut) for _ in range(n)]",
         "            *[Bottleneck(hidden, hidden, 0.5, shortcut) for _ in range(n)]",
         ("yolox", "published_architecture"),
+    ),
+    (
+        # The value this PR shipped with. It satisfies the "dominates every
+        # real cost" half and breaks the "still comparable in float32" half,
+        # which is why nothing saw it: every structural guard stays green and
+        # the loss stays finite.
+        "yolox/outside_penalty_above_float32_resolution",
+        YOLOX_PATH,
+        "SIMOTA_OUTSIDE_PENALTY = 1.0e5",
+        "SIMOTA_OUTSIDE_PENALTY = 1.0e8",
+        ("yolox", "outside_penalty_float32"),
+    ),
+    (
+        # The opposite failure, so the guard's FIRST assertion is proven too:
+        # a penalty below the attainable cost ceiling lets a penalised
+        # candidate outrank a geometrically valid one.
+        "yolox/outside_penalty_below_the_cost_ceiling",
+        YOLOX_PATH,
+        "SIMOTA_OUTSIDE_PENALTY = 1.0e5",
+        "SIMOTA_OUTSIDE_PENALTY = 1.0e1",
+        ("yolox", "outside_penalty_float32"),
     ),
     (
         "yolox/depth_multiplier_moved",
@@ -2273,11 +2686,123 @@ MUTATIONS = [
         # round. GroupNorm has none, so a stateful norm coming back moves the
         # pinned reading and nothing else does.
         #
-        # Observed red: buffers 23,178 vs pinned 0 (tensors 462 vs 240).
+        # Observed red, RE-RUN on this template rather than copied: buffers
+        # 24,978 vs pinned 0 (tensors 512 vs 266). This note previously read
+        # "buffers 23,178 ... tensors 462 vs 240" -- byte-identical to the
+        # yolox note above and impossible for rtmdet, whose pin is 266
+        # (model-zoo#237 review). In the one file whose argument is that a
+        # number derived from the model under test is self-consistency rather
+        # than evidence, a copy-pasted provenance note is the wrong kind of
+        # comment.
+        #
         # Parameters are UNCHANGED by this swap -- GroupNorm and BatchNorm both
         # carry weight+bias -- which is why `published_architecture` stays green
         # under it and this pin is the only thing that can see it.
         ("rtmdet", "module_tree_size"),
+    ),
+    (
+        # No pre-NMS cap at all: the state this PR shipped in.
+        "rtmdet/no_pre_nms_cap",
+        RTMDET_PATH,
+        "            if flat_scores.numel() > NMS_PRE:\n"
+        "                flat_scores, order = flat_scores.topk(NMS_PRE)\n"
+        "                labels, box_index = labels[order], box_index[order]",
+        "            pass",
+        ("rtmdet", "nms_pre_cap"),
+    ),
+    (
+        # The cap present but implemented as a TRUNCATION by index rather than
+        # a top-k by score -- caps exactly the same amount of work while
+        # silently dropping the best detections. This is the mutation the
+        # guard's second assertion exists for; without it "at most NMS_PRE
+        # reach NMS" is satisfied by a silent recall loss.
+        "rtmdet/pre_nms_cap_truncates_instead_of_topk",
+        RTMDET_PATH,
+        "                flat_scores, order = flat_scores.topk(NMS_PRE)\n"
+        "                labels, box_index = labels[order], box_index[order]",
+        "                order = torch.arange(NMS_PRE, device=flat_scores.device)\n"
+        "                flat_scores = flat_scores[order]\n"
+        "                labels, box_index = labels[order], box_index[order]",
+        ("rtmdet", "nms_pre_cap"),
+    ),
+    (
+        # The channel-0 fix shipped in BOTH templates and only YOLOX got a
+        # guard; nothing in this table pinned the slice on either side, so the
+        # whole revert stayed green on rtmdet (model-zoo#237 review).
+        #
+        # The anchor deliberately spans the slice AND the `arange` offset:
+        # flipping only `[:, 1:]` to `[:, 0:]` gives labels 1..classes --
+        # mislabelled but never zero -- so a slice-only mutation would not
+        # discriminate against the "not zero" assertion.
+        "rtmdet/background_channel_leaks",
+        RTMDET_PATH,
+        "            class_scores = class_scores[:, 1:]\n"
+        "            num_priors, num_classes = class_scores.shape\n"
+        "            flat_scores = class_scores.reshape(-1)\n"
+        "            labels = (\n"
+        "                torch.arange(1, num_classes + 1, device=image_boxes.device)",
+        "            num_priors, num_classes = class_scores.shape\n"
+        "            flat_scores = class_scores.reshape(-1)\n"
+        "            labels = (\n"
+        "                torch.arange(0, num_classes, device=image_boxes.device)",
+        ("rtmdet", "decode_per_image"),
+    ),
+    (
+        # The OTHER half, on its own: keep the slice, revert only the offset.
+        # Labels come back 0..classes-2, so the top detection is
+        # `classes - 2` rather than `classes - 1` and never zero -- only the
+        # added offset assertion sees it.
+        "rtmdet/background_label_offset_dropped",
+        RTMDET_PATH,
+        "                torch.arange(1, num_classes + 1, device=image_boxes.device)",
+        "                torch.arange(0, num_classes, device=image_boxes.device)",
+        ("rtmdet", "decode_per_image"),
+    ),
+    (
+        # The YOLOX twin. Its assertion DID go red under a hand revert, but it
+        # had no entry here -- `decode_per_image` was already satisfied by the
+        # truncation and misalignment mutations, so deleting the background
+        # scenario outright would still have passed
+        # `test_every_guard_has_a_mutation` (model-zoo#237 review).
+        "yolox/background_channel_leaks",
+        YOLOX_PATH,
+        "            class_scores = class_scores[:, 1:]\n"
+        "            num_anchors, num_classes = class_scores.shape\n"
+        "            flat_scores = class_scores.reshape(-1)\n"
+        "            labels = (\n"
+        "                torch.arange(1, num_classes + 1, device=boxes.device)",
+        "            num_anchors, num_classes = class_scores.shape\n"
+        "            flat_scores = class_scores.reshape(-1)\n"
+        "            labels = (\n"
+        "                torch.arange(0, num_classes, device=boxes.device)",
+        ("yolox", "decode_per_image"),
+    ),
+    (
+        # The defect this PR shipped for four review passes: the neck built
+        # ChannelAttention the published model has none of. Anchored on the
+        # top-down C4 stage only -- one un-gated stage out of four is the
+        # HARDEST case for the guards (+65,792 of the +410,752), so a mutation
+        # that flipped all four would be weaker evidence, not stronger.
+        "rtmdet/neck_channel_attention",
+        RTMDET_PATH,
+        "        self.top_down_c4 = CSPLayer(\n"
+        "            2 * c4, c4, n=blocks, add_identity=False, channel_attention=False\n"
+        "        )",
+        "        self.top_down_c4 = CSPLayer(\n"
+        "            2 * c4, c4, n=blocks, add_identity=False, channel_attention=True\n"
+        "        )",
+        ("rtmdet", "channel_attention_backbone_only"),
+    ),
+    (
+        # The other half of the same invariant: attention MISSING from the
+        # backbone, which `channel_attention_backbone_only` must also catch.
+        # Without this entry the guard's backbone assertion is unproven and
+        # only its neck assertion is registered.
+        "rtmdet/backbone_channel_attention_dropped",
+        RTMDET_PATH,
+        "                    channel_attention=True,",
+        "                    channel_attention=False,",
+        ("rtmdet", "channel_attention_backbone_only"),
     ),
     (
         "rtmdet/width_multiplier_moved",
@@ -2317,6 +2842,63 @@ def test_both_templates_exist() -> None:
     """Guard the guard: every table below is keyed on these two files."""
     for path in (YOLOX_PATH, RTMDET_PATH):
         assert path.is_file(), f"{path} is missing — this whole file is dead"
+
+
+def test_published_drift_reads_the_reference_it_is_given() -> None:
+    """``_published_drift`` must use the row handed to it, not a fixed one.
+
+    The regression test for a defect this file shipped: the drift comparison
+    hardcoded ``_reference_yolox_s_parameters(80)`` while interpolating
+    ``entry_name`` into its message, so RTMDet's anchor would have been checked
+    against YOLOX's transcription.
+
+    The tolerance CANNOT be what catches that — the cross-wired reading lands
+    at 0.9%, inside the 2% budget, and passes green (asserted below so this
+    stays a real statement rather than a hopeful one). So this drives the
+    helper with two synthetic rows whose only difference is the transcription:
+    any implementation reaching for a particular reference function returns the
+    same answer for both and goes red here.
+    """
+    honest = {"parameters": lambda classes: 1_000_000, "published": 1_000_000}
+    inflated = {"parameters": lambda classes: 1_200_000, "published": 1_000_000}
+
+    assert _published_drift(honest) == (1_000_000, 0.0)
+    derived, drift = _published_drift(inflated)
+    assert (derived, round(drift, 6)) == (1_200_000, 0.2)
+
+    # The transcriptions must be quoted at the published class count, not at
+    # the templates' `output_classes + 1` label space.
+    assert _PUBLISHED_CLASS_COUNT == 80
+
+    # And the two real rows must be far enough apart that the cross-wiring was
+    # a genuine mis-measurement rather than a coincidence -- while still both
+    # sitting inside tolerance, which is why tolerance could not see it.
+    yolox, rtmdet = _REFERENCE["YOLOXS"], _REFERENCE["RTMDetS"]
+    assert rtmdet["published"] is not None, (
+        "RTMDetS lost its published anchor; with it None this whole branch is "
+        "dormant again and the cross-wiring becomes unobservable"
+    )
+    own_derived, own_drift = _published_drift(rtmdet)
+    crossed_derived = yolox["parameters"](_PUBLISHED_CLASS_COUNT)
+    crossed_drift = (
+        abs(crossed_derived - rtmdet["published"]) / rtmdet["published"]
+    )
+    assert own_derived != crossed_derived, (
+        "the two transcriptions derive the same total, so substituting one for "
+        "the other is unobservable and this test proves nothing"
+    )
+    assert own_drift <= _PUBLISHED_TOLERANCE
+    assert crossed_drift <= _PUBLISHED_TOLERANCE, (
+        f"the cross-wired reading now drifts {crossed_drift:.2%}, outside the "
+        f"{_PUBLISHED_TOLERANCE:.0%} tolerance. That would mean tolerance had "
+        f"started catching the defect on its own -- good, but re-word this "
+        f"test rather than leaving a claim in it that is no longer true."
+    )
+    assert own_drift < crossed_drift, (
+        f"the entry's own transcription drifts {own_drift:.2%} and the "
+        f"cross-wired one {crossed_drift:.2%}; the own reading must be the "
+        f"tighter of the two or the anchor is not describing this model"
+    )
 
 
 @pytest.mark.parametrize(
