@@ -229,6 +229,11 @@ MODERN_YOLO_CITATION = (
     "and whose s row's 21.7 GFLOPs is reproduced at 640 and at no other edge "
     "(13.9 at 512, 31.3 at 768, measured with ultralytics 8.3.0) — so the "
     "9,458,752-parameter figure on that line is quoted at 640; "
+    "Ultralytics YOLO12 (2025) cfg/models/12/yolo12.yaml the same way, and its "
+    "s row's 21.7 GFLOPs is likewise reproduced at 640 and at no other "
+    "32-divisible edge (19.6 at 608, 23.9 at 672, measured with ultralytics "
+    "8.3.78), with YOLOv12 (Tian, Ye & Doermann, arXiv:2502.12524) evaluated at "
+    "640 on MS COCO; "
     "cfg/default.yaml sets imgsz: 640. "
     "Each template's own published parameter figure is quoted at that scale."
 )
@@ -315,6 +320,21 @@ PUBLISHED_RESOLUTION: dict[str, tuple[int, str, str]] = {
     # unfused 9,458,752 against fused 9,443,760, a 0.16% gap the docs table's
     # one-decimal "9.4M" cannot distinguish either way.
     "yolo11_s": (MODERN_YOLO_RESOLUTION, MODERN_YOLO, "the C3k2/C2PSA YOLO11-S (model-zoo#263), NMS-based unlike its yolov10_s neighbour. Ultralytics YOLO11 (2024) cfg/models/11/yolo11.yaml quotes '9458752 parameters, 9458736 gradients, 21.7 GFLOPs' on one summary line per scale, and 21.7 GFLOPs is reproduced only at 640 — the resolution is recovered from the same line as the parameter count rather than asserted alongside it"),
+    # the A2C2f/Area-Attention YOLOv12-S (model-zoo#266). ⚠️ THE STEM KEEPS THE
+    # `v` AND THAT IS THE OPPOSITE CALL TO `yolo11_s` ABOVE: this generation has
+    # TWO upstreams that disagree about the name. The authors' paper and repo are
+    # `yolov12` (sunsmarterjie/yolov12, yolov12s.pt); Ultralytics integrated it
+    # as `yolo12`. So both spellings are real here, where `yolov11` never was.
+    # ⚠️ AND THERE ARE THREE PUBLISHED PARAMETER FIGURES. This row's citation
+    # quotes the ULTRALYTICS one, which is what the template is built against
+    # and the only one that lives in an installable package. The authors' v1.0
+    # tag says 9,285,632 for the same topology (its `Conv` signature reads the
+    # padding argument as `bias`, giving every Area-Attention positional
+    # encoding a bias: +1,536 here); their current `main` is YOLOv12-turbo at
+    # 9,127,424 / 19.7 GFLOPs and is a DIFFERENT architecture — grouped
+    # downsample convs at yaml layers 1 and 3. Do not reconcile this row
+    # against either.
+    "yolov12_s": (MODERN_YOLO_RESOLUTION, MODERN_YOLO, "the attention-centric YOLOv12-S (model-zoo#266) — R-ELAN backbone with Area Attention, no SPPF and no C2PSA, NMS-based. Ultralytics YOLO12 (2025) cfg/models/12/yolo12.yaml quotes '9,284,096 parameters, 9,284,080 gradients, 21.7 GFLOPs' on one summary line per scale, and 21.7 GFLOPs is reproduced at 640 and at no other 32-divisible edge (19.6 at 608, 23.9 at 672, 13.9 at 512, 31.2 at 768, measured with ultralytics 8.3.78) — so the resolution is recovered from the same line that carries the parameter count. Tian, Ye & Doermann, arXiv:2502.12524; cfg/default.yaml sets imgsz: 640 independently"),
     # RTMDet is NOT a YOLO — CSPNeXt backbone, mmdetection lineage — so it does
     # not join the family anchor above even though its resolution matches.
     # Membership is the thing being asserted, not the number.
@@ -353,6 +373,7 @@ MODERN_YOLO_ROWS = frozenset(
         "yolov8_s",
         "yolov9_s",
         "yolov10_s",
+        "yolov12_s",
         "yolox_s",
     }
 )
