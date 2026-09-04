@@ -67,7 +67,26 @@ framework = "pytorch"
 model_type = "rcnn"
 main_class = "MyModel"
 image_size = 800
-batch_size = 16
+# Dropped from 16 alongside the image_size fix (backend#3058, model-zoo#265).
+#
+# The MODEL-side tensor is unchanged -- GeneralizedRCNNTransform produced
+# 800x800 from a 448x448 delivery already, and produces 800x800 from an 800x800
+# one, measured byte-identical. What changes is what the edge MATERIALISES and
+# SHIPS per sample: 800x800x3 instead of 448x448x3, 3.19x the bytes.
+#
+# At 16 that made this the heaviest deliverer on the roster by a wide margin --
+# 122.9 MB/batch, and the only one of the sixteen declared-800 templates above
+# 8. Its direct sibling `faster_rcnn_resnet_v2` (same ResNet50-FPN) uses 2, and
+# the other two-stage detectors sit at 2-4 (`cascade_rcnn` 4, `sparse_rcnn` 2);
+# the 8s are all one-stage (`atss_resnet`, `fcos`, `retinanet`).
+#
+# 4 matches `cascade_rcnn`, the closest two-stage peer, and delivers 30.7
+# MB/batch -- 0.80x what this template shipped before. So the resolution fix is
+# a net REDUCTION on the data plane rather than a 3.19x regression.
+#
+# Same convention as `fcos_convnext_small.py`: OD ships no SDK shape-probe
+# (#270), so this value is taken at face value with nothing to correct it.
+batch_size = 4
 output_classes = 12
 category = "object_detection"
 

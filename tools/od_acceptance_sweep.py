@@ -84,12 +84,32 @@ below (the `harness/od/scenario.py` reachable-checkout pattern).
 
 RESOLUTION IS RECORDED, NOT ASSUMED (backend#3058)
 --------------------------------------------------
-`faster_rcnn_resnet`, `fcos` and `retinanet` declare `image_size = 448` and
-override nothing, so they fall through to `GeneralizedRCNNTransform`'s default
-`min_size=800`/`max_size=1333` -- verified on develop: no `min_size`, `max_size`
-or `GeneralizedRCNNTransform` in any of the three. backend#3058 corrects the
-declaration to 800, after which a native-aspect source lands near 800x1067
-instead of an upscaled square 800x800, about a third more pixels.
+`faster_rcnn_resnet`, `fcos` and `retinanet` USED to declare `image_size = 448`
+while overriding nothing, so they fell through to `GeneralizedRCNNTransform`'s
+default `min_size=800`/`max_size=1333`. backend#3058 (model-zoo#265) corrects
+all three to 800.
+
+A CORRECTION TO WHAT THIS SECTION USED TO CLAIM. It said the fix meant "a
+native-aspect source lands near 800x1067 instead of an upscaled square 800x800,
+about a third more pixels" -- i.e. that the fix was not compute-neutral.
+**That is wrong**, and @saqlainsyed007 caught it on model-zoo#265.
+`GeneralizedRCNNTransform` does not INTRODUCE an aspect ratio; it preserves
+whatever it is handed, and the platform hands it a SQUARE `image_size x
+image_size` (see `make_batch` below, and `test_od_declared_resolution.py`'s
+"dataset delivers 448x448"). Measured directly:
+
+    448x448 delivered -> batched (2, 3, 800, 800)
+    800x800 delivered -> batched (2, 3, 800, 800)      <- byte-identical
+
+So model-side step time and activation memory are UNCHANGED by the fix. The real
+increase is on the DATA PLANE -- what the edge materialises and ships per sample,
+448**2 -> 800**2, i.e. 2.41 MB -> 7.68 MB per image, 3.19x -- which the old
+paragraph did not mention at all. `faster_rcnn_resnet`'s `batch_size` dropped
+16 -> 4 in the same commit for that reason, leaving it at 0.80x its previous
+delivered bytes.
+
+The lesson for this file: the transform normalises the input away, which is
+exactly why a declared size is not a cost figure.
 
 So a cost figure is meaningless without the resolution it was measured at, and
 `observed_input_shape` records the POST-TRANSFORM batched tensor per template
