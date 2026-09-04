@@ -854,20 +854,32 @@ def test_only_refuses_a_name_that_matches_no_template() -> None:
     assert "known templates" in message, message
 
 
-def test_only_names_a_real_template_and_is_accepted() -> None:
-    """The accepting direction: a real name must survive validation.
+def test_the_only_validator_accepts_a_real_name_and_refuses_an_unknown() -> None:
+    """Both directions, against the validator ITSELF.
 
-    Asserted WITHOUT running a cycle -- this file must stay CI-fast, and the
-    point here is only that a valid name is not rejected by the new guard. So
-    the name is checked against the sweep's own roster reader.
+    My first version of this asserted that a name drawn from
+    `family_templates()` was a member of that same set -- true by construction,
+    and it would stay green if `validate_only_names` started rejecting
+    everything. Cursor Bugbot called it vacuous on model-zoo#261 and was right;
+    the function was extracted from `sweep` precisely so the accepting direction
+    could be exercised without running a cycle.
     """
     known = {sweep_mod.template_key(p)
              for p in sweep_mod.family_templates(sweep_mod.family_values())}
     assert known, "roster reader returned nothing, so this test is vacuous"
     real = sorted(known)[0]
-    assert set([real]) - known == set(), (
-        f"{real} came from the roster and must validate against it"
-    )
+
+    # ACCEPTS: returns without raising.
+    assert sweep_mod.validate_only_names([real], known) is None
+
+    # REFUSES: and names both halves so the message is actionable.
+    with pytest.raises(SystemExit) as caught:
+        sweep_mod.validate_only_names([real, "no_such_template"], known)
+    message = str(caught.value)
+    assert "no_such_template" in message, message
+    assert "known templates" in message, message
+    # The VALID name must not be reported as unknown.
+    assert f"roster: {real}" not in message, message
 
 
 def test_an_all_slow_selection_refuses_rather_than_reporting_zero_rows() -> None:
@@ -1082,3 +1094,90 @@ def test_findings_survive_an_exception_raised_after_they_were_collected(
         f"the exception was not reported: {record['findings']}"
     )
     assert record["status"] == sweep_mod.STATUS_FAIL, record
+
+
+
+# ---------------------------------------------------------------------------
+# The row's numbers must come from the run its verdict came from (Bugbot, #261)
+# ---------------------------------------------------------------------------
+
+
+def test_worst_run_picks_the_run_the_status_came_from() -> None:
+    """`worst_run` and `aggregate_status` must agree on which run matters.
+
+    They were not agreeing: `status` was worst-of while `loss_first`,
+    `loss_last`, `n_preds` and `observed_input_shape` were copied from
+    `runs[0]`. A later failing experiment therefore left the table showing the
+    LUCKY run's decreasing loss next to a FAIL verdict.
+    """
+    lucky = {"status": sweep_mod.STATUS_PASS, "loss_first": 2.0, "loss_last": 1.0}
+    bad = {"status": sweep_mod.STATUS_FAIL, "loss_first": 2.0, "loss_last": 9e9}
+    div = {"status": sweep_mod.STATUS_DIVERGENT, "loss_first": 2.0, "loss_last": 900.0}
+
+    # Worst regardless of position -- the bug was positional.
+    assert sweep_mod.worst_run([lucky, bad])["loss_last"] == 9e9
+    assert sweep_mod.worst_run([bad, lucky])["loss_last"] == 9e9
+    assert sweep_mod.worst_run([lucky, div])["loss_last"] == 900.0
+    assert sweep_mod.worst_run([div, bad])["loss_last"] == 9e9
+
+    # And it must agree with the verdict, which is the actual invariant.
+    for runs in ([lucky, bad], [bad, lucky], [lucky, div], [div, lucky]):
+        assert sweep_mod.worst_run(runs)["status"] == sweep_mod.aggregate_status(
+            [r["status"] for r in runs]
+        )
+
+    # All-pass: the accepting direction, and ties break to the earliest.
+    a = {"status": sweep_mod.STATUS_PASS, "loss_last": 1.0}
+    b = {"status": sweep_mod.STATUS_PASS, "loss_last": 2.0}
+    assert sweep_mod.worst_run([a, b])["loss_last"] == 1.0
+
+
+def test_worst_run_of_nothing_raises_rather_than_inventing_a_row() -> None:
+    """An empty run list is a caller bug, not a row to report."""
+    with pytest.raises(ValueError):
+        sweep_mod.worst_run([])
+
+
+def test_an_unreached_inference_is_not_reported_as_an_empty_payload() -> None:
+    """`None` (never ran) and `[]` (ran, returned nothing) are different facts.
+
+    `n_preds` was defaulted to `[]`, so a train-time FAIL -- NaN loss, a missing
+    `image_size`, an import error -- got the same quality cause as a clean run
+    that genuinely emitted no boxes.
+    """
+    assert sweep_mod._quality_cause(None, seeded=False) == sweep_mod.CAUSE_NOT_REACHED
+    assert sweep_mod._quality_cause(None, seeded=True) == sweep_mod.CAUSE_NOT_REACHED
+
+    # The ran-and-returned-nothing direction is UNCHANGED.
+    assert sweep_mod._quality_cause([], seeded=False) == sweep_mod.CAUSE_EMPTY_PAYLOAD
+    assert (
+        sweep_mod._quality_cause([0, 0], seeded=False)
+        == sweep_mod.CAUSE_EMPTY_PAYLOAD
+    )
+    assert (
+        sweep_mod._quality_cause([3, 0], seeded=False)
+        == sweep_mod.CAUSE_RANDOM_SCORES
+    )
+    assert sweep_mod.CAUSE_NOT_REACHED != sweep_mod.CAUSE_EMPTY_PAYLOAD
+
+
+def test_sweep_takes_its_scalars_from_worst_run() -> None:
+    """`sweep` must actually CALL the worst-of picker.
+
+    Extracting `worst_run` made the rule testable and simultaneously made it
+    possible for `sweep` to go back to `runs[0]` with every test above still
+    green -- a mutation replacing the call survived until this check existed.
+    The same hole, and the same remedy, as
+    `test_sweep_aggregates_with_aggregate_status`: read it statically, because
+    exercising it needs torch and hours.
+    """
+    source = (ROOT / "tools" / "od_acceptance_sweep.py").read_text(encoding="utf-8")
+    assert "worst = worst_run(runs)" in source, (
+        "sweep() no longer takes its scalars from worst_run() -- a row's numbers "
+        "can now come from a different experiment than its verdict"
+    )
+    # And nothing has gone back to indexing a run positionally for them.
+    assert "first = runs[0]" not in source, (
+        "a positional run pick is back in sweep(); that is the defect Bugbot "
+        "found on model-zoo#261"
+    )

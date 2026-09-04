@@ -144,7 +144,7 @@ import re
 import sys
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any, Dict, List, Optional, Sequence, Set
 
 # Sibling tool module, same directory -- the `check_engine_pin_drift.py` idiom,
 # so this runs as `python tools/od_acceptance_sweep.py` from anywhere.
@@ -234,6 +234,13 @@ DIVERGENCE_FACTOR = 100.0
 
 #: Quality-pending causes, derived per run by `_quality_cause`.
 CAUSE_EMPTY_PAYLOAD = "empty-payload"
+#: Inference NEVER RAN, so the payload is unknown rather than empty. Distinct
+#: from CAUSE_EMPTY_PAYLOAD on purpose: a train-time FAIL (NaN loss, a missing
+#: `image_size`, an import error) leaves `n_preds` absent, and defaulting that
+#: to `[]` gave it the same quality cause as a clean run that genuinely emitted
+#: no boxes. Two different facts, and this epic's whole complaint is causes that
+#: read as something they are not. Found by Cursor Bugbot on model-zoo#261.
+CAUSE_NOT_REACHED = "inference-not-reached"
 CAUSE_RANDOM_SCORES = "random-init-scores"
 CAUSE_MEASURABLE = "measurable"
 
@@ -706,6 +713,38 @@ def divergence_findings(
     return []
 
 
+def validate_only_names(only: Sequence[str], known: Set[str]) -> None:
+    """Refuse an ``--only`` name that matches no template. Raises or returns.
+
+    EXTRACTED SO THE ACCEPTING DIRECTION IS TESTABLE. Inline in `sweep`, the
+    only way to reach it was to run a sweep -- so the "a valid name is accepted"
+    test I first wrote asserted that a name drawn from `family_templates()` was
+    in that same set, which is true by construction and stays true if this
+    function starts rejecting everything. Cursor Bugbot called that vacuous on
+    model-zoo#261 and was right. A pure function has both directions available
+    without torch and without a cycle.
+    """
+    unknown = sorted(set(only) - set(known))
+    if unknown:
+        raise SystemExit(
+            "--only names no template in the "
+            f"{FAMILY!r} roster: {', '.join(unknown)}\n"
+            f"known templates: {', '.join(sorted(known))}"
+        )
+
+
+def worst_run(runs: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
+    """The run whose status `aggregate_status` reports -- so the numbers match.
+
+    Keyed on the SAME severity map as `aggregate_status`, so a row's scalars can
+    never come from a different experiment than its verdict. Ties break to the
+    earliest, which keeps the report stable across runs.
+    """
+    if not runs:
+        raise ValueError("worst_run() of no runs -- callers must not do this")
+    return max(runs, key=lambda r: _STATUS_SEVERITY.get(r.get("status"), 0))
+
+
 def aggregate_status(statuses: Sequence[str]) -> str:
     """One template's several experiments collapsed to one status: WORST-OF.
 
@@ -743,13 +782,15 @@ def classify_status(findings: Sequence[str], divergence: Sequence[str]) -> str:
     return STATUS_PASS
 
 
-def _quality_cause(n_preds: Sequence[int], seeded: bool) -> str:
+def _quality_cause(n_preds: Optional[Sequence[int]], seeded: bool) -> str:
     """Why detection quality is or is not measurable, from THIS run's payload.
 
     Derived, never a constant -- backend#3093's normalisation fix is expected to
     move which templates emit boxes at all, and a baked list would then report a
     reality that has changed. See the module docstring.
     """
+    if n_preds is None:
+        return CAUSE_NOT_REACHED
     if seeded:
         return CAUSE_MEASURABLE
     return CAUSE_EMPTY_PAYLOAD if sum(n_preds) == 0 else CAUSE_RANDOM_SCORES
@@ -909,14 +950,7 @@ def sweep(
     # mechanical state exists precisely so nothing can look clean while
     # diverging; this bypassed it by leaving nothing to judge.
     if only:
-        known = {template_key(path) for path in covered}
-        unknown = sorted(set(only) - known)
-        if unknown:
-            raise SystemExit(
-                "--only names no template in the "
-                f"{FAMILY!r} roster: {', '.join(unknown)}\n"
-                f"known templates: {', '.join(sorted(known))}"
-            )
+        validate_only_names(only, {template_key(path) for path in covered})
 
     selected, skipped = [], []
     for path in covered:
@@ -989,16 +1023,26 @@ def sweep(
             row["divergence"] = sorted({d for r in runs for d in r.get("divergence", [])})
             row["cycles_run"] = sum(r.get("steps_run", 0) for r in runs)
             row["wall_s"] = round(sum(r.get("wall_s", 0.0) for r in runs), 2)
-            first = runs[0]
-            row["observed_input_shape"] = first.get("observed_input_shape")
-            row["n_preds"] = first.get("n_preds", [])
-            row["n_zero_grad"] = first.get("n_zero_grad")
-            row["params_m"] = first.get("params_m")
-            row["loss_first"] = first.get("loss_first")
-            row["loss_last"] = first.get("loss_last")
-            row["loss_decreased"] = first.get("loss_decreased")
+            # THE SCALARS FOLLOW THE WORST RUN, not `runs[0]`.
+            # `status`, `findings` and `divergence` are worst-of across
+            # experiments, but these were copied from the first run -- so a
+            # later divergent or failing experiment left the table showing the
+            # LUCKY run's decreasing loss beside a DIVERGENT/FAIL status. Found
+            # by Cursor Bugbot on model-zoo#261, and it is the same defect class
+            # as the aggregation mutation that survived earlier in this PR: a
+            # worst-of verdict whose supporting numbers came from elsewhere.
+            worst = worst_run(runs)
+            row["observed_input_shape"] = worst.get("observed_input_shape")
+            # ABSENT, not `[]` -- see CAUSE_NOT_REACHED. `.get` with no default
+            # keeps "inference never ran" distinct from "ran, returned nothing".
+            row["n_preds"] = worst.get("n_preds")
+            row["n_zero_grad"] = worst.get("n_zero_grad")
+            row["params_m"] = worst.get("params_m")
+            row["loss_first"] = worst.get("loss_first")
+            row["loss_last"] = worst.get("loss_last")
+            row["loss_decreased"] = worst.get("loss_decreased")
         row["quality"] = "pending"
-        row["quality_cause"] = _quality_cause(row.get("n_preds") or [], row["seeded"])
+        row["quality_cause"] = _quality_cause(row.get("n_preds"), row["seeded"])
         rows.append(row)
 
     return {
