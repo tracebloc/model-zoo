@@ -871,6 +871,24 @@ def sweep(
         )
 
     seeds = seeding_index()
+
+    # AN --only NAME THAT MATCHES NOTHING IS A TYPO, NOT A SELECTION.
+    # `if only and key not in only: continue` silently drops unmatched names, so
+    # `--only fcos_resnet` (no such template) selected nothing, produced a
+    # zero-row report, and `exit_code`'s `any(...)` over an empty list returned
+    # 0 -- a clean sweep. Cursor Bugbot found it on model-zoo#261. The third
+    # mechanical state exists precisely so nothing can look clean while
+    # diverging; this bypassed it by leaving nothing to judge.
+    if only:
+        known = {template_key(path) for path in covered}
+        unknown = sorted(set(only) - known)
+        if unknown:
+            raise SystemExit(
+                "--only names no template in the "
+                f"{FAMILY!r} roster: {', '.join(unknown)}\n"
+                f"known templates: {', '.join(sorted(known))}"
+            )
+
     selected, skipped = [], []
     for path in covered:
         key = template_key(path)
@@ -882,6 +900,23 @@ def sweep(
             )
             continue
         selected.append(path)
+
+    # AND AN EMPTY SELECTION IS NEVER A PASS, even when every name was valid:
+    # `--only fcos --skip-slow` where `fcos` is a cost outlier legitimately
+    # matches nothing. The names are right, the result is still zero rows, and
+    # a zero-row report must not read as success.
+    if not selected:
+        raise SystemExit(
+            "the selection is empty, so this sweep would assert nothing.\n"
+            f"  --only:      {', '.join(only) if only else '(all)'}\n"
+            f"  --skip-slow: {skip_slow}"
+            + (
+                "\n  every selected template is in SLOW_TEMPLATES; drop "
+                "--skip-slow or widen --only."
+                if skipped
+                else ""
+            )
+        )
 
     rows: List[Dict[str, Any]] = []
     for path in selected:
@@ -1093,8 +1128,16 @@ def exit_code(report: Dict[str, Any]) -> int:
     anything reading the exit status rather than the table -- which is what CI,
     a Makefile target and a shell pipeline all do.
 
+    AN EMPTY TEMPLATE LIST IS ALSO NON-ZERO. `any(...)` over an empty list is
+    False, so a report with no rows returned 0 -- "every template passed" when
+    none ran. `sweep` now refuses to build such a report, but this function is
+    public and pure by design (see below), so it must not depend on its only
+    in-tree caller for that: a report asserting nothing is not a pass.
+
     Pure and separate from `main` so it can be asserted without running a sweep.
     """
+    if not report["templates"]:
+        return 1
     return (
         1
         if any(r["status"] != STATUS_PASS for r in report["templates"])

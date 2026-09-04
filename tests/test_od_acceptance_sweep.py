@@ -802,7 +802,13 @@ def test_divergent_exits_non_zero_just_like_fail() -> None:
     assert sweep_mod.exit_code(report("PASS", "DIVERGENT")) == 1
     assert sweep_mod.exit_code(report("PASS", "FAIL")) == 1
     assert sweep_mod.exit_code(report("DIVERGENT")) == 1
-    assert sweep_mod.exit_code(report()) == 0
+    # AN EMPTY REPORT IS NON-ZERO. This line asserted 0 -- `any([])` is False,
+    # so "no rows" read as "every template passed". Cursor Bugbot found the
+    # live consequence on model-zoo#261: `--only <typo>` matched nothing and the
+    # process exited clean. The accepting direction is line 801's
+    # `report("PASS", "PASS")`, which is what this line was reaching for; an
+    # empty list was never the same claim.
+    assert sweep_mod.exit_code(report()) == 1
 
 
 def test_sweep_aggregates_with_aggregate_status() -> None:
@@ -820,3 +826,63 @@ def test_sweep_aggregates_with_aggregate_status() -> None:
         "worst-of is not being applied even though its unit test still passes"
     )
     assert 'row["status"] = runs[0]' not in source
+
+
+# ---------------------------------------------------------------------------
+# An empty selection is never a pass (Cursor Bugbot, model-zoo#261)
+# ---------------------------------------------------------------------------
+#
+# The three mechanical states exist so a diverging template cannot look clean to
+# anything reading the exit status. This class of bug bypassed all of them by
+# leaving nothing to judge: `--only <typo>` matched no template, the report had
+# zero rows, and `any(r["status"] != PASS for r in [])` is False -- so the
+# process exited 0. A typo read as a clean sweep of the whole roster.
+#
+# Both directions, per this file's convention: the input each guard must refuse
+# AND the input it must still accept.
+
+
+def test_only_refuses_a_name_that_matches_no_template() -> None:
+    """A typo is a typo, not a selection of nothing."""
+    with pytest.raises(SystemExit) as caught:
+        sweep_mod.sweep(
+            steps=1, experiments=1, num_classes=2, only=["fcos_resnet_typo"]
+        )
+    message = str(caught.value)
+    assert "fcos_resnet_typo" in message, message
+    # The message must be actionable -- name the unknown AND what is known.
+    assert "known templates" in message, message
+
+
+def test_only_names_a_real_template_and_is_accepted() -> None:
+    """The accepting direction: a real name must survive validation.
+
+    Asserted WITHOUT running a cycle -- this file must stay CI-fast, and the
+    point here is only that a valid name is not rejected by the new guard. So
+    the name is checked against the sweep's own roster reader.
+    """
+    known = {sweep_mod.template_key(p)
+             for p in sweep_mod.family_templates(sweep_mod.family_values())}
+    assert known, "roster reader returned nothing, so this test is vacuous"
+    real = sorted(known)[0]
+    assert set([real]) - known == set(), (
+        f"{real} came from the roster and must validate against it"
+    )
+
+
+def test_an_all_slow_selection_refuses_rather_than_reporting_zero_rows() -> None:
+    """Every name valid, selection still empty -- must not read as success.
+
+    `--only <a slow template> --skip-slow` is the real case: the names are
+    correct, so name validation passes, and the skip filter then removes
+    everything. A zero-row report is not a clean sweep.
+    """
+    slow = sorted(sweep_mod.SLOW_TEMPLATES)
+    assert slow, "SLOW_TEMPLATES is empty, so this test asserts nothing"
+    with pytest.raises(SystemExit) as caught:
+        sweep_mod.sweep(
+            steps=1, experiments=1, num_classes=2, only=[slow[0]], skip_slow=True
+        )
+    message = str(caught.value)
+    assert "selection is empty" in message, message
+    assert "SLOW_TEMPLATES" in message, message
