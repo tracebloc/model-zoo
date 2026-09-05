@@ -74,10 +74,11 @@ license = "BSD-3-Clause"
 # would pay the resize twice and change nothing the model sees. 800 is what
 # this model actually runs at.
 #
-# NOTE this is 800 where the existing fcos.py declares 448. That template's
-# transform is also min_size=800, so 448 was never the resolution it ran at;
-# not corrected here because changing a shipped template's declared shape is a
-# separate change with its own blast radius.
+# NOTE `fcos.py` USED to declare 448 while its transform ran at min_size=800, so
+# 448 was never the resolution it ran at. That separate change has since landed
+# (backend#3058, model-zoo#265): `fcos.py`, `faster_rcnn_resnet` and `retinanet`
+# all declare 800 now, and `KNOWN_MISMATCHES` in
+# tests/test_od_declared_resolution.py is empty with its ratchet at zero.
 image_size = 800
 # Conservative on purpose. OD ships no SDK shape-probe (#270), so this value is
 # taken at face value with nothing to correct it, and a ConvNeXt-Small backbone

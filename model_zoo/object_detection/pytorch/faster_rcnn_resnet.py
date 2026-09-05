@@ -12,24 +12,48 @@ verifying that matched weight file.
 The backbone is assembled explicitly instead of via the high-level
 ``fasterrcnn_resnet50_fpn(weights=None)`` builder, because that builder keys
 its architecture off whether weights were requested: with no weights it
-swaps the backbone norm layers from ``FrozenBatchNorm2d`` to trainable
-``BatchNorm2d`` and unfreezes all five backbone stages instead of the last
-three. Both are training-behavior changes, and the norm swap also changes
-the state_dict key set (``BatchNorm2d`` adds ``num_batches_tracked``
-buffers), so the hosted pretrained seed would no longer be a key-exact
-match. Building the backbone directly reproduces the checkpoint-path
-architecture exactly — same norm layers, same three trainable stages, same
-state_dict keys and shapes.
+unfreezes all five backbone stages instead of the last three, and it picks the
+backbone norm off the same flag. Building the backbone directly keeps the three
+trainable stages under explicit control. The norm is no longer the
+checkpoint's — see below.
+
+Backbone norm: GroupNorm, and it is NOT the checkpoint's norm (backend#3093)
+----------------------------------------------------------------------------
+This template used to build ``norm_layer=misc_nn_ops.FrozenBatchNorm2d`` to
+reproduce torchvision's checkpoint-path architecture key-exactly. That was
+wrong in the regime the platform actually runs: frozen BN at construction
+holds ``weight=1``, ``bias=0``, ``running_mean=0``, ``running_var=1``, so on a
+``weights=None`` build it computes ``(x - 0) / sqrt(1 + eps) * 1 + 0`` -- a
+bit-exact identity. Its buffers are meaningful only after a checkpoint loads
+real statistics into them, and NO OD seed is hosted (backend#3055 is blocked
+on the store decision in backend#2659). So every run of this template to date
+trained with no backbone normalisation at all; activations were measured at
+sigma ~= 24 where a live BN gives ~= 3.
+
+GroupNorm normalises per sample, so it is correct with no checkpoint and adds
+no running statistics for the averaging service to ship each federated round
+-- both halves of the constraint that produced frozen BN in the first place.
+
+⚠️ WHAT THIS COSTS, EXPLICITLY. A torchvision COCO checkpoint's BN running
+statistics have nowhere to go in a GroupNorm tree, so this template can no
+longer strict-load a seed prepped from ``download.pytorch.org`` weights, and
+the prepped-but-unhosted dump named in the header above is invalidated by this
+change. ``tools/prep_offline_weights.py`` fails loudly on the strict load
+rather than producing a mismatched dump, which is the right place for it to
+fail. Whether this template keeps a seed declaration, drops it, or re-sources
+one belongs to backend#2659 / backend#3055 -- not to this file. The trade taken
+here is a real defect on every run today against a hypothetical benefit that
+is blocked.
 
 ``_resnet_fpn_extractor`` is torchvision-private API (stable across recent
 releases; this file is verified against torchvision 0.27). If a torchvision
 upgrade ever moves it, this template fails loudly at import and the contract
 tests catch it.
 """
+from torch import nn
 from torchvision.models import resnet50
 from torchvision.models.detection.backbone_utils import _resnet_fpn_extractor
 from torchvision.models.detection.faster_rcnn import FasterRCNN, FastRCNNPredictor
-from torchvision.ops import misc as misc_nn_ops
 
 # backend#2642 — the task head is NOT carried by the hosted seed.
 # The seed holds the backbone; the head initialises fresh from output_classes,
@@ -42,31 +66,71 @@ SEED_EXCLUDED_PREFIXES = ("roi_heads.box_predictor.bbox_pred.", "roi_heads.box_p
 framework = "pytorch"
 model_type = "rcnn"
 main_class = "MyModel"
-image_size = 448
-batch_size = 16
+image_size = 800
+# Dropped from 16 alongside the image_size fix (backend#3058, model-zoo#265).
+#
+# The MODEL-side tensor is unchanged -- GeneralizedRCNNTransform produced
+# 800x800 from a 448x448 delivery already, and produces 800x800 from an 800x800
+# one, measured byte-identical. What changes is what the edge MATERIALISES and
+# SHIPS per sample: 800x800x3 instead of 448x448x3, 3.19x the bytes.
+#
+# At 16 that made this the heaviest deliverer on the roster by a wide margin --
+# 122.9 MB/batch, and the only one of the sixteen declared-800 templates above
+# 8. Its direct sibling `faster_rcnn_resnet_v2` (same ResNet50-FPN) uses 2, and
+# the other two-stage detectors sit at 2-4 (`cascade_rcnn` 4, `sparse_rcnn` 2);
+# the 8s are all one-stage (`atss_resnet`, `fcos`, `retinanet`).
+#
+# 4 matches `cascade_rcnn`, the closest two-stage peer, and delivers 30.7
+# MB/batch -- 0.80x what this template shipped before. So the resolution fix is
+# a net REDUCTION on the data plane rather than a 3.19x regression.
+#
+# Same convention as `fcos_convnext_small.py`: OD ships no SDK shape-probe
+# (#270), so this value is taken at face value with nothing to correct it.
+batch_size = 4
 output_classes = 12
 category = "object_detection"
+
+
+def _group_norm(channels):
+    """GroupNorm with the largest group count ``<= 32`` that divides ``channels``.
+
+    The backbone norm for a from-scratch build (backend#3093). This template
+    used ``FrozenBatchNorm2d``, which at construction holds ``weight=1``,
+    ``bias=0``, ``running_mean=0``, ``running_var=1`` and therefore computes
+    ``(x - 0) / sqrt(1 + eps) * 1 + 0`` -- its input, unchanged. Those buffers
+    only mean anything once a pretrained checkpoint loads real statistics into
+    them; with ``weights=None`` there is nothing to freeze and the layer is a
+    no-op, so the backbone trained with no normalisation at all. GroupNorm
+    normalises per sample, so it is correct with no checkpoint AND holds no
+    running statistics for the averaging service to ship every federated round
+    -- the reason frozen BN was reached for in the first place.
+
+    The group count is derived, not hardcoded to 32: ``nn.GroupNorm`` requires
+    ``channels % num_groups == 0``, which ResNet-50's 64..2048 all satisfy at
+    32 (the canonical Wu & He setting) but MobileNetV3's 16/24/40/72/120/184
+    stages do not.
+
+    Duplicated per template on purpose -- a zoo template is uploaded as ONE
+    file and cannot import a sibling (no relative imports anywhere in this
+    repo). ``efficientdet_d0._norm`` and ``rtmdet_s``/``yolox_s._norm_groups``
+    are the same helper for the same reason.
+    """
+    groups = max(g for g in range(1, 33) if channels % g == 0)
+    return nn.GroupNorm(groups, channels)
 
 
 def MyModel(num_classes=output_classes):
     num_classes = num_classes + 1  # 1 for background
 
-    # Reproduce the checkpoint-path architecture exactly, with no download:
-    # frozen batch-norm backbone, FPN with the last 3 stages trainable, and
-    # the stock 91-class COCO head (replaced below, as before).
-    backbone = resnet50(weights=None, norm_layer=misc_nn_ops.FrozenBatchNorm2d)
+    # No download: GroupNorm backbone (backend#3093 -- frozen BN is an
+    # identity from scratch), FPN with the last 3 stages trainable, and the
+    # stock 91-class COCO head (replaced below, as before).
+    backbone = resnet50(weights=None, norm_layer=_group_norm)
     backbone = _resnet_fpn_extractor(backbone, trainable_layers=3)
     model = FasterRCNN(backbone, num_classes=91)
 
-    # The checkpoint-path build zeroes FrozenBatchNorm2d eps for this
-    # architecture (torchvision's overwrite_eps); match it so numerics are
-    # identical, not just the parameter set.
-    for module in model.modules():
-        if isinstance(module, misc_nn_ops.FrozenBatchNorm2d):
-            module.eps = 0.0
-
-    # Replace the classifier head (identical to the pre-migration build, so
-    # the hosted seed state_dict keys/shapes match this module exactly).
+    # Replace the classifier head. Its keys/shapes are unchanged by the norm
+    # swap; SEED_EXCLUDED_PREFIXES above still names exactly this head.
     in_features = model.roi_heads.box_predictor.cls_score.in_features
     model.roi_heads.box_predictor = FastRCNNPredictor(in_features, num_classes)
 
