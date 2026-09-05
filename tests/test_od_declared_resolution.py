@@ -17,13 +17,18 @@ twice and throws away the detail it would have had if the dataset had delivered
 that is worse than the architecture should give — which is indistinguishable
 from "detection is hard".
 
-Three shipped templates have it (``faster_rcnn_resnet``, ``fcos``,
-``retinanet``, all 448 against a transform at 800). **They are deliberately not
-fixed here.** Changing a declared shape changes what the edge is asked to
-deliver, so backend#3058 wants a before/after mAP measurement rather than a
-blind edit. This file is the guard, landing first: it stops a *new* template
-acquiring the same defect, and it makes the three known ones explicit instead of
-folklore.
+Three shipped templates HAD it (``faster_rcnn_resnet``, ``fcos``,
+``retinanet``, all 448 against a transform at 800). **All three are fixed** —
+backend#3058, model-zoo#265 — and ``KNOWN_MISMATCHES`` is empty with its ratchet
+at zero. This file landed as the guard first and is now also the record of the
+fix: it stops a *new* template acquiring the defect, and there is no longer any
+template it excuses.
+
+The before/after mAP measurement backend#3058 originally wanted was NOT gated
+on: it needs seeded weights from the blocked backend#2659, both arms score ~0
+from random init, and an upscale cannot recover detail a downscale discarded —
+so it would have established magnitude, not direction. It rides on
+backend#3048's sweep once seeds exist.
 
 Asserted in both directions
 ---------------------------
@@ -125,14 +130,16 @@ FAMILY = "torchvision_detection"
 #: they run at, tracked as backend#3058. Value is the declared/effective pair, so
 #: a partial change is as loud as no change.
 #:
-#: ⚠️ Asserted in BOTH directions — fixing one of these fails this file until
-#: its row is deleted. Do not add a row to silence a new template; a new
+#: **EMPTY as of model-zoo#265**, which fixed the last three
+#: (``faster_rcnn_resnet``, ``fcos``, ``retinanet`` — all 448 against a transform
+#: at 800). This dict now exists only so that ADDING a row is still the thing the
+#: ratchet refuses. Same shape as ``NON_NORMALISING`` in
+#: ``test_od_norm_layers_normalise.py`` after model-zoo#262 emptied it.
+#:
+#: ⚠️ Asserted in BOTH directions — fixing a listed template fails this file
+#: until its row is deleted. Do not add a row to silence a new template; a new
 #: mismatch is a bug in that template, not a new known issue.
-KNOWN_MISMATCHES = {
-    "faster_rcnn_resnet": (448, 800),
-    "fcos": (448, 800),
-    "retinanet": (448, 800),
-}
+KNOWN_MISMATCHES: dict[str, tuple[int, int]] = {}
 
 #: The list is a RATCHET: it may only ever shrink, and its length is pinned by
 #: EQUALITY rather than by an upper bound.
@@ -157,7 +164,7 @@ KNOWN_MISMATCHES = {
 #: the `MAX_KNOWN_MISMATCHES == <n>` pin below keeps that a conscious,
 #: reviewable edit rather than a silent one. The legal edit is therefore
 #: *enforced* rather than merely documented.
-MAX_KNOWN_MISMATCHES = 3
+MAX_KNOWN_MISMATCHES = 0
 
 #: How each row of ``PUBLISHED_RESOLUTION`` is anchored — i.e. what would have
 #: to change for the row to legitimately change. Three of the four kinds are
@@ -223,7 +230,18 @@ MODERN_YOLO_CITATION = (
     "Every modern-YOLO scale is published, trained and evaluated at 640x640 on "
     "MS COCO: YOLOX (Ge et al. 2021) sec. 3 test size 640; Ultralytics YOLOv8 "
     "(2023) default imgsz=640; YOLOv9 (Wang et al. 2024) sec. 4.1; YOLOv10 "
-    "(Wang et al. 2024, NeurIPS, arXiv:2405.14458) results table Test Size 640. "
+    "(Wang et al. 2024, NeurIPS, arXiv:2405.14458) results table Test Size 640; "
+    "Ultralytics YOLO11 (2024) cfg/models/11/yolo11.yaml, whose per-scale "
+    "summary comment carries the parameter count and the GFLOPs on ONE line, "
+    "and whose s row's 21.7 GFLOPs is reproduced at 640 and at no other edge "
+    "(13.9 at 512, 31.3 at 768, measured with ultralytics 8.3.0) — so the "
+    "9,458,752-parameter figure on that line is quoted at 640; "
+    "Ultralytics YOLO12 (2025) cfg/models/12/yolo12.yaml the same way, and its "
+    "s row's 21.7 GFLOPs is likewise reproduced at 640 and at no other "
+    "32-divisible edge (19.6 at 608, 23.9 at 672, measured with ultralytics "
+    "8.3.78), with YOLOv12 (Tian, Ye & Doermann, arXiv:2502.12524) evaluated at "
+    "640 on MS COCO; "
+    "cfg/default.yaml sets imgsz: 640. "
     "Each template's own published parameter figure is quoted at that scale."
 )
 
@@ -302,6 +320,28 @@ PUBLISHED_RESOLUTION: dict[str, tuple[int, str, str]] = {
     # the dual-head one; do not "correct" it to the README's 7.2M, which is the
     # fused one2one-only deployed graph. The resolution is 640 in every variant.
     "yolov10_s": (MODERN_YOLO_RESOLUTION, MODERN_YOLO, "the NMS-free dual-assignment YOLOv10-S (model-zoo#258). YOLOv10 (Wang et al. 2024, NeurIPS, arXiv:2405.14458) results table gives Test Size 640 for every scale; the scale its published 8,128,272-parameter dual-head summary is quoted at"),
+    # the C3k2/C2PSA YOLO11-S (model-zoo#263). ⚠️ THE STEM HAS NO `v`: upstream
+    # dropped it at this generation (`yolo11.yaml`, `yolo11s.pt`), so `yolov11_s`
+    # is a name that has never existed and searching for it finds nothing.
+    # Unlike `yolov10_s` above there is only ONE published figure worth quoting:
+    # unfused 9,458,752 against fused 9,443,760, a 0.16% gap the docs table's
+    # one-decimal "9.4M" cannot distinguish either way.
+    "yolo11_s": (MODERN_YOLO_RESOLUTION, MODERN_YOLO, "the C3k2/C2PSA YOLO11-S (model-zoo#263), NMS-based unlike its yolov10_s neighbour. Ultralytics YOLO11 (2024) cfg/models/11/yolo11.yaml quotes '9458752 parameters, 9458736 gradients, 21.7 GFLOPs' on one summary line per scale, and 21.7 GFLOPs is reproduced only at 640 — the resolution is recovered from the same line as the parameter count rather than asserted alongside it"),
+    # the A2C2f/Area-Attention YOLOv12-S (model-zoo#266). ⚠️ THE STEM KEEPS THE
+    # `v` AND THAT IS THE OPPOSITE CALL TO `yolo11_s` ABOVE: this generation has
+    # TWO upstreams that disagree about the name. The authors' paper and repo are
+    # `yolov12` (sunsmarterjie/yolov12, yolov12s.pt); Ultralytics integrated it
+    # as `yolo12`. So both spellings are real here, where `yolov11` never was.
+    # ⚠️ AND THERE ARE THREE PUBLISHED PARAMETER FIGURES. This row's citation
+    # quotes the ULTRALYTICS one, which is what the template is built against
+    # and the only one that lives in an installable package. The authors' v1.0
+    # tag says 9,285,632 for the same topology (its `Conv` signature reads the
+    # padding argument as `bias`, giving every Area-Attention positional
+    # encoding a bias: +1,536 here); their current `main` is YOLOv12-turbo at
+    # 9,127,424 / 19.7 GFLOPs and is a DIFFERENT architecture — grouped
+    # downsample convs at yaml layers 1 and 3. Do not reconcile this row
+    # against either.
+    "yolov12_s": (MODERN_YOLO_RESOLUTION, MODERN_YOLO, "the attention-centric YOLOv12-S (model-zoo#266) — R-ELAN backbone with Area Attention, no SPPF and no C2PSA, NMS-based. Ultralytics YOLO12 (2025) cfg/models/12/yolo12.yaml quotes '9,284,096 parameters, 9,284,080 gradients, 21.7 GFLOPs' on one summary line per scale, and 21.7 GFLOPs is reproduced at 640 and at no other 32-divisible edge (19.6 at 608, 23.9 at 672, 13.9 at 512, 31.2 at 768, measured with ultralytics 8.3.78) — so the resolution is recovered from the same line that carries the parameter count. Tian, Ye & Doermann, arXiv:2502.12524; cfg/default.yaml sets imgsz: 640 independently"),
     # RTMDet is NOT a YOLO — CSPNeXt backbone, mmdetection lineage — so it does
     # not join the family anchor above even though its resolution matches.
     # Membership is the thing being asserted, not the number.
@@ -336,9 +376,11 @@ UNVERIFIABLE_LITERALS = frozenset(
 #: resolution without its own review — merely by being named after a YOLO.
 MODERN_YOLO_ROWS = frozenset(
     {
+        "yolo11_s",
         "yolov8_s",
         "yolov9_s",
         "yolov10_s",
+        "yolov12_s",
         "yolox_s",
     }
 )
@@ -494,8 +536,8 @@ def test_family_templates_were_found():
     nothing, and it is driven by a file scan plus a schema lookup."""
     assert "rcnn" in FAMILY_VALUES, (
         f"{_schema_path().name}: {FAMILY!r} lost its legacy 'rcnn' alias — "
-        f"faster_rcnn_resnet declares it and is one of the KNOWN_MISMATCHES, so "
-        f"this scan just stopped covering the row that matters most"
+        f"faster_rcnn_resnet declares it, so this scan just stopped covering "
+        f"the only template on the legacy alias"
     )
     # This was `len(FAMILY_TEMPLATES) >= 4` — a floor every roster PR is
     # invited to raise, i.e. a shared literal with the same serialisation cost
@@ -628,27 +670,36 @@ def test_the_known_mismatch_list_only_ever_shrinks():
     cap — both a ``<=`` bound and the ``MAX == n`` pin still pass, leaving a free
     slot a later commit can refill with a brand-new mismatch and stay green.
 
-    Legal edits are: delete a row, lower ``MAX_KNOWN_MISMATCHES``, and update
-    the pin below — all in one commit. Adding a row fails here, so a new
-    mismatch has to be argued for rather than absorbed.
+    **The ratchet is now AT ITS FLOOR** — empty, pinned at 0 (model-zoo#265).
+    There is no legal edit to these two values left: the only edit the original
+    design permitted was *downward*, and down is where they are. A new
+    declared/effective mismatch is a bug in the template that introduced it, not
+    a row to add here.
+
+    Historically the legal edit was: delete a row, lower
+    ``MAX_KNOWN_MISMATCHES``, and update the pin below — all in one commit. That
+    is recorded because it is what got us to zero, not because it is still
+    available.
     """
     assert len(KNOWN_MISMATCHES) == MAX_KNOWN_MISMATCHES, (
         f"KNOWN_MISMATCHES holds {len(KNOWN_MISMATCHES)} entries "
         f"({sorted(KNOWN_MISMATCHES)}) against a pinned {MAX_KNOWN_MISMATCHES}.\n"
         f"  - GREW? A declared/effective mismatch in a NEW template is a bug in "
         f"that template — fix its image_size instead of listing it.\n"
-        f"  - SHRANK? Good: backend#3058 fixed one. Lower MAX_KNOWN_MISMATCHES "
-        f"to {len(KNOWN_MISMATCHES)} in this same commit, and update the "
-        f"equality pin below.\n"
+        f"  - SHRANK? No longer possible: the ratchet is at its floor (0) as "
+        f"of model-zoo#265, so a shrink means a row was added and removed, not "
+        f"that a template was fixed.\n"
         f"This is asserted by EQUALITY, not `<=`, on purpose: an upper bound "
         f"would let a fix free a slot that a later commit could quietly refill "
         f"with a brand-new mismatch."
     )
-    assert MAX_KNOWN_MISMATCHES == 3, (
-        f"MAX_KNOWN_MISMATCHES is {MAX_KNOWN_MISMATCHES}, not the 3 recorded "
-        f"when this guard landed. Raising it defeats the ratchet; lowering it "
-        f"is correct once backend#3058 fixes a template, and this assertion "
-        f"should be updated in the same commit that lowers it."
+    assert MAX_KNOWN_MISMATCHES == 0, (
+        f"MAX_KNOWN_MISMATCHES is {MAX_KNOWN_MISMATCHES}, not the 0 this ratchet "
+        f"reached when backend#3058 fixed the last three templates "
+        f"(faster_rcnn_resnet, fcos, retinanet). It may only ever go DOWN, and "
+        f"it is already at the floor: there is no legal edit to this number "
+        f"left. A new declared/effective mismatch is a bug in the template that "
+        f"introduced it, not a row to add here."
     )
 
 
@@ -711,9 +762,10 @@ def test_declared_image_size_matches_the_published_specification(path):
     the declared-vs-built comparison cannot see, and why nothing the template
     does at construction time can influence its expectation.
 
-    The three ``KNOWN_MISMATCHES`` templates fail this too (they declare 448
-    against a published 800), so their recorded value is honoured here as well
-    — one exemption list, one ratchet, read by both comparisons.
+    ``KNOWN_MISMATCHES`` is read here as well as by the declared-vs-built
+    comparison — one exemption list, one ratchet, both comparisons. It is now
+    **empty** (model-zoo#265), so this test exempts nothing: every template's
+    declared value is checked against its published specification.
     """
     stem = _stem(path)
     declared = _read_declared_image_size(path)

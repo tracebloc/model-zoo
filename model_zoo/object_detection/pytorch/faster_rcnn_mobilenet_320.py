@@ -12,9 +12,10 @@ Hosting the torchvision COCO tensors as a tracebloc model-store seed (the
 #1499 pattern: a matched ``<stem>_weights.pkl`` prepped by
 ``tools/prep_offline_weights.py`` and strict-loaded after ``MyModel()`` has
 built the architecture) is follow-up work, not part of this roster addition.
-What makes it possible is the key-exactness recorded below — until a dump is
-staged, ``tools/check_dump_coverage.py`` classifies this file NO_SEED and the
-statement above is what keeps that classification honest.
+Until a dump is staged, ``tools/check_dump_coverage.py`` classifies this file
+NO_SEED and the statement above is what keeps that classification honest. What
+seeding would now require is recorded below — it is no longer the torchvision
+COCO checkpoint.
 
 The 320 variant differs from ``faster_rcnn_mobilenet.py`` ONLY in
 ``GeneralizedRCNNTransform`` and RPN inference knobs — none of which are
@@ -23,29 +24,47 @@ serve both once a seed is staged; they are kept as separate templates because
 the declared ``image_size`` is the thing a user picks between, and that is
 header metadata, not a runtime argument.
 
-The backbone is assembled explicitly instead of via the high-level
-``fasterrcnn_mobilenet_v3_large_320_fpn(weights=None)`` builder, for exactly
-the reason documented in ``faster_rcnn_resnet.py``: that builder keys its norm
-layer off whether weights were requested
-(``FrozenBatchNorm2d if is_trained else nn.BatchNorm2d``), and ``BatchNorm2d``
-contributes a ``num_batches_tracked`` buffer per norm layer — 46 extra
-state_dict keys, 330 tensors against the checkpoint path's 284 — so a seed
-prepped from the COCO checkpoint could never strict-load into a
-``weights=None`` build. Assembling the backbone directly reproduces the 284
-exactly. Verified by diffing the two builds under torchvision 0.26.0, the
-engine pin.
+Backbone norm: GroupNorm, and it forfeits COCO seeding (backend#3093)
+---------------------------------------------------------------------
+This template used to build ``norm_layer=misc_nn_ops.FrozenBatchNorm2d``, to
+reproduce the checkpoint path's key set exactly so a future COCO seed could
+strict-load. That was wrong in the regime the platform actually runs: frozen
+BN at construction holds ``weight=1``, ``bias=0``, ``running_mean=0``,
+``running_var=1``, so on a ``weights=None`` build it computes
+``(x - 0) / sqrt(1 + eps) * 1 + 0`` -- a bit-exact identity. Its buffers are
+meaningful only after a checkpoint loads real statistics into them, and NO OD
+seed is hosted (backend#3055 is blocked on the store decision in
+backend#2659). So every run of this template to date trained with no backbone
+normalisation at all.
 
-Unlike the ResNet R-CNN family, the mobilenet checkpoint path does not zero
-``FrozenBatchNorm2d`` eps — ``overwrite_eps`` is called only from the
-``*_resnet50_fpn`` v1 builders — so there is no eps overwrite here.
+GroupNorm normalises per sample, so it is correct with no checkpoint and adds
+no running statistics for the averaging service to ship each federated round
+-- both halves of the constraint that produced frozen BN in the first place.
+
+⚠️ WHAT THIS COSTS, EXPLICITLY. A torchvision COCO checkpoint's BN running
+statistics have nowhere to go in a GroupNorm tree, so the follow-up seeding
+described above can no longer be done from ``download.pytorch.org`` weights;
+``tools/prep_offline_weights.py`` fails loudly on the strict load rather than
+producing a mismatched dump. The build is 192 state_dict tensors under
+torchvision 0.26.0, against the 284 of the frozen-BN key set this file used to
+reproduce -- GroupNorm drops the two running-statistic buffers per norm layer
+and keeps ``weight``/``bias``, now as parameters rather than buffers. Whether
+this template is seeded from a different source or stays random-initialised
+belongs to backend#2659 / backend#3055, not to this file. The trade taken here
+is a real defect on every run today against a hypothetical benefit that is
+blocked.
+
+The backbone is still assembled explicitly rather than via the builder, but
+for a different reason than before: the builder's norm is not this template's
+norm, and it unfreezes all backbone stages rather than the last three.
 
 Verified against torchvision 0.26.0 (the engine pin, ``tools/requirements-engine-pin.txt``).
 """
+from torch import nn
 from torchvision.models import mobilenet_v3_large
 from torchvision.models.detection.anchor_utils import AnchorGenerator
 from torchvision.models.detection.backbone_utils import _mobilenet_extractor
 from torchvision.models.detection.faster_rcnn import FasterRCNN
-from torchvision.ops import misc as misc_nn_ops
 
 # backend#2642 — the task head is NOT carried by the hosted seed.
 # The seed holds the backbone; the head initialises fresh from output_classes,
@@ -66,13 +85,41 @@ output_classes = 12
 category = "object_detection"
 
 
+def _group_norm(channels):
+    """GroupNorm with the largest group count ``<= 32`` that divides ``channels``.
+
+    The backbone norm for a from-scratch build (backend#3093). This template
+    used ``FrozenBatchNorm2d``, which at construction holds ``weight=1``,
+    ``bias=0``, ``running_mean=0``, ``running_var=1`` and therefore computes
+    ``(x - 0) / sqrt(1 + eps) * 1 + 0`` -- its input, unchanged. Those buffers
+    only mean anything once a pretrained checkpoint loads real statistics into
+    them; with ``weights=None`` there is nothing to freeze and the layer is a
+    no-op, so the backbone trained with no normalisation at all. GroupNorm
+    normalises per sample, so it is correct with no checkpoint AND holds no
+    running statistics for the averaging service to ship every federated round
+    -- the reason frozen BN was reached for in the first place.
+
+    The group count is derived, not hardcoded to 32: ``nn.GroupNorm`` requires
+    ``channels % num_groups == 0``, which ResNet-50's 64..2048 all satisfy at
+    32 (the canonical Wu & He setting) but MobileNetV3's 16/24/40/72/120/184
+    stages do not.
+
+    Duplicated per template on purpose -- a zoo template is uploaded as ONE
+    file and cannot import a sibling (no relative imports anywhere in this
+    repo). ``efficientdet_d0._norm`` and ``rtmdet_s``/``yolox_s._norm_groups``
+    are the same helper for the same reason.
+    """
+    groups = max(g for g in range(1, 33) if channels % g == 0)
+    return nn.GroupNorm(groups, channels)
+
+
 def MyModel(num_classes=output_classes):
     num_classes = num_classes + 1  # 1 for background
 
-    # Reproduce the checkpoint-path architecture exactly, with no download:
-    # frozen batch-norm backbone and the FPN over the last 3 trainable stages.
+    # No download: GroupNorm backbone (backend#3093 -- frozen BN is an
+    # identity from scratch) and the FPN over the last 3 trainable stages.
     backbone = mobilenet_v3_large(
-        weights=None, norm_layer=misc_nn_ops.FrozenBatchNorm2d
+        weights=None, norm_layer=_group_norm
     )
     backbone = _mobilenet_extractor(backbone, True, 3)
 
