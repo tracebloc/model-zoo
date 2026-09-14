@@ -1,0 +1,4 @@
+# Pinned to the version the org code-quality gate runs (code-quality.yml
+# `ruff-version` default). An unpinned `ruff` here meant ci.yml's REQUIRED
+# ruff job installed whatever PyPI served that day.
+ruff==0.15.20
