@@ -1,0 +1,764 @@
+# GENERATED FILE -- DO NOT EDIT BY HAND.
+#
+# Self-contained copy of the reusable workflow `.github/workflows/code-quality.yml`
+# (blob 989a83785c26b32ae6047acb06315a89fc991722) folded with the private source repo's own caller of it,
+# `.github/workflows/code-quality-caller.yml` (blob d0d9d4c4ecb1747e9f1b3fadcf516b79fe8c55bb), for a PUBLIC repo: GitHub lets a
+# public repo `uses:` a reusable workflow only from a public repo, and the
+# reusables live in the private source repo. So this file carries the
+# reusable's jobs inline -- the triggers are the caller's; every `inputs.*` is
+# resolved to a literal (repo-inventory.yml's `caller_inputs` floor, else the
+# reusable's default -- the caller's own toolchain choices are NOT copied); the
+# App-token secrets are named directly; a job whose condition resolves to a
+# constant false is omitted; and each job's display name keeps the
+# `quality / ` prefix so the check contexts branch protection requires do
+# not change. Scripts are still fetched from the private source repo at run time with a
+# read-only App installation token; on a fork PR that token cannot be minted
+# (no secrets), so the checkout fails closed rather than running untrusted input.
+#
+# PUBLIC SURFACE. This file is delivered to a public repo. Exactly what was
+# scrubbed, and what was not:
+#
+#   * COMMENT TEXT -- a whole-line YAML `#` comment, a `#`-first line of a `run:`
+#     script that is not inside a heredoc, and this header -- was scrubbed: every
+#     private-repo issue reference, org-qualified private repo name, RFC id and
+#     tenant name became `(internal ref)`, and the private repo this file was
+#     generated from became `the private source repo`.
+#   * CODE -- everything else: commands, heredoc bodies, strings a workflow posts,
+#     `repository:` values, URLs, step names -- was NOT edited. An internal
+#     reference there refuses the render (it is a defect in the source), with one
+#     exception: the name of the private repo this file was generated from, which
+#     the code states verbatim because the workflow checks that repo out and
+#     fetches its scripts from it at run time. Its bare, unqualified name is not
+#     scrubbed anywhere.
+#
+# Regenerate:  python3 scripts/render-self-contained.py          (in the private source repo)
+# Verify:      python3 scripts/render-self-contained.py --check  (make selftest-self-contained)
+#
+# The comments below are the reusable's own and describe the reusable; where
+# they mention `inputs.*` or callers, read them as history.
+
+name: Code quality
+
+# Reusable workflow. The org's first *code* quality gate — every other reusable
+# workflow in this repo automates process (kanban, FR gate, WIP), and none
+# of them looks at what the code does.
+#
+# WHY (measured over 60 days of automated code review)
+#   The automated reviewer's false-positive rate is 3% — so what it reports is
+#   real, and it arrives at the most expensive possible moment. Of the findings
+#   we hand-classified, 20% were expressible as a lint or grep rule, and 14%
+#   were rules the team had already agreed on, being re-enforced one PR at a
+#   time by a reviewer instead of once by CI. This workflow moves that share to
+#   the left, where it costs seconds instead of a review round-trip.
+#
+# JOBS — each is a SEPARATE job on purpose
+#   ruff         Python lint (opt in with `python: true`)
+#   shellcheck   shell lint (opt in with `shell: true`)
+#   gitleaks     credential scanning (on by default)
+#   house-rules  the org's own grep-level rules (on by default)
+#   early-close  the pipefail SIGPIPE gate (on by default, whole-tree)
+#   Separate jobs run independently, so a ruff failure never hides what
+#   shellcheck found. Steps inside one job would short-circuit; jobs do not.
+#
+# BLOCKING BEHAVIOUR — read this before adopting
+#   `soft-fail` defaults to TRUE: every finding is annotated on the diff and
+#   written to the job summary, and the job still exits 0. That is deliberate.
+#   A linter switched on as a required check against an unlinted backlog gets
+#   the check removed, not the backlog fixed. The intended path is:
+#
+#     1. Add the caller with the defaults below. Findings appear; nothing blocks.
+#     2. Run it once with `all-files: true` to size the whole backlog.
+#     3. Clear the backlog (or record a gitleaks baseline / add ignore pragmas
+#        for the deliberate exceptions).
+#     4. Flip `soft-fail: false` in the caller.
+#     5. Mark `Code quality / <job>` as a required status check in branch
+#        protection. Only then is it a gate.
+#
+#   Step 4 is the point of the exercise. `soft-fail: true` is a migration
+#   setting, not a destination: a linter that only ever warns changes nothing.
+#   If a repo is still on the default months from now, that is the finding.
+#
+#   SOFT-FAIL SOFTENS FINDINGS, NEVER A SCANNER THAT COULD NOT RUN. Every job
+#   treats exactly two exit codes as verdicts -- 0 (clean) and 1 (findings) --
+#   and anything else (ruff 2, shellcheck 2-4, gitleaks >1, 126/127, a signal)
+#   fails the job with exit 2 whatever `soft-fail` says. A scan that produced no
+#   verdict has not passed; recording it as clean is how a gate turns into
+#   decoration (Bugbot on (internal ref), (internal ref); (internal ref) rule 3).
+#
+# ADOPTION — drop this in as `.github/workflows/code-quality-caller.yml`
+#
+#     name: Code quality
+#
+#     on:
+#       pull_request:
+#         types: [opened, reopened, synchronize, ready_for_review]
+#
+#     # Supersede the previous run when a branch is pushed again. Measured:
+#     # workflows missing this stack ~10-minute duplicate runs per push.
+#     concurrency:
+#       group: code-quality-${{ github.workflow }}-${{ github.ref }}
+#       cancel-in-progress: true
+#
+#     permissions:
+#       contents: read
+#
+#     jobs:
+#       quality:
+#         uses: the private source repo/.github/workflows/code-quality.yml@main
+#         with:
+#           python: true          # repos with Python
+#           shell: true           # repos with shell scripts
+#           # soft-fail: false    # flip once the backlog is clear
+#         secrets:
+#           app-id: ${{ secrets.RELEASE_TRAIN_APP_ID }}
+#           app-private-key: ${{ secrets.RELEASE_TRAIN_APP_PRIVATE_KEY }}
+#
+#   This workflow asks only for `contents: read`, so it runs under a minimal
+#   caller and the org default workflow-token permission of "read". It needs
+#   EXACTLY TWO secrets, declared REQUIRED under `on.workflow_call.secrets`:
+#   the App id and key that mint a read-only token for the private source repo,
+#   the PRIVATE repo the house-rules and pipefail scripts are checked out of.
+#   Callers pass those two BY NAME and nothing else -- decided under
+#   (internal ref) Q5 ((internal ref), unwound in (internal ref); the carve-out
+#   for these two on (internal ref)). `inherit` was briefly the convention
+#   ("harmless no-op, nothing is referenced"), but callers pin `@main`: the day
+#   a reusable gains a `${{ secrets.X }}` step, every inheriting caller hands it
+#   that repo's ENTIRE secret set (`toJSON(secrets)` dumps it). Explicit
+#   per-secret passing keeps the need visible in every caller diff, and the
+#   REQUIRED declaration makes a caller that forgets fail at startup rather than
+#   at run time with an empty app-id. Cursor Bugbot's recurring nag about the
+#   "missing" `inherit` line is suppressed per-repo in `.cursor/BUGBOT.md` (the
+#   (internal ref) flywheel); the inverse -- a caller that ADDS `secrets: inherit`
+#   -- is what deserves a finding.
+#
+# SUPPLY CHAIN
+#   gitleaks is installed from its release tarball pinned by version AND
+#   verified against a pinned SHA-256, rather than via gitleaks-action. Two
+#   reasons: gitleaks-action requires a GITLEAKS_LICENSE for organization-owned
+#   repos (it would simply fail here), and a version+digest pin on the artefact
+#   we actually execute is a stronger guarantee than a commit pin on a wrapper
+#   that downloads it for us. `actions/checkout` is pinned to a commit SHA.
+#
+# EXTENDING house-rules
+#   Rules live in `scripts/house-rules.sh` in this repo. A repo adds its own
+#   without touching the shared workflow by committing `.house-rules.conf`:
+#
+#     exclude: third_party/*
+#     timeout-wrapper: guard             # a wrapper that already bounds time
+#     disable: curl-timeout
+#     rule: no-print | *.py | ^[[:space:]]*print\( | use client_logger, not print()
+#
+#   Run it locally exactly as CI does:  ./house-rules.sh --all
+#   (`--help` documents every rule, every exclusion, and the ignore pragma.)
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, ready_for_review]
+  # Manual whole-tree scan (gitleaks baseline etc.) -- runs every enabled
+  # job in all-files mode instead of a PR diff.
+  workflow_dispatch:
+    inputs:
+      all-files:
+        description: "Scan the whole repo, not a diff"
+        type: boolean
+        default: true
+
+concurrency:
+  group: code-quality-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# Only `contents: read`. Requesting more would exceed a minimal caller's grant
+# and fail the run at startup with no jobs.
+permissions:
+  contents: read
+
+jobs:
+  # ---------------------------------------------------------------- Python ----
+  early-close:
+    name: quality / pipefail early-close
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Mint a read-only token for org-config (private; the caller's own token cannot read it)
+        id: org-config-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.RELEASE_TRAIN_APP_ID }}
+          private-key: ${{ secrets.RELEASE_TRAIN_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: org-config
+          permission-contents: read
+
+      - name: Check out the shared checker
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: tracebloc/org-config
+          token: ${{ steps.org-config-token.outputs.token }}
+          ref: ${{ 'main' }}
+          path: .quality-tools
+          persist-credentials: false
+
+      # PyYAML IS PROVISIONED, NEVER ASSUMED. The YAML phase imports it, and a
+      # missing import is (correctly) exit 2 -- "cannot tell" is a finding. But
+      # an rc 2 is a HARD failure regardless of soft-fail, so relying on
+      # whatever the runner image happens to ship would turn the first run of
+      # this coverage into a red gate across the fleet. Same pin and same
+      # invocation as selftests.yml and caller-drift.yml.
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      - name: Install PyYAML for the YAML run-block phase
+        # RETRIED, BECAUSE THIS SITS ON A GATE IN 18 REPOS (@saadqbal). A single
+        # PyPI hiccup reddened `code-quality` fleet-wide with a message about pip
+        # rather than about the code -- and a gate that fails for an unrelated
+        # reason is one people learn to re-run without reading.
+        #
+        # Three attempts with a widening pause. Deliberately NOT `continue-on-
+        # error`: without PyYAML the extractor exits 2 by design ("cannot tell"
+        # is a finding), so swallowing this would trade a loud unrelated failure
+        # for a quiet real one.
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3; do
+            if python -m pip install --quiet --disable-pip-version-check \
+                 'pyyaml==6.0.2'; then
+              exit 0
+            fi
+            echo "::warning::pip install pyyaml failed (attempt ${attempt}/3)"
+            # `if` rather than `[ "$attempt" -lt 3 ] && sleep ...`, for
+            # READABILITY, not for correctness. I first wrote this comment
+            # claiming the `&&` form would trip `set -e` on the last attempt and
+            # skip the diagnostic below. It does not: POSIX exempts every
+            # command of an AND-OR list except the last, so a false `[` there
+            # never triggers errexit. Verified both forms reach the end at rc 0
+            # before saying so, since being wrong in the other direction is how
+            # a comment starts teaching the bug.
+            if [ "$attempt" -lt 3 ]; then
+              sleep $(( attempt * 5 ))
+            fi
+          done
+          echo "::error::could not install PyYAML after 3 attempts -- the YAML"
+          echo "::error::run-block phase cannot run, and its extractor treats a"
+          echo "::error::missing PyYAML as 'cannot tell' rather than as clean."
+          exit 1
+
+      - name: pipefail early-close
+        env:
+          SOFT_FAIL: ${{ false }}
+          YAML_RUN_BLOCKS: ${{ true }}
+          YAML_SOFT_FAIL: ${{ true }}
+        run: |
+          set -uo pipefail
+          GATE=".quality-tools/scripts/pipefail-early-close.sh"
+          chmod +x "$GATE"
+
+          # TWO SCOPES, ONE RULE ((internal ref)). `shell` is the tree's shell
+          # files -- the verdict this job has always produced, under whatever
+          # `soft-fail` the caller chose. `yaml` is the `run:` blocks of
+          # workflows and composite actions, which were never in scope at all:
+          # the classifier is extension-else-shebang and YAML is neither, so
+          # the gate reported SUCCESS on `e2e-test-agent@f4d6fec`'s live
+          # `printf | head -1`. Both halves are judged by the SAME awk; only
+          # the file list differs.
+          #
+          # THEY RUN AS SEPARATE INVOCATIONS, not one `all` pass, because the
+          # two halves need different blocking behaviour during the migration
+          # and a single exit code cannot say which half produced it.
+          OVERALL=0
+          for scope in shell yaml; do
+            if [ "$scope" = yaml ]; then
+              [ "$YAML_RUN_BLOCKS" = "true" ] || continue
+              SOFT="$YAML_SOFT_FAIL"
+              TITLE="pipefail early-close (YAML run blocks)"
+            else
+              SOFT="$SOFT_FAIL"
+              TITLE="pipefail early-close"
+            fi
+            OUT="/tmp/early-close-$scope.out"
+            ERR="/tmp/early-close-$scope.err"
+
+            # PIPEFAIL_ROOT is the CALLER's checkout. The `.quality-tools` tree
+            # sits inside the workspace but outside the caller's git index, so
+            # `git ls-files` cannot reach it and the checker never lints itself.
+            RC=0
+            PIPEFAIL_SCOPE="$scope" PIPEFAIL_ROOT="$GITHUB_WORKSPACE" \
+              bash "$GATE" > "$OUT" 2>"$ERR" || RC=$?
+            cat "$OUT"
+            cat "$ERR" >&2 || true
+
+          # ONLY 0 AND 1 ARE VERDICTS. 0 = clean, 1 = findings; anything else is
+          # the gate failing to run -- rc 2 (cannot tell), 126/127 (not
+          # executable / not found), a signal death. Those are ALWAYS fatal,
+          # soft-fail or not: a gate that could not check has not passed, and
+          # letting soft-fail swallow it is how a gate becomes decoration
+          # ((internal ref) rule 3).
+          #
+          # Whitelisting the verdicts rather than blacklisting rc=2 is the
+          # load-bearing part. The first version tested `[ "$RC" = 2 ]`, so a
+          # missing or non-executable script exited 127, fell through to the
+          # soft-fail branch, and reported green (Bugbot, .github#300).
+            if [ "$RC" != 0 ] && [ "$RC" != 1 ]; then
+              echo "::error title=$TITLE::the gate exited $RC — it did not run to a verdict, so this is not a pass"
+              {
+                echo "### $TITLE"
+                echo ""
+                echo "**The gate exited \`$RC\`** — not a verdict (0 = clean, 1 = findings)."
+                echo "Hard failure regardless of \`soft-fail\`: a gate that could not check has not passed."
+                echo ""
+                echo '```'
+                head -20 "$ERR"
+                echo '```'
+              } >> "$GITHUB_STEP_SUMMARY"
+              exit "$RC"
+            fi
+
+            if [ "$SOFT" = "true" ]; then LEVEL=warning; else LEVEL=error; fi
+            # Output is `path:line: code`.
+            awk -v lvl="$LEVEL" -v title="$TITLE" -F: '
+              /^[^:]+:[0-9]+: / {
+                msg=$0; sub(/^[^:]*:[0-9]+: /, "", msg)
+                printf "::%s file=%s,line=%s,title=%s::pipes into an early-closing reader under errexit+pipefail; use a here-string or capture-then-slice: %s\n", lvl, $1, $2, title, msg
+              }' "$OUT"
+
+            COUNT=$(grep -cE "^[^:]+:[0-9]+: " "$OUT" || true)
+            {
+              echo "### $TITLE"
+              echo ""
+              if [ "$COUNT" = "0" ]; then
+                echo "No findings."
+              else
+                echo "**$COUNT finding(s).** Each pipes into a reader that closes before EOF"
+                echo "(\`head\`, \`grep -q\`, \`grep -m N\`, \`sed q\`, \`read\`) where errexit + pipefail are both live."
+                echo "Use a here-string (\`head -25 <<<\"\$out\"\`) or capture-then-slice."
+                echo "If an instance is genuinely safe, mark the line \`# pipefail-guard: allow\` and say why."
+                echo ""
+                echo '```'
+                head -100 "$OUT"
+                echo '```'
+              fi
+              echo ""
+            } >> "$GITHUB_STEP_SUMMARY"
+
+            if [ "$RC" != "0" ] && [ "$SOFT" = "true" ]; then
+              echo "$TITLE: soft-fail is on — reporting only, not failing this job."
+            elif [ "$RC" != "0" ]; then
+              OVERALL=1
+            fi
+          done
+          exit "$OVERALL"
+
+  # --------------------------------------------------------------- gitleaks ---
+  gitleaks:
+    name: quality / gitleaks
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Full history: the scan walks the PR's commit range, so the base
+          # commit has to exist locally. A shallow clone silently scans nothing.
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Install gitleaks (version + SHA-256 pinned)
+        env:
+          GITLEAKS_VERSION: "8.30.1"
+          GITLEAKS_SHA256: "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb"
+        run: |
+          set -euo pipefail
+          URL="https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          curl -fsSL --tlsv1.2 --connect-timeout 30 --max-time 300 "$URL" -o /tmp/gitleaks.tar.gz
+          echo "${GITLEAKS_SHA256}  /tmp/gitleaks.tar.gz" | sha256sum -c -
+          tar -xzf /tmp/gitleaks.tar.gz -C /tmp gitleaks
+          chmod +x /tmp/gitleaks
+          /tmp/gitleaks version
+
+      - name: Scan for leaked credentials
+        env:
+          ALL_FILES: ${{ (inputs.all-files || false) }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          BASELINE: ${{ '' }}
+          SOFT_FAIL: ${{ false }}
+        run: |
+          set -uo pipefail
+
+          set -- --no-banner --redact --report-format json --report-path /tmp/gitleaks.json
+          if [ -n "${BASELINE:-}" ] && [ -f "$BASELINE" ]; then
+            echo "Applying baseline: $BASELINE"
+            set -- "$@" --baseline-path "$BASELINE"
+          fi
+          # A .gitleaks.toml at the repo root is picked up automatically.
+
+          # EVERY invocation below is `gitleaks git` — commit-scoped — and the
+          # per-repo baselines DEPEND on that: baseline fingerprints embed the
+          # commit SHA that introduced each finding, so they only match findings
+          # produced by a git-mode scan. Switching any branch here to `gitleaks
+          # dir`/`detect` (path-scoped fingerprints) silently invalidates every
+          # baseline entry fleet-wide at once — 277 suppressions un-suppress in
+          # a single run ((internal ref) §4). Permanent fixtures live in per-repo
+          # `.gitleaks.toml` allowlists instead (auto-loaded from the checkout
+          # root, commit-INDEPENDENT); only genuine historical exposure stays
+          # baselined, tracked for rotation in (internal ref).
+          RC=0
+          if [ "$ALL_FILES" = "true" ] || [ -z "${BASE_SHA:-}" ]; then
+            echo "Scanning the full history."
+            /tmp/gitleaks git "$@" . || RC=$?
+          else
+            # Exactly the commits this PR adds — every version of every line it
+            # introduced, so a value added and then deleted again is still found.
+            echo "Scanning commit range ${BASE_SHA}..${HEAD_SHA}"
+            /tmp/gitleaks git "$@" --log-opts="--no-merges ${BASE_SHA}..${HEAD_SHA}" . || RC=$?
+            # gitleaks uses 0 = clean, 1 = leaks found; any other code is an
+            # operational error (missing base.sha, bad log-opts). Don't let a
+            # broken credential scan look clean — fall back to a full-history
+            # scan, the same as ruff/shellcheck/house-rules (Bugbot #65). If the
+            # FALLBACK errors too, RC carries that code into the verdict check
+            # below and the job fails -- it used to flow into the soft-fail
+            # branch and exit 0 ((internal ref)).
+            if [ "$RC" != "0" ] && [ "$RC" != "1" ]; then
+              echo "::warning::gitleaks range scan errored (exit $RC) — falling back to a full-history scan."
+              RC=0
+              /tmp/gitleaks git "$@" . || RC=$?
+            fi
+          fi
+
+          # ONLY 0 AND 1 ARE VERDICTS (Bugbot, (internal ref); (internal ref)). Any
+          # other code -- from the full scan, or from the fallback after the range
+          # scan already failed once -- is a scanner that could not run: a broken
+          # binary, an unreadable repository, a signal death, 126/127. That is not
+          # "zero leaks", and it exits 2 HERE, before the soft-fail branch at the
+          # end of this step can turn it into a green job. soft-fail governs
+          # findings (RC = 1), nothing else. Whitelist, not `= 2` (.github#300).
+          if [ "$RC" != "0" ] && [ "$RC" != "1" ]; then
+            echo "::error::gitleaks could not run (exit $RC) — the result is UNKNOWN, not clean"
+            {
+              echo "### gitleaks"
+              echo ""
+              echo "**gitleaks exited \`$RC\`** — not a verdict (0 = clean, 1 = leaks found). Hard failure regardless of \`soft-fail\`: a scan that could not run has not passed."
+              echo ""
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 2
+          fi
+
+          # A report that exists but cannot be read is a scan whose result is
+          # UNKNOWN -- it must never count as zero findings. `|| echo 0` did exactly
+          # that, and under the default soft-fail it exited 0 as all-clear (Bugbot,
+          # (internal ref)). Exit 2 here is deliberately outside the soft-fail path:
+          # soft-fail governs FINDINGS, not a scanner that could not be read.
+          COUNT=0
+          if [ -s /tmp/gitleaks.json ]; then
+            if ! COUNT=$(jq 'length' /tmp/gitleaks.json 2>/tmp/gitleaks-jq.err); then
+              echo "::error::gitleaks wrote a report that jq cannot parse -- the scan result is UNKNOWN, not clean: $(tr '\n' ' ' </tmp/gitleaks-jq.err)"
+              exit 2
+            fi
+            case "$COUNT" in
+              ''|*[!0-9]*)
+                echo "::error::gitleaks report length is not a number ('$COUNT') -- the scan result is UNKNOWN, not clean."
+                exit 2 ;;
+            esac
+          fi
+          # gitleaks says it found leaks (exit 1) but the report holds none: the two
+          # disagree, so the result is unknown -- refuse rather than pick a side.
+          if [ "$RC" = "1" ] && [ "$COUNT" = "0" ]; then
+            echo "::error::gitleaks exited 1 (leaks found) but its report holds no findings -- the scan result is UNKNOWN, not clean."
+            exit 2
+          fi
+
+          # Captured whole HERE, then sliced with a here-string below -- NOT
+          # `jq ... | head -50`. `head` closes the pipe after row 50; with a big
+          # enough finding set jq is still buffering, so it takes SIGPIPE, and
+          # under pipefail the PIPELINE returns 141. Errexit then aborts the step
+          # mid-summary -- and -e IS on here: Actions runs `run:` as `bash -e {0}`,
+          # so the `set -uo pipefail` above leaves it ON while reading as though it
+          # were off. The damage is not just a short table: the ::error::/::warning::
+          # annotations below never emit, and the soft-fail `exit 0` is skipped, so
+          # a repo configured `soft-fail: true` HARD-fails instead of reporting.
+          # Latent, not live -- it needs ~700+ findings to fill a 64K pipe buffer
+          # (measured: tips at ~250 findings / ~24K, nondeterministically at the
+          # boundary, because it is a race). A here-string is one command, so jq
+          # always runs to completion and the status is its own.
+          # ((internal ref) -- same class as .github#173 and the PII gate's #1409.)
+          #
+          # `|| true` keeps a parse failure non-fatal, which is what the existing
+          # `2>/dev/null` already intended; it is near-unreachable anyway, since
+          # COUNT != 0 means jq already parsed this file once.
+          ROWS=""
+          if [ "$COUNT" != "0" ]; then
+            ROWS=$(jq -r '.[] | "| \(.RuleID) | `\(.File)` | \(.StartLine) | \(.Commit[0:8]) |"' \
+              /tmp/gitleaks.json 2>/dev/null || true)
+          fi
+
+          {
+            echo "### gitleaks"
+            echo ""
+            if [ "$COUNT" = "0" ]; then
+              echo "Nothing detected."
+            else
+              echo "**$COUNT finding(s).** Values are redacted here and in the log."
+              echo ""
+              echo "| Rule | File | Line | Commit |"
+              echo "|---|---|---:|---|"
+              # Guarded: `head <<<""` would emit one blank line and break the
+              # table, where the old pipeline printed nothing.
+              if [ -n "$ROWS" ]; then
+                head -50 <<<"$ROWS"
+              fi
+              echo ""
+              echo "Treat anything detected here as compromised: **rotate it first**, then"
+              echo "remove it from the code. Rewriting history is not remediation — the"
+              echo "value was already pushed. A deliberate false positive belongs in"
+              echo "\`.gitleaks.toml\` (allowlist) or in a committed baseline report."
+            fi
+            echo ""
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "$COUNT" != "0" ]; then
+            if [ "$SOFT_FAIL" = "true" ]; then LEVEL=warning; else LEVEL=error; fi
+            jq -r --arg lvl "$LEVEL" '.[] | "::" + $lvl + " file=" + .File + ",line=" + (.StartLine|tostring) + ",title=gitleaks: " + .RuleID + "::Detected by rule " + .RuleID + ". Rotate the value, then remove it from the code."' \
+              /tmp/gitleaks.json 2>/dev/null || true
+          fi
+
+          if [ "$RC" != "0" ] && [ "$SOFT_FAIL" = "true" ]; then
+            echo "soft-fail is on — reporting only, not failing this job."
+            echo "Note: this is the one job worth flipping soft-fail off for first."
+            exit 0
+          fi
+          exit "$RC"
+
+  # ------------------------------------------------------------ house rules ---
+  house-rules:
+    name: quality / house-rules
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Mint a read-only token for org-config (private; the caller's own token cannot read it)
+        id: org-config-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.RELEASE_TRAIN_APP_ID }}
+          private-key: ${{ secrets.RELEASE_TRAIN_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: org-config
+          permission-contents: read
+
+      - name: Check out the shared checker
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: tracebloc/org-config
+          token: ${{ steps.org-config-token.outputs.token }}
+          # Same repo this workflow lives in, so `main` is the version that
+          # matches a `@main` caller. `quality-ref` overrides it for testing.
+          ref: ${{ 'main' }}
+          path: .quality-tools
+          persist-credentials: false
+
+      - name: Run the house-rules checker
+        env:
+          ALL_FILES: ${{ (inputs.all-files || false) }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          CONFIG: ${{ '.house-rules.conf' }}
+          EXCLUDE: ${{ '' }}
+          SOFT_FAIL: ${{ false }}
+        run: |
+          set -uo pipefail
+          CHECKER=".quality-tools/scripts/house-rules.sh"
+          chmod +x "$CHECKER"
+
+          set -- --github --summary "$GITHUB_STEP_SUMMARY"
+          if [ -n "${CONFIG:-}" ] && [ -f "$CONFIG" ]; then
+            set -- "$@" --config "$CONFIG"
+          fi
+          if [ -n "${EXCLUDE:-}" ]; then
+            set -- "$@" --exclude "$EXCLUDE"
+          fi
+          # The checker's own tree must not be linted as if it were the repo's.
+          set -- "$@" --exclude '.quality-tools/*'
+          if [ "$SOFT_FAIL" = "true" ]; then
+            set -- "$@" --soft-fail
+          fi
+          if [ "$ALL_FILES" = "true" ] || [ -z "${BASE_SHA:-}" ]; then
+            set -- "$@" --all
+          else
+            set -- "$@" --base "$BASE_SHA"
+          fi
+
+          "$CHECKER" "$@"
+
+      # (internal ref) D3 ((internal ref)): what a repo declares, ships and installs must
+      # be reachable from what it runs. Rides THIS job on purpose -- `quality /
+      # house-rules` is a required status check on every train repo's develop
+      # (measured 2026-09-09), so the checker is a gate the day it lands without
+      # 16 branch-protection edits; a new job name would be advice (rule 2)
+      # until each protection was hand-updated.
+      #
+      # WHOLE-TREE, never diff-scoped: removing an import elsewhere is what makes
+      # a pin dead, and that hunk is never in the PR that added the pin.
+      #
+      # Advisory by default (`dead-weight-soft-fail: true`) and hard per caller,
+      # so the fleet does not go red on promotion day. Python >= 3.11 for
+      # tomllib; ubuntu-latest ships 3.12. The version guard is a real refusal,
+      # not a skip: a checker that silently ran nothing would report clean.
+      - name: Run the dead-weight checker
+        env:
+          CONFIG: ${{ '.house-rules.conf' }}
+          EXCLUDE: ${{ '' }}
+          SOFT_FAIL: ${{ true }}
+        run: |
+          set -uo pipefail
+          CHECKER=".quality-tools/scripts/dead-weight.py"
+          python3 -c 'import sys; sys.exit(0 if sys.version_info >= (3, 11) else 1)' || {
+            echo "::error::dead-weight needs python3 >= 3.11 (tomllib); the runner has $(python3 --version)"
+            exit 1
+          }
+
+          set -- --root . --github --summary "$GITHUB_STEP_SUMMARY"
+          if [ -n "${CONFIG:-}" ]; then
+            set -- "$@" --config "$CONFIG"
+          fi
+          if [ -n "${EXCLUDE:-}" ]; then
+            set -- "$@" --exclude "$EXCLUDE"
+          fi
+          set -- "$@" --exclude '.quality-tools/*'
+          if [ "$SOFT_FAIL" = "true" ]; then
+            set -- "$@" --soft-fail
+          fi
+
+          python3 "$CHECKER" "$@"
+
+  # Whole-tree action-pin gate ((internal ref), D10). Hand-pinning does not hold:
+  # while one PR pinned jlumbroso/free-disk-space, a second PR added a NEW
+  # unpinned call site of the same action in a non-overlapping hunk of the same
+  # file — both merged cleanly, no conflict, caught only by a human reading the
+  # diff (#1446/#1449). This job makes that silent recurrence impossible.
+  #
+  # WHOLE-TREE, NEVER DIFF-SCOPED — deliberately. A guard that inspects only
+  # what a PR adds reports clean forever over the existing backlog (the exact
+  # failure mode of PR-mode gitleaks on frontend-app). Every run scans every
+  # workflow file in the checkout.
+  #
+  # THE GRAMMAR, and why not a YAML parse: pin-checking needs the `uses:` REF
+  # STRINGS, not the workflow's semantic structure. A strict line grammar
+  # (comment lines excluded; quoted refs unwrapped) covers every real workflow
+  # in the fleet, and anything it cannot parse — e.g. `uses: ${{ ... }}`
+  # expressions — is REPORTED as a finding rather than skipped: a guard that
+  # cannot verify must refuse to claim it did ((internal ref) property 2; with
+  # soft-fail off, that refusal is red).
+  #
+  # ALLOWED forms (everything else is a finding):
+  #   ./local/path                      repo-local actions
+  #   tracebloc/<...>@main              org reusables float on @main BY DECISION
+  #                                     ((internal ref) Q3; any other tracebloc ref is
+  #                                     drift, same rule as caller-drift's)
+  #   owner/action[/path]@<40-hex sha>  D10 pin (trailing "# vX.Y.Z" comment is
+  #                                     convention but not enforced here)
+  #   docker://image@sha256:<digest>    digest-pinned images only
+  action-pins:
+    name: quality / action-pins
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Scan every workflow for unpinned action refs
+        env:
+          # The pin-specific override alone decides this job's posture, so a repo
+          # can arm the supply-chain check while the rest of its suite is still
+          # advisory during a migration. That is the whole reason this input is
+          # separate from `soft-fail`.
+          #
+          # It used to read `(inputs.soft-fail || inputs.action-pins-soft-fail)`.
+          # Because `soft-fail` defaults to true, that OR made the override
+          # incapable of EVER arming the job -- it could only ever weaken it --
+          # while 16 of 16 callers pass `action-pins-soft-fail: false` expecting
+          # the opposite, and four of them carry a comment claiming the check is
+          # "Armed ... independent of soft-fail above". It was not ((internal ref)).
+          SOFT_FAIL: ${{ false && 'true' || 'false' }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import glob, os, re, sys
+
+          USES = re.compile(r"^\s*-?\s*uses:\s*(.+?)\s*$")
+          SHA_PIN = re.compile(r"^[\w.-]+/[\w.-]+(/[\w./-]+)?@[0-9a-f]{40}$")
+          TB_MAIN = re.compile(r"^tracebloc/[\w.-]+(/[\w./-]+)*@main$")
+          DOCKER_DIGEST = re.compile(r"^docker://\S+@sha256:[0-9a-f]{64}$")
+
+          # Built from parts so this SOURCE never contains a literal GitHub
+          # expression opener - actionlint validates expressions inside run:
+          # blocks and rejects the bare sequence even inside a Python string.
+          EXPR_MARKER = "$" + "{{"
+
+          findings = []
+          files = sorted(glob.glob(".github/workflows/*.yml") + glob.glob(".github/workflows/*.yaml"))
+          for f in files:
+              for lineno, raw in enumerate(open(f, encoding="utf-8"), 1):
+                  stripped = raw.lstrip()
+                  if stripped.startswith("#"):
+                      continue
+                  # drop a trailing comment BEFORE matching, so "@sha # v4" parses
+                  code = re.split(r"\s#", raw, 1)[0]
+                  m = USES.match(code)
+                  if not m:
+                      continue
+                  ref = m.group(1).strip().strip("'\"")
+                  if ref.startswith("./"):
+                      continue
+                  # tracebloc/* is judged FIRST: the org convention is @main and
+                  # nothing else, so a tracebloc ref frozen on a SHA is drift,
+                  # not a pin (Bugbot, .github#159) - SHA_PIN must never see it.
+                  if ref.startswith("tracebloc/"):
+                      if TB_MAIN.match(ref):
+                          continue
+                      why = "tracebloc/* must be @main (Q3) - any other ref is drift"
+                  elif SHA_PIN.match(ref) or DOCKER_DIGEST.match(ref):
+                      continue
+                  elif EXPR_MARKER in ref:
+                      why = "expression ref - cannot be verified, so it is refused (property 2)"
+                  else:
+                      why = "not pinned to a 40-char commit SHA (D10)"
+                  findings.append((f, lineno, ref, why))
+
+          if not files:
+              # Any repo CALLING this reusable necessarily has at least one
+              # workflow file (its own caller), so an empty glob means the
+              # checkout or working directory is wrong - a malfunction, not a
+              # clean tree. Malfunctions fail even under soft-fail: that flag
+              # governs FINDINGS, never the scan's own integrity (Bugbot,
+              # .github#159; the watchdog's findings-vs-malfunction split).
+              print("::error::action-pins scanned ZERO workflow files - the checkout or cwd is wrong; refusing to report a pass")
+              sys.exit(2)
+
+          level = "warning" if os.environ.get("SOFT_FAIL") == "true" else "error"
+          for f, lineno, ref, why in findings:
+              print(f"::{level} file={f},line={lineno}::unpinned action ref '{ref}' - {why}")
+
+          # The summary carries the FULL list, like ruff/format/gitleaks do:
+          # annotations cap at ten per step, so a backlog-carrying repo would
+          # otherwise show ten warnings and a bare number (Bugbot, .github#159).
+          summary = os.environ.get("GITHUB_STEP_SUMMARY")
+          if summary:
+              with open(summary, "a", encoding="utf-8") as out:
+                  out.write(f"## action-pins\n\nscanned {len(files)} workflow file(s), {len(findings)} finding(s)\n\n")
+                  if findings:
+                      out.write("| file | line | ref | why |\n|---|---|---|---|\n")
+                      for f, lineno, ref, why in findings:
+                          out.write(f"| {f} | {lineno} | `{ref}` | {why} |\n")
+
+          print(f"action-pins: {len(files)} file(s) scanned, {len(findings)} finding(s)")
+          if findings and os.environ.get("SOFT_FAIL") != "true":
+              sys.exit(1)
+          if findings:
+              print("soft-fail is on - reporting only, not failing this job.")
+          PY
