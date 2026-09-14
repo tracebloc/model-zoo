@@ -1,0 +1,584 @@
+# GENERATED FILE -- DO NOT EDIT BY HAND.
+#
+# Self-contained copy of the reusable workflow `.github/workflows/advance-deploy-env.yml`
+# (blob f8b068ecc1001349728eef16fd1ec1b09ab99fc5) folded with the private source repo's own caller of it,
+# `.github/workflows/advance-deploy-env-caller.yml` (blob a4796127e8f8ed55464d9bc51b2271a05638712e), for a PUBLIC repo: GitHub lets a
+# public repo `uses:` a reusable workflow only from a public repo, and the
+# reusables live in the private source repo. So this file carries the
+# reusable's jobs inline -- the triggers are the caller's; every `inputs.*` is
+# resolved to a literal (repo-inventory.yml's `caller_inputs` floor, else the
+# reusable's default -- the caller's own toolchain choices are NOT copied); the
+# App-token secrets are named directly; a job whose condition resolves to a
+# constant false is omitted; and each job's display name keeps the
+# `advance / ` prefix so the check contexts branch protection requires do
+# not change. Scripts are still fetched from the private source repo at run time with a
+# read-only App installation token; on a fork PR that token cannot be minted
+# (no secrets), so the checkout fails closed rather than running untrusted input.
+#
+# PUBLIC SURFACE. This file is delivered to a public repo. Exactly what was
+# scrubbed, and what was not:
+#
+#   * COMMENT TEXT -- a whole-line YAML `#` comment, a `#`-first line of a `run:`
+#     script that is not inside a heredoc, and this header -- was scrubbed: every
+#     private-repo issue reference, org-qualified private repo name, RFC id and
+#     tenant name became `(internal ref)`, and the private repo this file was
+#     generated from became `the private source repo`.
+#   * CODE -- everything else: commands, heredoc bodies, strings a workflow posts,
+#     `repository:` values, URLs, step names -- was NOT edited. An internal
+#     reference there refuses the render (it is a defect in the source), with one
+#     exception: the name of the private repo this file was generated from, which
+#     the code states verbatim because the workflow checks that repo out and
+#     fetches its scripts from it at run time. Its bare, unqualified name is not
+#     scrubbed anywhere.
+#
+# Regenerate:  python3 scripts/render-self-contained.py          (in the private source repo)
+# Verify:      python3 scripts/render-self-contained.py --check  (make selftest-self-contained)
+#
+# The comments below are the reusable's own and describe the reusable; where
+# they mention `inputs.*` or callers, read them as history.
+
+name: Advance deploy environment
+
+# Reusable workflow. Called from each active repo on push to develop/staging/master/main.
+# For each PR contained in the push, updates the Deploy environment project field
+# and advances Status through the multi-stage validation flow:
+#   develop      -> Status = "On dev"         (automatic; no dev-side review — D6)
+#   staging      -> Status = "FR on staging"  (functional review on staging environment)
+#   master/main  -> Status = "Prod"           (shipped to production)
+#
+# Advancement is MONOTONIC: a card is never moved backward. Back-merges and
+# fast-forwards re-push commits that already shipped further down the line
+# (staging->develop back-merge, develop==main sync); those cards keep their
+# furthest Status instead of being "un-shipped" on the board.
+#
+# The "Ready for prod" intermediate state is set manually via /fr-pass at staging
+# (drag-and-drop on the kanban or via a /fr-pass comment) when the FR reviewer
+# declares the validation passed but the deploy hasn't happened yet.
+#
+# -- Per-repo override via `.kanban.yml` --
+# For repos where the default branch isn't the prod-truth (e.g. averaging-service
+# deploys a Docker image from staging without ever touching main), drop a
+# `.kanban.yml` at the repo root:
+#
+#   # .kanban.yml
+#   branch_status_map:
+#     staging: Prod          # this repo's deploy ships staging-built artifacts
+#
+# The override merges with the default mapping. Anything you don't explicitly
+# remap stays on the default. Keys are branch names.
+#
+# VALUES MUST BE A STATUS `ENV_FOR_STATUS` DECLARES, in
+# tracebloc/.github's `scripts/branch_status_map.py` -- read the list there rather
+# than from a copy here. The three names this comment used to list were a copy, and
+# the table has five.
+# A value outside it is REFUSED ((internal ref)): the mapper exits non-zero, this
+# workflow fails red and the card keeps whatever Status it had. It used to be
+# accepted and passed straight to the board write, where it resolves to no option
+# id -- and in the closure router that no-write let the project's built-in
+# "Item closed" automation set `Cancelled` and archive the card within a day.
+
+on:
+  push:
+    branches: [develop, staging, master, main]
+
+jobs:
+  advance:
+    name: advance / advance
+    # A branch CREATION or deletion is not a merge — its commits are inherited,
+    # not newly shipped. Without this guard, creating a branch (BEFORE = zero
+    # hash) falls through to the "last 50 commits" range below and mass-advances
+    # ~50 recent PRs' kanban items — e.g. every time a new `staging` branch is
+    # cut for a repo ((internal ref) D8/#1274). Skip create/delete pushes.
+    if: github.event.created != true && github.event.deleted != true
+    runs-on: ubuntu-slim
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      # The mapping comes from .github, not from a copy in this file: one
+      # definition of branch -> Status ((internal ref)).
+      - name: Mint a read-only token for org-config (private; the caller's own token cannot read it)
+        id: org-config-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.RELEASE_TRAIN_APP_ID }}
+          private-key: ${{ secrets.RELEASE_TRAIN_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: org-config
+          permission-contents: read
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: tracebloc/org-config
+          token: ${{ steps.org-config-token.outputs.token }}
+          ref: main
+          path: .kanban-map
+          persist-credentials: false
+
+      - name: Resolve deploy env + status (one shared mapping)
+        id: env
+        env:
+          BRANCH: ${{ github.ref_name }}
+          # The workflow token, not the App token: this reads `.kanban.yml`
+          # from the caller's own repo, which is `contents: read` on itself.
+          GH_TOKEN: ${{ github.token }}
+        # ONE DEFINITION, SHARED WITH THE CLOSURE ROUTER ((internal ref)). This step
+        # used to hold its own `case` plus its own `yq` read of `.kanban.yml`, and
+        # the router held two more copies that ignored the override entirely -- so
+        # with a `.kanban.yml` present the two workflows wrote DIFFERENT statuses
+        # for the same merge and run ordering decided which stuck.
+        # Third argument is the REF to read `.kanban.yml` from, which is the branch
+        # being mapped -- not the repo default (Bugbot, .github#295).
+        run: python3 .kanban-map/scripts/branch_status_map.py "$BRANCH" "$GITHUB_REPOSITORY" "$BRANCH"
+
+      - name: Skip if branch not tracked
+        if: steps.env.outputs.env == ''
+        env:
+          BRANCH: ${{ github.ref_name }}
+        run: |
+          echo "Branch '$BRANCH' is not develop/staging/master/main (and no .kanban.yml override) - nothing to do."
+
+      # THIS is the workflow (internal ref) was filed about. On 2026-08-14 at 06:22
+      # UTC, run 31776053792 on client-runtime died with
+      #     gh: API rate limit already exceeded for user ID 54042461
+      # exit 1 -- because every board caller in the fleet, both crons, the
+      # conformance gate and that person's own `gh` shared ONE user PAT's 5,000/hr.
+      # The workflow failed CLOSED, which is right, and the cost was still a card
+      # left behind its own shipped code until someone noticed.
+      #
+      # An installation token has a budget that is not shared with a human's
+      # interactive use and does not evaporate when that person rotates a token or
+      # leaves. `owner:` makes it ORG-scoped; a repo-scoped token cannot write an
+      # org ProjectV2.
+      #
+      # Minted BEFORE the extract step, because the extract step is its first
+      # consumer ((internal ref)): `/commits/{sha}/pulls` needs `pull-requests: read`,
+      # and the caller's `github.token` runs under the org default of restricted
+      # `read` -- contents and packages only -- so under that token the read 403s
+      # on every PRIVATE repo and succeeds on every public one. From .github#438
+      # reaching `main` (2026-09-08 19:10 UTC) until this change, that was 100 % of
+      # private-repo pushes: the fail-closed branch below did its job and no card
+      # moved. A called workflow can only DOWNGRADE the caller's token, so the fix
+      # is not a `permissions:` block here -- it is this token, which already
+      # carries the grant. Gated on a tracked branch only: a push to an untracked
+      # branch still mints nothing.
+      #
+      # NO FALLBACK TO THE PAT: a fallback would let a broken App path keep
+      # working silently, so the migration would look complete while nothing had
+      # migrated ((internal ref)'s whole subject).
+      - name: Mint an installation token
+        id: app-token
+        if: steps.env.outputs.env != ''
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.RELEASE_TRAIN_APP_ID }}
+          private-key: ${{ secrets.RELEASE_TRAIN_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          # LEAST PRIVILEGE, DERIVED FROM THIS JOB'S OWN CALLS ((internal ref)).
+          # Without any `permission-*` the token carried the App's FULL installation
+          # grant -- contents:write included -- across every installed repo. The
+          # step below makes exactly five kinds of call, and this is the union of
+          # what they need:
+          #
+          #   organization(login:).projectV2 field/option lookup   projects  read
+          #   updateProjectV2ItemFieldValue                        projects  WRITE
+          #   repository.pullRequest(n).projectItems               PRs       read
+          #   GET /repos/{r}/commits/{sha}/pulls  (extract step)   PRs       read
+          #                                                        contents  read
+          #
+          # The ONE repository-CONTENT read is the extract step's
+          # `/commits/{sha}/pulls`, so contents stays at `read` -- see the call-site
+          # block below before dropping it. Neither checkout above is on this token
+          # (both use `github.token` / `persist-credentials: false`), so contents
+          # stops at read -- and administration/actions/checks read still drop.
+          #
+          # `repositories:` STAYS UNNARROWED, but the reason it used to give is gone.
+          # It cited the closing-issue advancement, which was deliberately cross-repo;
+          # (internal ref) removed that block, so nothing here reaches outside the
+          # calling repo any more. `organization-projects` is an ORG-level grant and is
+          # not narrowed by `owner:` alone either way, so leaving this unnarrowed costs
+          # nothing measurable -- narrowing it is a plausible tidy-up, but it is a token
+          # -scope change that wants its own measurement rather than riding a
+          # behavioural fix. Do not re-cite the closing-issue block as the reason.
+          #
+          # WHAT IS NOT PROVEN HERE. These are the scopes the calls DOCUMENT a need
+          # for, not scopes a run has exercised. An under-scoped token does not fail
+          # at mint time -- it fails at the call, which for this workflow means a
+          # card left behind its own shipped code. The first push to a tracked
+          # branch carrying a PR is the real test; if it reddens, read the failing
+          # call rather than widening the list back to a full grant.
+          # `contents: read` IS FOR THE EXTRACT STEP'S CALL SITE, NOT THE MAPPER'S
+          # ((internal ref)). Read this before dropping it again.
+          #
+          # saadqbal's finding on .github#324 was narrow and is STILL CORRECT, by its
+          # own test -- check the call site, not the prose. `contents: read` reached
+          # this file by analogy with kanban-closure-router, whose mapper calls run
+          # AFTER its mint under the App token; this workflow's ONE mapper call is
+          # `:94`, in the `env` step, which runs BEFORE this mint and under
+          # `GH_TOKEN: ${{ github.token }}`. It also maps `$GITHUB_REPOSITORY`, its
+          # own repo, where the router maps `$REPO_FULL`, the caller's. Same script,
+          # opposite side of the mint: the scope was required there and inert here.
+          # That reasoning is untouched, and the mapper is still not a reason to
+          # grant contents. Do not re-cite it as one.
+          #
+          # WHAT CHANGED IS A NEW CALL SITE ON THIS TOKEN. .github#438 put
+          # `GET /repos/{r}/commits/{sha}/pulls` in the extract step, and this PR
+          # moves that step to AFTER the mint -- so by the same call-site test its
+          # scope is now this token's business, which it was not when #324 was
+          # written. `fr-gate.yml`'s mint comment ("NOT DERIVED FROM A TEMPLATE")
+          # records that endpoint as `contents: read + pull-requests: read`, derived
+          # from its own calls under (internal ref) and running as a required check on
+          # every promotion since; no workflow in this repo reads that endpoint under
+          # `pull-requests: read` alone. Granting only PRs read
+          # would reproduce (internal ref) one scope over, in the same silent shape:
+          # the read 403s, the fail-closed branch refuses the subject fallback, and
+          # no card moves on any private repo.
+          #
+          # `permission-issues` DROPPED ((internal ref)). The only issue reads were
+          # `repository.issue(n) {state, projectItems}` in the removed closing-issue
+          # block; with it gone, nothing in this workflow touches an issue. Re-add it
+          # only alongside a call that needs it.
+          permission-contents: read
+          permission-pull-requests: read
+          permission-organization-projects: write
+
+      - name: Extract PR numbers from new commits
+        id: prs
+        if: steps.env.outputs.env != ''
+        env:
+          BEFORE: ${{ github.event.before }}
+          SHA: ${{ github.sha }}
+          # The App token minted ABOVE, not `github.token`: `/commits/{sha}/pulls`
+          # needs `pull-requests: read` + `contents: read`, and the org-default
+          # restricted workflow token holds only the latter on a private repo
+          # ((internal ref); the mint step's comment has the derivation).
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        # DERIVE each commit's PR from GitHub, not from its subject text
+        # ((internal ref)). The org convention `type(scope): summary (backend#N)`
+        # puts a ticket in the `(#N)` slot, and an edited squash subject may carry
+        # no `(#N)` at all -- so the old subject-grep attributed the wrong card or
+        # none (2/48 on the 2026-09-07 staging hop). The script GETs each commit's
+        # merged PR and falls back to the subject only when the API is empty, with a
+        # `::warning::` so an unattributed commit is visible. It lives in .github
+        # (checked out at .kanban-map above), one definition; `git log` runs against
+        # the caller's checkout (cwd). Selftest: scripts/tests/extract-advanced-prs-selftest.sh.
+        run: bash .kanban-map/scripts/extract-advanced-prs.sh
+
+      - name: Update project fields for each PR
+        if: steps.env.outputs.env != '' && steps.prs.outputs.prs != ''
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          ORG: ${{ 'tracebloc' }}
+          PROJECT_NUMBER: ${{ 2 }}
+          DEPLOY_ENV: ${{ steps.env.outputs.env }}
+          STATUS_NAME: ${{ steps.env.outputs.status_name }}
+          REPO_FULL: ${{ github.repository }}
+          PR_NUMBERS: ${{ steps.prs.outputs.prs }}
+          DRY_RUN: ${{ false }}
+        run: |
+          set -euo pipefail
+          REPO_NAME="${REPO_FULL#*/}"
+
+          # selftest:graphql-read-start  (byte-identical in every workflow that carries it)
+          # THE BODY DECIDES WHETHER A GraphQL READ SUCCEEDED, never the exit code
+          # alone. An HTTP 200 whose body carries `errors[]` (rate limit, partial
+          # payload, a NOT_FOUND on a sub-field) fed straight into `.data...nodes[]?`
+          # produces NOTHING, and nothing read as "not on the project" -- so the
+          # Item-closed automation could write Cancelled over shipped work
+          # (Bugbot on quickstart#5, (internal ref)). Empty and non-object bodies are
+          # refused for the same reason: a search over nothing finds nothing, and
+          # "found nothing" must never mean "absent". This function never
+          # whitelists an error type; the one benign NOT_FOUND is the caller's call.
+          #   $1  the raw payload   $2  what was being read (prefixes the message)
+          reject_graphql_errors() {
+            if ! jq -e 'type == "object"' >/dev/null 2>&1 <<< "$1"; then
+              echo "::error::$2: the response was not readable JSON (empty, truncated or not an object), so it cannot be shown to be error-free -- UNREADABLE, not absent" >&2
+              return 1
+            fi
+            if jq -e 'has("errors")' <<< "$1" >/dev/null 2>&1; then
+              echo "::error::$2: the response carries GraphQL errors[] ($(jq -r '[.errors[]? | ((.type // "?") + ": " + (.message // "?"))] | join("; ")' <<< "$1")) -- UNREADABLE, not absent" >&2
+              return 1
+            fi
+            return 0
+          }
+          # selftest:graphql-read-end
+
+          # Look up project ID + relevant field/option IDs (one query)
+          # shellcheck disable=SC2016  # the $names here are GraphQL variables, not shell - keep literal
+          PROJ=$(gh api graphql -f query='
+            query($org: String!, $num: Int!) {
+              organization(login: $org) {
+                projectV2(number: $num) {
+                  id
+                  fields(first: 50) {
+                    nodes {
+                      ... on ProjectV2SingleSelectField { id name options { id name } }
+                    }
+                  }
+                }
+              }
+            }' -F org="$ORG" -F num="$PROJECT_NUMBER")
+          reject_graphql_errors "$PROJ" "project #$PROJECT_NUMBER field read" || exit 1
+
+          PROJECT_ID=$(echo "$PROJ" | jq -r '.data.organization.projectV2.id')
+          DEPLOY_FIELD=$(echo "$PROJ" | jq -r '.data.organization.projectV2.fields.nodes[]
+            | select(.name=="Deploy environment") | .id')
+          DEPLOY_OPT=$(echo "$PROJ" | jq -r --arg e "$DEPLOY_ENV" '.data.organization.projectV2.fields.nodes[]
+            | select(.name=="Deploy environment") | .options[] | select(.name==$e) | .id')
+          STATUS_FIELD=$(echo "$PROJ" | jq -r '.data.organization.projectV2.fields.nodes[]
+            | select(.name=="Status") | .id')
+          STATUS_OPT=$(echo "$PROJ" | jq -r --arg s "$STATUS_NAME" '.data.organization.projectV2.fields.nodes[]
+            | select(.name=="Status") | .options[] | select(.name==$s) | .id')
+          if [ -z "$DEPLOY_OPT" ] || [ "$DEPLOY_OPT" = "null" ]; then
+            echo "Could not resolve Deploy environment option for '$DEPLOY_ENV' - aborting"
+            exit 1
+          fi
+
+          # Status resolution does NOT degrade gracefully -- see the abort below.
+          # It used to, and that was the bug: a graceful degrade here means the
+          # board stops advancing while every run reports success.
+          # FAIL CLOSED. This used to warn and set SKIP_STATUS=1, so an unresolvable
+          # Status option meant the run stayed GREEN while no card advanced -- the
+          # board silently stops tracking the pipeline and the only signal is a
+          # warning nobody reads (Bugbot, .github#243, High).
+          #
+          # It is also the ONE asymmetry in this file and its siblings: the Deploy
+          # environment lookup twelve lines above aborts, and
+          # kanban-closure-router.yml aborts on exactly this condition. A column
+          # rename, a project renumbering or a `.kanban.yml` naming a column that
+          # does not exist are all misconfigurations, and every one of them is
+          # cheaper to find as a red run than as three weeks of un-advanced cards.
+          if [ -z "$STATUS_FIELD" ] || [ "$STATUS_FIELD" = "null" ] \
+             || [ -z "$STATUS_OPT" ] || [ "$STATUS_OPT" = "null" ]; then
+            echo "::error::Could not resolve Status option '$STATUS_NAME' in project #$PROJECT_NUMBER." \
+                 "NOTHING WAS WRITTEN: this check runs before any field update, so no card" \
+                 "was touched and there is no half-applied state to repair." \
+                 "Check the board's Status column names against this workflow's branch map." >&2
+            exit 1
+          fi
+          # Now always 0 -- the branch that set it to 1 aborts instead. Kept so the
+          # two `[ "$SKIP_STATUS" != "1" ]` guards below stay valid without
+          # re-indenting their blocks; there is no live skip path.
+          SKIP_STATUS=0
+
+          # Pipeline order (mirrors fr-gate's rank). Advancement is monotonic:
+          # a push only ever moves a card FORWARD. Pushes routinely carry commits
+          # that already shipped further down the pipeline -- a staging->develop
+          # back-merge re-pushes Prod-shipped PRs to develop, a develop==main
+          # fast-forward does the same -- and demoting those cards would un-ship
+          # them on the board (seen live: .github#87-#92 and #95).
+          rank() {
+            case "$1" in
+              "Backlog")        echo 1 ;;
+              "North Stars")    echo 2 ;;
+              "Ready")          echo 3 ;;
+              "In progress")    echo 4 ;;
+              "Code review")    echo 5 ;;
+              "On dev")         echo 6 ;;
+              # RANK 7: the agent stage, between `On dev` and human FR. READ-ONLY for
+              # now -- nothing writes this value yet (#1578 does that, in a LATER
+              # hop). An unknown Status returns "" here, the guard below fails, and
+              # evaluation falls through to strict equality: the card BLOCKS every
+              # prod promotion carrying it. That is the (internal ref) shape, and the
+              # column already EXISTS on the board, so this was a live landmine
+              # waiting for the first card to land in it (#1577, (internal ref) D5).
+              "Staging (agent review)")  echo 7  ;;
+              # `Staging (human review)` IS GONE (saadqbal on .github#295). It ranked
+              # here as a shim so the monotonic guard stayed stable across the #1592
+              # rename INSTANT -- and that instant has passed: measured against project
+              # #2, whose Status options are Backlog, North Stars, Ready, In progress,
+              # Code review, On dev, Staging (agent review), FR on staging, Ready for
+              # prod, Prod, Done, Cancelled. No card can carry the old name because the
+              # column does not exist.
+              #
+              # Keeping a shim for a completed rename is how this same file came to
+              # accept an override value naming a nonexistent column -- the headline
+              # finding of this PR. Retiring it is also what lets this file back into
+              # `kanban-columns-check.py`'s WRITERS: with the phantom gone, all twelve
+              # remaining names are live board options.
+              "FR on staging")  echo 8 ;;
+              "Ready for prod") echo 9 ;;
+              "Prod")           echo 10 ;;
+              # Done and Cancelled are TERMINAL: nothing may demote a card out of
+              # them. Both returned 0 here, which inverted the monotonic guard below
+              # so the next push carrying an old commit demoted a Done card -- and
+              # staging->develop back-merges re-carry old commits routinely
+              # ((internal ref) D8, (internal ref)).
+              "Done")           echo 11 ;;
+              "Cancelled")      echo 11 ;;
+              *)                echo 0 ;;
+            esac
+          }
+          TARGET_RANK=$(rank "$STATUS_NAME")
+
+          # Apply one single-select field update WITHOUT letting a single bad item
+          # abort the whole push. An unguarded mutation under `set -e` aborts the
+          # step on the first failure, leaving every later PR un-advanced. Archived
+          # items are already skipped above; this is defense-in-depth for any other
+          # per-item error -- log it, flag the run, but keep processing the rest.
+          RUN_FAILED=0
+          # A FAILED LOOKUP IS NOT AN ABSENT CARD (Bugbot, (internal ref)). Counted
+          # separately from RUN_FAILED because it is a different event: a card
+          # whose state this run could not READ, as opposed to one it read and
+          # could not write. The loop keeps going either way -- one 403 must not
+          # strand every PR after it in the push -- and the step fails at the end.
+          LOOKUP_FAILED=0
+          LOOKUP_ERRF=$(mktemp)
+          update_field() {   # $1=fieldId  $2=optionId  $3=human label
+            local err body
+            if [ "${DRY_RUN:-false}" = "true" ]; then
+              echo "[DRY] would set $3 on item $ITEM_ID"
+              return 0
+            fi
+            # THE WRITE'S BODY IS READ TOO. An exit-0 mutation response carrying
+            # errors[] (a stale option id, a permission edge, a partial payload)
+            # means the field was NOT written; the exit code alone would have
+            # called that a success and left the step green. Same function, same
+            # rule as the reads above.
+            # shellcheck disable=SC2016  # the $names here are GraphQL variables, not shell - keep literal
+            if body=$(gh api graphql -f query='
+              mutation($p: ID!, $i: ID!, $f: ID!, $o: String!) {
+                updateProjectV2ItemFieldValue(input: {
+                  projectId: $p, itemId: $i, fieldId: $f,
+                  value: {singleSelectOptionId: $o}
+                }) { projectV2Item { id } }
+              }' -F p="$PROJECT_ID" -F i="$ITEM_ID" -F f="$1" -f o="$2" 2>&1); then
+              if err=$(reject_graphql_errors "$body" "#$prnum $3 write" 2>&1); then
+                return 0
+              fi
+              err="${err#::error::}"
+            else
+              err="$body"
+            fi
+            echo "::warning::#$prnum $3 update failed: $err"
+            RUN_FAILED=1
+            return 0
+          }
+
+          for prnum in $PR_NUMBERS; do
+            # THE LOOKUP'S FAILURE IS READ, NOT REPLACED. This used to be
+            # `... 2>/dev/null) || RESP='{}'`, so a rate limit, a 403 or a network
+            # error became an empty object, the item lookup below found nothing in
+            # it, and the card was "not on project - skipping" -- unmoved, behind
+            # its shipped code, in a run that stayed GREEN (Bugbot, (internal ref)).
+            # A read that failed is a could-not-tell and is recorded as one.
+            #
+            # THE BODY DECIDES, WHATEVER THE EXIT CODE ((internal ref)). `gh api
+            # graphql` happens to exit 1 on a GraphQL-level error today, and the
+            # first version of this leaned on that: only a non-zero exit was
+            # classified, so an exit-0 body carrying `errors[]` (rate limit,
+            # partial payload) fell through to the item search below, found
+            # nothing, and read as "not on project". The response is now read the
+            # same way at exit 0 and at exit 1. ONE shape is benign: a number
+            # that is not a pull request (the extract step falls back to the
+            # commit subject's `(#N)`, which can name an issue) comes back as a
+            # NOT_FOUND on exactly `repository.pullRequest`. That -- and only
+            # that -- is a quiet skip, the same answer the removed closing-issue
+            # loop gave (.github#181). Everything else is a failed read: gh
+            # exiting non-zero, `errors[]` of any other type or path (a NOT_FOUND
+            # on the repository itself is a misconfiguration, not an issue
+            # number), an HTTP error body with no `errors` at all, an empty or
+            # non-JSON body -- the classification is whitelist, so an unfamiliar
+            # shape fails closed.
+            LOOKUP_RC=0
+            # shellcheck disable=SC2016  # the $names here are GraphQL variables, not shell - keep literal
+            RESP=$(gh api graphql -f query='
+              query($org: String!, $repo: String!, $num: Int!) {
+                repository(owner: $org, name: $repo) {
+                  pullRequest(number: $num) {
+                    projectItems(first: 10) {
+                      nodes {
+                        id isArchived project { number }
+                        status: fieldValueByName(name: "Status") {
+                          ... on ProjectV2ItemFieldSingleSelectValue { name }
+                        }
+                      }
+                    }
+                  }
+                }
+              }' -F org="$ORG" -F repo="$REPO_NAME" -F num="$prnum" 2>"$LOOKUP_ERRF") || LOOKUP_RC=$?
+            if jq -e '(.errors // []) | length > 0 and all(.type == "NOT_FOUND" and .path == ["repository", "pullRequest"])' <<<"$RESP" >/dev/null 2>&1; then
+              echo "::notice::#$prnum is not a pull request in $REPO_FULL (NOT_FOUND) -- skipping"
+              continue
+            fi
+            if [ "$LOOKUP_RC" -ne 0 ] || ! reject_graphql_errors "$RESP" "#$prnum project-item lookup" 2>>"$LOOKUP_ERRF"; then
+              LOOKUP_ERR=$(sed 's/^::error:://' "$LOOKUP_ERRF" | tr '\n' ' ')
+              echo "::error::#$prnum project-item lookup FAILED -- its board state is UNKNOWN, not absent, and the card was NOT advanced: ${LOOKUP_ERR:-gh exited non-zero with no message}"
+              LOOKUP_FAILED=$((LOOKUP_FAILED + 1))
+              continue
+            fi
+
+            ITEM_ID=$(echo "$RESP" | jq -r --arg n "$PROJECT_NUMBER" '.data.repository.pullRequest.projectItems.nodes[]?
+                  | select(.project.number == ($n | tonumber)) | .id' 2>/dev/null | head -1)
+
+            if [ -z "$ITEM_ID" ] || [ "$ITEM_ID" = "null" ]; then
+              echo "#$prnum not on project (or not a PR) - skipping"
+              continue
+            fi
+
+            # An archived project item cannot be updated: the mutation errors and,
+            # under `set -e`, used to abort the whole step -- stranding every PR
+            # after it in the push below its deploy column. Archived cards are
+            # intentionally out of the deploy flow, so skip them cleanly.
+            ARCHIVED=$(echo "$RESP" | jq -r --arg n "$PROJECT_NUMBER" '.data.repository.pullRequest.projectItems.nodes[]?
+                  | select(.project.number == ($n | tonumber)) | .isArchived' 2>/dev/null | head -1)
+            if [ "$ARCHIVED" = "true" ]; then
+              echo "::notice::#$prnum project item is archived -- skipping (out of deploy flow)"
+              continue
+            fi
+
+            CURRENT_STATUS=$(echo "$RESP" | jq -r --arg n "$PROJECT_NUMBER" '.data.repository.pullRequest.projectItems.nodes[]?
+                  | select(.project.number == ($n | tonumber)) | .status.name // ""' 2>/dev/null | head -1)
+            if [ "$TARGET_RANK" -gt 0 ] && [ "$(rank "$CURRENT_STATUS")" -ge "$TARGET_RANK" ]; then
+              echo "::notice::#$prnum already at '${CURRENT_STATUS:-none}' (>= '$STATUS_NAME') -- not demoting"
+              continue
+            fi
+
+            echo "-> PR #$prnum: Deploy env = $DEPLOY_ENV"
+            update_field "$DEPLOY_FIELD" "$DEPLOY_OPT" "Deploy env=$DEPLOY_ENV"
+
+            if [ "$SKIP_STATUS" != "1" ]; then
+              echo "-> PR #$prnum: Status = $STATUS_NAME"
+              update_field "$STATUS_FIELD" "$STATUS_OPT" "Status=$STATUS_NAME"
+            fi
+          done
+
+          # NO ISSUE ADVANCEMENT HERE. This workflow advances PRs only.
+          #
+          # It used to also advance the issues each promoted PR closes ((internal ref)),
+          # because the closure router parked a PR-closed issue at `On dev` and nothing
+          # ever moved it when the code shipped -- it drifted permanently (2026-08-06:
+          # all 20 drifted cards were closed issues, 0 PRs). That was a real problem and
+          # #1600 was right to fix it; marching the card through the deploy columns was
+          # the wrong remedy.
+          #
+          # (internal ref) sends a completed issue straight to `Done` in
+          # kanban-closure-router.yml instead. `Done` is terminal, so there is nothing
+          # left to drift, and kanban-archive sweeps it off the board daily -- which
+          # answers #1600 more completely than advancing ever did. With no issue parked
+          # in a deploy column, this block had nothing left to advance; kept, it would
+          # pull those cards straight back in and undo the other half of the fix.
+          #
+          # Worth knowing what was deleted, because it was hard-won and should be
+          # reused rather than rewritten if issue advancement is ever needed again:
+          # the removed loop resolved closingIssuesReferences CROSS-REPO, failed CLOSED
+          # on a lookup error so a rate limit could not read as "closes no issues"
+          # (.github#166) while still skipping a non-PR number quietly (.github#181),
+          # and refused to advance a still-OPEN closing issue (.github#168) -- PRs merge
+          # to develop rather than the default branch, so GitHub does not auto-close
+          # them and the reference list is full of in-progress cards.
+
+          # BOTH COUNTERS FAIL THE STEP, after every PR in the push has had its
+          # turn. A red run is the only signal a stranded card gets; advancement
+          # is monotonic, so re-running this workflow once the API error has
+          # cleared is safe and is the remedy.
+          if [ "$LOOKUP_FAILED" -ne 0 ]; then
+            echo "::error::$LOOKUP_FAILED PR lookup(s) FAILED (see the errors above) -- those cards may sit behind their shipped code; re-run this workflow once the API error has cleared."
+          fi
+          if [ "$RUN_FAILED" -ne 0 ]; then
+            echo "::error::One or more project items failed to update (see warnings above)."
+          fi
+          if [ "$LOOKUP_FAILED" -ne 0 ] || [ "$RUN_FAILED" -ne 0 ]; then
+            exit 1
+          fi
