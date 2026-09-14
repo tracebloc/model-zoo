@@ -3031,7 +3031,7 @@ def guard_constructs_with_no_network(module) -> None:
             raise AssertionError(
                 f"{module.__name__}: construction or a forward pass tried to "
                 f"reach the network — {error}. This template is written from "
-                f"scratch so that nothing is fetched; the #199 egress lockdown "
+                f"scratch so that nothing is fetched; the (internal ref) egress lockdown "
                 f"means a fetch is an edge-only failure, invisible on a warm "
                 f"local cache."
             ) from error

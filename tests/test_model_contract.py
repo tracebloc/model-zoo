@@ -115,7 +115,7 @@ def _missing_optional_deps(path: pathlib.Path) -> list[str]:
 # `AutoConfig.for_model(...)` + `from_config`) match none of these.
 #
 # `pretrained=False` USED TO BE LISTED HERE as part of "the required offline
-# pattern". It is not sufficient and it never was (#289, @saadqbal): on the
+# pattern". It is not sufficient and it never was ((internal ref), @saadqbal): on the
 # torchvision detection and segmentation builders the legacy shim maps
 # `pretrained` onto `weights` and never touches `weights_backbone`, which
 # defaults to an ImageNet enum — so `deeplabv3_resnet50(pretrained=False)`
@@ -138,7 +138,7 @@ _RUNTIME_HUB_FETCH = re.compile(
 )
 
 
-# Offline-migrated templates (#156) build from an inlined config with no hub
+# Offline-migrated templates (internal ref) build from an inlined config with no hub
 # fetch, so they are constructible in tests — which is the point. But
 # construction materializes the full fp32 random-init parameter set in RAM, and
 # for multi-billion-parameter templates that exceeds the ~16GB of a standard
@@ -249,7 +249,7 @@ def test_no_runtime_hub_fetch_patterns() -> None:
     """No template may fetch from a remote hub at construction time.
 
     The HuggingFace hub is a closed door (design note D6): the
-    offline-weights migration (#182-#193) removed every runtime fetch, and this
+    offline-weights migration ((internal ref)-(internal ref)) removed every runtime fetch, and this
     guard keeps the door shut. It fails at the SOURCE — a reintroduced
     `from_pretrained` / `pretrained=True` / `load_dataset` / torchvision
     pretrained checkpoint is caught here even for a template that a given CI

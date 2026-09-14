@@ -2,7 +2,7 @@
 
 Offline variant: the architecture is built from the inlined config below —
 no hub model id, no config fetch, no download at build time, so the template
-constructs anywhere, network or not (this also clears the #1495 upload gate
+constructs anywhere, network or not (this also clears the (internal ref) upload gate
 that rejected the previous hub-fetching version). The pretrained
 encoder tensors are delivered from the tracebloc model store as the training
 seed: upload the matched ``gte_modernbert_weights.pkl`` sitting next to this

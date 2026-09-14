@@ -2,7 +2,7 @@
 
 HuggingFace hub is a closed door (design note D6): every template
 must build from local library code or an inlined config, never a runtime hub
-fetch. The offline-weights migration (#182-#193) already removed every fetch
+fetch. The offline-weights migration ((internal ref)-(internal ref)) already removed every fetch
 site; the client spawns training pods with these three vars set
 (client-runtime jobs_manager._add_environment_variables), and the engine
 tokenizer loader hard-errors under them.
@@ -70,7 +70,7 @@ os.environ["HF_DATASETS_OFFLINE"] = "1"
 # wide open and `test_model_instantiates` downloaded silently on a networked runner and
 # passed. That is how `deeplab.py` shipped calling `deeplabv3_resnet50(pretrained=False)`
 # while its `weights_backbone` default fetched a 97.8 MB ResNet-50 checkpoint on every
-# construction (#289).
+# construction (internal ref).
 #
 # No template may fetch: architectures build from local code or an inlined config, and
 # pretrained tensors arrive as a sibling weights file the platform loads AFTER MyModel().

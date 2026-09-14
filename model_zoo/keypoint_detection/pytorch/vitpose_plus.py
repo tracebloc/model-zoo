@@ -26,7 +26,7 @@ from transformers import AutoConfig, VitPoseForPoseEstimation
 SEED_EXCLUDED_PREFIXES = ("model.head.conv.",)
 
 framework = "pytorch"
-# model-zoo#273 -- this declared `model_type = "transformer"`,
+# (internal ref) -- this declared `model_type = "transformer"`,
 # which is not a value the platform accepts: the backend's
 # `Experiment.MODEL_TYPE_CHOICES` ChoiceField refuses it, so an experiment
 # built from this template was rejected with a 400 before the model was ever

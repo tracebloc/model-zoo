@@ -1,7 +1,7 @@
 """Faster R-CNN with a MobileNetV3-Large FPN backbone, tuned for 320px input. The low-resolution sibling of ``faster_rcnn_mobilenet.py``: same architecture, but torchvision's small-input configuration — a 320/640 transform and a far shorter RPN proposal list at inference — for the cheapest two-stage option in the zoo.
 
 Offline variant: the architecture is built with ``weights=None``, so nothing
-is fetched from ``download.pytorch.org`` — the #199 egress lockdown blocks it
+is fetched from ``download.pytorch.org`` — the (internal ref) egress lockdown blocks it
 — and the template constructs anywhere, network or not. No seed is hosted for
 this template yet, so it random-initialises and there is no weight file:
 upload with ``weights=False``::
@@ -9,7 +9,7 @@ upload with ``weights=False``::
     user.upload_model("faster_rcnn_mobilenet_320", weights=False)
 
 Hosting the torchvision COCO tensors as a tracebloc model-store seed (the
-#1499 pattern: a matched ``<stem>_weights.pkl`` prepped by
+(internal ref) pattern: a matched ``<stem>_weights.pkl`` prepped by
 ``tools/prep_offline_weights.py`` and strict-loaded after ``MyModel()`` has
 built the architecture) is follow-up work, not part of this roster addition.
 Until a dump is staged, ``tools/check_dump_coverage.py`` classifies this file

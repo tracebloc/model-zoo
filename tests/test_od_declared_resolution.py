@@ -19,7 +19,7 @@ from "detection is hard".
 
 Three shipped templates HAD it (``faster_rcnn_resnet``, ``fcos``,
 ``retinanet``, all 448 against a transform at 800). **All three are fixed** —
-(internal ref), model-zoo#265 — and ``KNOWN_MISMATCHES`` is empty with its ratchet
+(internal ref), (internal ref) — and ``KNOWN_MISMATCHES`` is empty with its ratchet
 at zero. This file landed as the guard first and is now also the record of the
 fix: it stops a *new* template acquiring the defect, and there is no longer any
 template it excuses.
@@ -75,7 +75,7 @@ All three must agree, and **two comparisons are enough to say so**:
 new one) together imply ``built == published``. A third test asserting that
 pairing directly was written and then removed — it added no coverage and
 rebuilt all twenty torchvision detectors, the heavy swin/convnext ones
-included, to re-derive an implication (review on model-zoo#252). Stated here
+included, to re-derive an implication (review on (internal ref)). Stated here
 so it is not helpfully re-added: if you find yourself wanting it, check
 whether the two existing comparisons already give it to you.
 
@@ -130,11 +130,11 @@ FAMILY = "torchvision_detection"
 #: they run at, tracked as (internal ref). Value is the declared/effective pair, so
 #: a partial change is as loud as no change.
 #:
-#: **EMPTY as of model-zoo#265**, which fixed the last three
+#: **EMPTY as of (internal ref)**, which fixed the last three
 #: (``faster_rcnn_resnet``, ``fcos``, ``retinanet`` — all 448 against a transform
 #: at 800). This dict now exists only so that ADDING a row is still the thing the
 #: ratchet refuses. Same shape as ``NON_NORMALISING`` in
-#: ``test_od_norm_layers_normalise.py`` after model-zoo#262 emptied it.
+#: ``test_od_norm_layers_normalise.py`` after (internal ref) emptied it.
 #:
 #: ⚠️ Asserted in BOTH directions — fixing a listed template fails this file
 #: until its row is deleted. Do not add a row to silence a new template; a new
@@ -191,7 +191,7 @@ MAX_KNOWN_MISMATCHES = 0
 #:                     it is checked against ``MODERN_YOLO_RESOLUTION``, one
 #:                     cited family fact shared by all of them, the way the
 #:                     ``ENGINE`` rows are checked against the engine contract.
-#:                     Added by model-zoo#258 because ``UNVERIFIABLE_LITERALS``
+#:                     Added by (internal ref) because ``UNVERIFIABLE_LITERALS``
 #:                     had reached the 8 its own message named as the limit and
 #:                     asked the next author for a derivation source for this
 #:                     family instead of a ninth row.
@@ -211,7 +211,7 @@ LITERAL = "published-literal"
 #: at, and the citation for it. ONE fact, anchoring FOUR rows.
 #:
 #: This is the "derivation source for the hand-written family" the
-#: ``UNVERIFIABLE_LITERALS`` pin asked the next author for (model-zoo#237) —
+#: ``UNVERIFIABLE_LITERALS`` pin asked the next author for (internal ref) —
 #: delivered rather than deferred with a ninth row. It works the same way the
 #: ``ENGINE`` kind does: one authority, many rows, so an individual row can no
 #: longer be quietly edited to match a bad template. It must equal this
@@ -294,40 +294,40 @@ PUBLISHED_RESOLUTION: dict[str, tuple[int, str, str]] = {
     "efficientdet_d0": (512, LITERAL, "EfficientDet (Tan et al. 2020) table 1: D0 input is 512x512"),
     # NOT the same template as `yolo_v8` above, and the two must not be
     # collapsed. `yolo_v8` is forced into the engine's v1-shaped 7x7 grid
-    # contract at 448; `yolov8_s` (model-zoo#253) is the genuine multi-scale
+    # contract at 448; `yolov8_s` (internal ref) is the genuine multi-scale
     # YOLOv8-S, anchor-free with a DFL box branch, and Ultralytics specifies it
     # at 640 -- which is also the `imgsz` default its published 11,166,560
     # parameter summary is measured at. A row that read 448 here would be
     # describing the wrong architecture.
-    # the genuine multi-scale YOLOv8-S (model-zoo#253), anchor-free with a DFL box branch — NOT `yolo_v8`, which the engine's contract fixes at 448 in a v1-shaped 7x7 grid
-    "yolov8_s": (MODERN_YOLO_RESOLUTION, MODERN_YOLO, "the genuine multi-scale YOLOv8-S (model-zoo#253), anchor-free with a DFL box branch — NOT `yolo_v8`, which the engine's contract fixes at 448 in a v1-shaped 7x7 grid. Ultralytics YOLOv8 (2023) default imgsz=640; the yolov8s.yaml scale its published 11,166,560-parameter summary is quoted at"),
+    # the genuine multi-scale YOLOv8-S (internal ref), anchor-free with a DFL box branch — NOT `yolo_v8`, which the engine's contract fixes at 448 in a v1-shaped 7x7 grid
+    "yolov8_s": (MODERN_YOLO_RESOLUTION, MODERN_YOLO, "the genuine multi-scale YOLOv8-S (internal ref), anchor-free with a DFL box branch — NOT `yolo_v8`, which the engine's contract fixes at 448 in a v1-shaped 7x7 grid. Ultralytics YOLOv8 (2023) default imgsz=640; the yolov8s.yaml scale its published 11,166,560-parameter summary is quoted at"),
     # Same distinction as `yolov8_s` above: this is the GELAN YOLOv9-S
-    # (model-zoo#255), not a member of the engine's fixed-448 yolo contract.
+    # (internal ref), not a member of the engine's fixed-448 yolo contract.
     # YOLOv9 (Wang et al. 2024) sec. 4.1 trains and evaluates on MS COCO at
     # 640x640, and 640 is also the scale `yolov9s.yaml`'s own 7318368-parameter
-    # header is quoted at -- the anchor #255's count is verified against.
-    # the GELAN YOLOv9-S (model-zoo#255)
-    "yolov9_s": (MODERN_YOLO_RESOLUTION, MODERN_YOLO, "the GELAN YOLOv9-S (model-zoo#255). YOLOv9 (Wang et al. 2024) sec. 4.1 trains and evaluates at 640x640 on MS COCO; the yolov9s.yaml scale its published 7,318,368-parameter header is quoted at"),
+    # header is quoted at -- the anchor (internal ref)'s count is verified against.
+    # the GELAN YOLOv9-S (internal ref)
+    "yolov9_s": (MODERN_YOLO_RESOLUTION, MODERN_YOLO, "the GELAN YOLOv9-S (internal ref). YOLOv9 (Wang et al. 2024) sec. 4.1 trains and evaluates at 640x640 on MS COCO; the yolov9s.yaml scale its published 7,318,368-parameter header is quoted at"),
     # Same distinction as `yolov8_s`/`yolov9_s` above and worth repeating,
     # because `yolox` reads like a yolo-family name and is not one: this is the
-    # multi-scale anchor-free YOLOX-S (model-zoo#237), which declares
+    # multi-scale anchor-free YOLOX-S (internal ref), which declares
     # `torchvision_detection`, NOT a member of the engine's fixed-448 7x7-grid
     # `yolo` contract. A row of 448 here would pin the wrong architecture.
-    # the multi-scale anchor-free YOLOX-S (model-zoo#237); the name reads like the legacy yolo family and is not in it
-    "yolox_s": (MODERN_YOLO_RESOLUTION, MODERN_YOLO, "the multi-scale anchor-free YOLOX-S (model-zoo#237); the name reads like the legacy yolo family and is not in it. YOLOX (Ge et al. 2021) sec. 3 and the official Megvii README standard-models table: YOLOX-s is size 640, the scale its published 9.0M-parameter row is quoted at"),
-    # the NMS-free dual-assignment YOLOv10-S (model-zoo#258). ⚠️ Its published
+    # the multi-scale anchor-free YOLOX-S (internal ref); the name reads like the legacy yolo family and is not in it
+    "yolox_s": (MODERN_YOLO_RESOLUTION, MODERN_YOLO, "the multi-scale anchor-free YOLOX-S (internal ref); the name reads like the legacy yolo family and is not in it. YOLOX (Ge et al. 2021) sec. 3 and the official Megvii README standard-models table: YOLOX-s is size 640, the scale its published 9.0M-parameter row is quoted at"),
+    # the NMS-free dual-assignment YOLOv10-S (internal ref). ⚠️ Its published
     # parameter figure has THREE variants and this row's citation is quoted at
     # the dual-head one; do not "correct" it to the README's 7.2M, which is the
     # fused one2one-only deployed graph. The resolution is 640 in every variant.
-    "yolov10_s": (MODERN_YOLO_RESOLUTION, MODERN_YOLO, "the NMS-free dual-assignment YOLOv10-S (model-zoo#258). YOLOv10 (Wang et al. 2024, NeurIPS, arXiv:2405.14458) results table gives Test Size 640 for every scale; the scale its published 8,128,272-parameter dual-head summary is quoted at"),
-    # the C3k2/C2PSA YOLO11-S (model-zoo#263). ⚠️ THE STEM HAS NO `v`: upstream
+    "yolov10_s": (MODERN_YOLO_RESOLUTION, MODERN_YOLO, "the NMS-free dual-assignment YOLOv10-S (internal ref). YOLOv10 (Wang et al. 2024, NeurIPS, arXiv:2405.14458) results table gives Test Size 640 for every scale; the scale its published 8,128,272-parameter dual-head summary is quoted at"),
+    # the C3k2/C2PSA YOLO11-S (internal ref). ⚠️ THE STEM HAS NO `v`: upstream
     # dropped it at this generation (`yolo11.yaml`, `yolo11s.pt`), so `yolov11_s`
     # is a name that has never existed and searching for it finds nothing.
     # Unlike `yolov10_s` above there is only ONE published figure worth quoting:
     # unfused 9,458,752 against fused 9,443,760, a 0.16% gap the docs table's
     # one-decimal "9.4M" cannot distinguish either way.
-    "yolo11_s": (MODERN_YOLO_RESOLUTION, MODERN_YOLO, "the C3k2/C2PSA YOLO11-S (model-zoo#263), NMS-based unlike its yolov10_s neighbour. Ultralytics YOLO11 (2024) cfg/models/11/yolo11.yaml quotes '9458752 parameters, 9458736 gradients, 21.7 GFLOPs' on one summary line per scale, and 21.7 GFLOPs is reproduced only at 640 — the resolution is recovered from the same line as the parameter count rather than asserted alongside it"),
-    # the A2C2f/Area-Attention YOLOv12-S (model-zoo#266). ⚠️ THE STEM KEEPS THE
+    "yolo11_s": (MODERN_YOLO_RESOLUTION, MODERN_YOLO, "the C3k2/C2PSA YOLO11-S (internal ref), NMS-based unlike its yolov10_s neighbour. Ultralytics YOLO11 (2024) cfg/models/11/yolo11.yaml quotes '9458752 parameters, 9458736 gradients, 21.7 GFLOPs' on one summary line per scale, and 21.7 GFLOPs is reproduced only at 640 — the resolution is recovered from the same line as the parameter count rather than asserted alongside it"),
+    # the A2C2f/Area-Attention YOLOv12-S (internal ref). ⚠️ THE STEM KEEPS THE
     # `v` AND THAT IS THE OPPOSITE CALL TO `yolo11_s` ABOVE: this generation has
     # TWO upstreams that disagree about the name. The authors' paper and repo are
     # `yolov12` (sunsmarterjie/yolov12, yolov12s.pt); Ultralytics integrated it
@@ -341,7 +341,7 @@ PUBLISHED_RESOLUTION: dict[str, tuple[int, str, str]] = {
     # 9,127,424 / 19.7 GFLOPs and is a DIFFERENT architecture — grouped
     # downsample convs at yaml layers 1 and 3. Do not reconcile this row
     # against either.
-    "yolov12_s": (MODERN_YOLO_RESOLUTION, MODERN_YOLO, "the attention-centric YOLOv12-S (model-zoo#266) — R-ELAN backbone with Area Attention, no SPPF and no C2PSA, NMS-based. Ultralytics YOLO12 (2025) cfg/models/12/yolo12.yaml quotes '9,284,096 parameters, 9,284,080 gradients, 21.7 GFLOPs' on one summary line per scale, and 21.7 GFLOPs is reproduced at 640 and at no other 32-divisible edge (19.6 at 608, 23.9 at 672, 13.9 at 512, 31.2 at 768, measured with ultralytics 8.3.78) — so the resolution is recovered from the same line that carries the parameter count. Tian, Ye & Doermann, arXiv:2502.12524; cfg/default.yaml sets imgsz: 640 independently"),
+    "yolov12_s": (MODERN_YOLO_RESOLUTION, MODERN_YOLO, "the attention-centric YOLOv12-S (internal ref) — R-ELAN backbone with Area Attention, no SPPF and no C2PSA, NMS-based. Ultralytics YOLO12 (2025) cfg/models/12/yolo12.yaml quotes '9,284,096 parameters, 9,284,080 gradients, 21.7 GFLOPs' on one summary line per scale, and 21.7 GFLOPs is reproduced at 640 and at no other 32-divisible edge (19.6 at 608, 23.9 at 672, 13.9 at 512, 31.2 at 768, measured with ultralytics 8.3.78) — so the resolution is recovered from the same line that carries the parameter count. Tian, Ye & Doermann, arXiv:2502.12524; cfg/default.yaml sets imgsz: 640 independently"),
     # RTMDet is NOT a YOLO — CSPNeXt backbone, mmdetection lineage — so it does
     # not join the family anchor above even though its resolution matches.
     # Membership is the thing being asserted, not the number.
@@ -355,7 +355,7 @@ PUBLISHED_RESOLUTION: dict[str, tuple[int, str, str]] = {
 #: quietly degrades back into whatever the templates already said.
 #:
 #: The pin is doing its job rather than being maintenance: `sparse_rcnn`
-#: (model-zoo#246) and `yolov8_s` (model-zoo#253) both arrived on `develop`
+#: (internal ref) and `yolov8_s` (internal ref) both arrived on `develop`
 #: while this PR was open, and each forced a deliberate cited edit here instead
 #: of being absorbed. That is the whole design — but it also means this set
 #: grows once per hand-written template, so if it ever passes ~8 the honest
@@ -494,7 +494,7 @@ def _read_declared_image_size(path: pathlib.Path) -> int | None:
     # local in a builder — would match as if it were the module-level
     # declaration, and the reader's own test claims it does not. No current
     # template trips it, so this was latent; the guarantee is now the one
-    # stated (review on model-zoo#252). All 23 OD templates declare
+    # stated (review on (internal ref)). All 23 OD templates declare
     # ``image_size`` at column zero, so nothing on the roster moves.
     match = re.search(r"^image_size\s*=\s*(\d+)", text, re.MULTILINE)
     return int(match.group(1)) if match else None
@@ -670,7 +670,7 @@ def test_the_known_mismatch_list_only_ever_shrinks():
     cap — both a ``<=`` bound and the ``MAX == n`` pin still pass, leaving a free
     slot a later commit can refill with a brand-new mismatch and stay green.
 
-    **The ratchet is now AT ITS FLOOR** — empty, pinned at 0 (model-zoo#265).
+    **The ratchet is now AT ITS FLOOR** — empty, pinned at 0 (internal ref).
     There is no legal edit to these two values left: the only edit the original
     design permitted was *downward*, and down is where they are. A new
     declared/effective mismatch is a bug in the template that introduced it, not
@@ -687,7 +687,7 @@ def test_the_known_mismatch_list_only_ever_shrinks():
         f"  - GREW? A declared/effective mismatch in a NEW template is a bug in "
         f"that template — fix its image_size instead of listing it.\n"
         f"  - SHRANK? No longer possible: the ratchet is at its floor (0) as "
-        f"of model-zoo#265, so a shrink means a row was added and removed, not "
+        f"of (internal ref), so a shrink means a row was added and removed, not "
         f"that a template was fixed.\n"
         f"This is asserted by EQUALITY, not `<=`, on purpose: an upper bound "
         f"would let a fix free a slot that a later commit could quietly refill "
@@ -742,7 +742,7 @@ def test_every_od_template_has_a_published_resolution_row():
     # Anchor-KIND validity is deliberately not re-asserted here:
     # ``test_the_anchor_kinds_partition_the_roster`` owns that partition over
     # this same dict, and two tests failing on one edit tells the reader
-    # nothing the first one did not (review on model-zoo#252). This test owns
+    # nothing the first one did not (review on (internal ref)). This test owns
     # COMPLETENESS.
     for stem, (value, anchor, citation) in sorted(PUBLISHED_RESOLUTION.items()):
         assert isinstance(value, int) and value > 0, f"{stem}: bad resolution {value!r}"
@@ -764,7 +764,7 @@ def test_declared_image_size_matches_the_published_specification(path):
 
     ``KNOWN_MISMATCHES`` is read here as well as by the declared-vs-built
     comparison — one exemption list, one ratchet, both comparisons. It is now
-    **empty** (model-zoo#265), so this test exempts nothing: every template's
+    **empty** (internal ref), so this test exempts nothing: every template's
     declared value is checked against its published specification.
     """
     stem = _stem(path)
@@ -781,7 +781,7 @@ def test_declared_image_size_matches_the_published_specification(path):
         f"test_every_od_template_has_a_published_resolution_row for what to "
         f"add and why — indexing the dict directly here raised a bare "
         f"KeyError for every parametrized case and buried that message "
-        f"(review on model-zoo#252)."
+        f"(review on (internal ref))."
     )
     published, anchor, citation = row
 
@@ -950,16 +950,16 @@ def test_the_anchor_kinds_partition_the_roster():
         f"docstring about the table being independent, so each addition is a "
         f"deliberate edit here with a citation — which is what the pin is for.\n"
         f"\n"
-        f"History: 3 -> 4 `sparse_rcnn` (model-zoo#246), 4 -> 5 `yolov8_s` "
-        f"(model-zoo#253), 5 -> 6 `yolov9_s` (model-zoo#255), 6 -> 8 "
-        f"`yolox_s` and `rtmdet_s` together (model-zoo#237), then 8 -> 5 when "
-        f"`yolov10_s` (model-zoo#258) arrived.\n"
+        f"History: 3 -> 4 `sparse_rcnn` (internal ref), 4 -> 5 `yolov8_s` "
+        f"(internal ref), 5 -> 6 `yolov9_s` (internal ref), 6 -> 8 "
+        f"`yolox_s` and `rtmdet_s` together (internal ref), then 8 -> 5 when "
+        f"`yolov10_s` (internal ref) arrived.\n"
         f"\n"
         f"⚠️ THAT LAST STEP WENT DOWN, AND ON PURPOSE. At 8 this message said "
         f"the next addition should come with a derivation source for the "
         f"hand-written family rather than a ninth row, and that raising the "
         f"number again without one was 'the decay this pin exists to make "
-        f"visible'. So #256 did not add a ninth row: the four genuine "
+        f"visible'. So (internal ref) did not add a ninth row: the four genuine "
         f"modern-YOLO templates (`yolov8_s`, `yolov9_s`, `yolov10_s`, "
         f"`yolox_s`) moved onto the MODERN_YOLO anchor, which checks them "
         f"against ONE cited family fact — MODERN_YOLO_RESOLUTION — the way the "
@@ -993,7 +993,7 @@ def test_the_modern_yolo_rows_are_anchored_to_one_family_fact():
     """The MODERN_YOLO rows must all equal ``MODERN_YOLO_RESOLUTION``.
 
     This is the derivation source the ``UNVERIFIABLE_LITERALS`` pin asked for
-    (model-zoo#237), and it is what stops the hand-written modern-YOLO family
+    (internal ref), and it is what stops the hand-written modern-YOLO family
     contributing one unreviewable literal per template forever. It works like
     the ``ENGINE`` kind: a single authority with a single citation, and every
     row checked against it rather than against itself.
@@ -1076,7 +1076,7 @@ def _engine_fixed_input_sizes(notes: str) -> set[int]:
     not against any 3-4 digit token in the prose. ``\\b(\\d{3,4})\\b`` accepted
     an incidental number (an issue id like 3058, a year, or the papers' own
     640), so a wrong ENGINE row could pass merely because 448 appeared
-    somewhere else in the sentence (review on model-zoo#252).
+    somewhere else in the sentence (review on (internal ref)).
 
     Extracted as a function purely so
     ``test_the_engine_anchor_reads_the_field_not_the_prose`` can point it at
@@ -1241,7 +1241,7 @@ def test_the_two_readers_are_independent_and_discriminate(tmp_path):
     # `\s*` happily consumes indentation, so an indented assignment ahead of
     # the real one would have won. Latent — no template trips it — but the
     # docstring promised something the regex did not deliver (review on
-    # model-zoo#252).
+    # (internal ref)).
     commented = tmp_path / "commented.py"
     commented.write_text("# image_size = 111\nimage_size = 512\n", "utf-8")
     assert _read_declared_image_size(commented) == 512, (

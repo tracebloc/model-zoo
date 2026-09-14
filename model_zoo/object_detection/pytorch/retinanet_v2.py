@@ -1,7 +1,7 @@
 """RetinaNet ResNet-50 FPN **v2** (Li et al., 2021 training recipe). The same recipe upgrade applied to the one-stage anchor baseline — a GroupNorm-normalized head and a GIoU regression loss in place of the original L1 — giving a markedly better one-stage detector than ``retinanet.py`` at the same backbone cost.
 
 Offline variant: the architecture is built with ``weights=None``, so nothing
-is fetched from ``download.pytorch.org`` — the #199 egress lockdown blocks it
+is fetched from ``download.pytorch.org`` — the (internal ref) egress lockdown blocks it
 — and the template constructs anywhere, network or not. No seed is hosted for
 this template yet, so it random-initialises and there is no weight file:
 upload with ``weights=False``::
@@ -9,7 +9,7 @@ upload with ``weights=False``::
     user.upload_model("retinanet_v2", weights=False)
 
 Hosting the torchvision COCO tensors as a tracebloc model-store seed (the
-#1499 pattern: a matched ``<stem>_weights.pkl`` prepped by
+(internal ref) pattern: a matched ``<stem>_weights.pkl`` prepped by
 ``tools/prep_offline_weights.py`` and strict-loaded after ``MyModel()`` has
 built the architecture) is follow-up work, not part of this roster addition.
 What makes it possible is the key-exactness recorded below — until a dump is
@@ -65,7 +65,7 @@ category = "object_detection"
 def MyModel(num_classes=output_classes):
     num_classes = num_classes + 1  # 1 for background
 
-    # weights=None: architecture only, no download (the #199 egress lockdown
+    # weights=None: architecture only, no download (the internal ref egress lockdown
     # blocks download.pytorch.org). weights_backbone=None is passed explicitly
     # even though it is this builder's default — the mobilenet and SSD builders
     # default it to an ImageNet enum that WOULD fetch, so stating it is the

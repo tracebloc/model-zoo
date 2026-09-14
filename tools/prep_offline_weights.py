@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Offline pretrained-weight prep + strict-load verifier (model-zoo #156).
+"""Offline pretrained-weight prep + strict-load verifier (model-zoo (internal ref)).
 
 Purpose
 -------
@@ -38,7 +38,7 @@ template declared when the tool ran. An experiment that overrides
 both template copies and re-run this tool (seconds, no re-download once
 cached). Head-tolerant seed loading, which would let one dump serve any
 class count, is a platform-side change tracked with the rest of the
-migration in #156.
+migration in (internal ref).
 
 How the offline check is enforced
 ---------------------------------

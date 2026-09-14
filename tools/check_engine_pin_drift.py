@@ -15,14 +15,14 @@ THERE IS MORE THAN ONE MIRROR, and this tool takes whichever one it is handed.
 `test-pytorch` job installs, and it carries the same rule in its own header
 ("never ahead of them"). The workflow calls this script once per mirror, so
 the failure output below names the file it was given rather than assuming the
-tools/ copy — model-zoo#229, where naming one mirror in the message was part
+tools/ copy — (internal ref), where naming one mirror in the message was part
 of what made the other one's absence easy to miss.
 
 Floors (``pkg>=ver``, e.g. safetensors) are intentionally not exact-pinned by
 the engine and are skipped here — the engine comment says the resolver governs
 the build.
 
-IT DETECTS A DISAGREEMENT; IT DOES NOT KNOW WHICH SIDE MOVED (model-zoo#274).
+IT DETECTS A DISAGREEMENT; IT DOES NOT KNOW WHICH SIDE MOVED (internal ref).
 Two pins tell you they differ. They carry no history, so they cannot tell you
 who changed — and this tool used to assert one anyway, printing *"the engine
 moved; regenerate the mirror"* in BOTH directions. Half the time that is the
@@ -30,7 +30,7 @@ wrong instruction, and not harmlessly wrong: when the MIRROR is the side that
 moved — the normal case, since the ordering rule in the ordering rule means the
 mirror PR is usually opened before the engine bump lands — following it
 regenerates the mirror back DOWN to the engine's older pin, greens the check,
-and silently reverts the bump being shipped. `model-zoo#271` was exactly that:
+and silently reverts the bump being shipped. `(internal ref)` was exactly that:
 the mirror was raising torch to 2.13.0 and the engine sat at 2.11.0 until
 `(internal ref)` merged.
 
@@ -40,11 +40,11 @@ merge base, which DOES settle it: the mirror changed in this PR => the mirror
 moved; unchanged => the engine did. Without it the output names both remedies
 and the ordering rule that chooses between them.
 
-THE DETECTION IS NOT LOOSENED BY ANY OF THIS. `#271` should have been red
-until `#914` landed, and it still would be — a mirror ahead of the engine is a
+THE DETECTION IS NOT LOOSENED BY ANY OF THIS. `(internal ref)` should have been red
+until `(internal ref)` landed, and it still would be — a mirror ahead of the engine is a
 stack skew whichever side caused it. Only the diagnosis changed.
 
-WHICH ENGINE FILES ARE "THE ENGINE" IS DERIVED, NOT DECLARED (model-zoo#276).
+WHICH ENGINE FILES ARE "THE ENGINE" IS DERIVED, NOT DECLARED (internal ref).
 This script used to take the engine's side as a hand-listed pair of `--engine`
 paths and reduce them with `dict.update`, which produced two separate defects:
 
@@ -109,7 +109,7 @@ def _exact_pins_in(text: str) -> dict[str, str]:
     A derivation that decided which files are engine sources by any other rule
     than the one the reader uses could certify coverage of a file the reader
     then finds nothing in — a coverage claim that is true about a different
-    scanner than the one doing the work (model-zoo#276).
+    scanner than the one doing the work (internal ref).
     """
     pins: dict[str, str] = {}
     for line in text.splitlines():
@@ -139,7 +139,7 @@ class EnginePinError(Exception):
 #: The search space the engine's source set is DERIVED from, anchored at the
 #: engine's root — and the only hand-kept claim left in this file.
 #:
-#: WHY A DERIVATION RATHER THAN FILENAMES (model-zoo#276). The workflow used to
+#: WHY A DERIVATION RATHER THAN FILENAMES (internal ref). The workflow used to
 #: name two engine files, and that pair WAS the coverage claim; it listed two
 #: of the seven files that pin something a mirror mirrors, and two of the five
 #: that pin torch. `(internal ref)` is the same defect in `backend`'s
@@ -240,7 +240,7 @@ def assert_engine_pin_coverage(
         file each GPU base greps STRUCTURALLY REQUIRED to be in the scan, and
         `Dockerfile.base.cv.gpu` derives from
         `use_cases/requirements_vision_cv_cuda.txt` — precisely the file
-        model-zoo#276 is about. Under the old two-file list that target was
+        (internal ref) is about. Under the old two-file list that target was
         not even fetched.
 
     A GPU Dockerfile that STARTS carrying a bare `torch==` needs no special
@@ -280,7 +280,7 @@ def assert_engine_pin_coverage(
                 f"{rel} derives its torch pin from {target}, which is NOT a "
                 "pinning file in the scanned set. The version that base image "
                 "actually installs therefore comes from outside this gate's "
-                "scan, which is model-zoo#276 exactly."
+                "scan, which is (internal ref) exactly."
             )
     if problems:
         raise EnginePinError(
@@ -311,7 +311,7 @@ def derive_engine_sources(candidates: dict[str, str]) -> list[str]:
         raise EnginePinError(
             "the engine-source derivation was handed no candidates at all. "
             "Nothing looked at derives nothing missing, and that then 'agrees' "
-            "vacuously (model-zoo#276)."
+            "vacuously (internal ref)."
         )
     return sorted(rel for rel, text in candidates.items() if _exact_pins_in(text))
 
@@ -337,10 +337,10 @@ def _conflict_report(conflicts: dict[str, dict[str, str]]) -> str:
         "to pick: `dict.update` is last-write-wins, so whichever source came "
         "LAST on the command line became 'the engine's pin' and the others were "
         "discarded without a word — the same files in a different order gave a "
-        "red and a green (model-zoo#276)."
+        "red and a green (internal ref)."
     )
     lines.append(
-        "WHICH SOURCE IS RIGHT IS NOT KNOWABLE FROM THE PINS (model-zoo#274) — "
+        "WHICH SOURCE IS RIGHT IS NOT KNOWABLE FROM THE PINS (internal ref) — "
         "two pins cannot tell you which side moved, and neither can seven. This "
         "gate READS the engine's sources; it does not choose between them. "
         "Reconcile them in tracebloc-engine, then re-run."
@@ -373,7 +373,7 @@ def _merge_engine_sources(paths: list[str], relevant: set[str]) -> dict[str, str
                 f"{path} was named as an engine source but could not be read "
                 f"({exc.strerror}). Refusing: an engine source this gate never "
                 "read cannot disagree with the mirror, so continuing without "
-                "it would report agreement it never established (model-zoo#276)."
+                "it would report agreement it never established (internal ref)."
             ) from exc
         # A NAMED SOURCE THAT CONTRIBUTES NOTHING IS A BROKEN INVOCATION, not
         # a benign no-op. It is what a sparse-checkout typo, a missing
@@ -386,7 +386,7 @@ def _merge_engine_sources(paths: list[str], relevant: set[str]) -> dict[str, str
                 "That is a broken invocation — a missing artifact, a "
                 "sparse-checkout that matched nothing, or a file that pins via "
                 "a wheel index rather than `pkg==ver` — and it must not pass "
-                "as a source that simply happened to agree (model-zoo#276)."
+                "as a source that simply happened to agree (internal ref)."
             )
         for pkg, ver in pins.items():
             seen.setdefault(pkg, {})[path] = ver
@@ -402,7 +402,7 @@ def _merge_engine_sources(paths: list[str], relevant: set[str]) -> dict[str, str
     return {pkg: srcs[sorted(srcs)[0]] for pkg, srcs in seen.items()}
 
 
-#: WHAT TWO PINS CAN AND CANNOT TELL YOU (model-zoo#274). They can tell you
+#: WHAT TWO PINS CAN AND CANNOT TELL YOU (internal ref). They can tell you
 #: the mirror and the engine disagree. They cannot tell you WHICH SIDE MOVED —
 #: that is a fact about history, and neither file carries any. So the
 #: disagreement is stated without a cause and both remedies are offered,
@@ -425,7 +425,7 @@ _REMEDIES = {
     ),
     _UNKNOWN: (
         "WHICH SIDE MOVED IS NOT KNOWABLE FROM TWO PINS, so this check does "
-        "not guess (model-zoo#274). Both remedies, and the ordering rule that "
+        "not guess (internal ref). Both remedies, and the ordering rule that "
         "chooses between them:\n"
         "  * If the ENGINE moved, the mirror is stale: regenerate the mirror "
         "AND the dumps built against it.\n"
@@ -464,7 +464,7 @@ def main() -> int:
         default=[],
         help="repeatable. An engine pin file, named explicitly. A disagreement "
         "between two of them is REFUSED, not resolved by argument order "
-        "(model-zoo#276).",
+        "(internal ref).",
     )
     ap.add_argument(
         "--engine-root",
@@ -472,7 +472,7 @@ def main() -> int:
         help="the root of a checked-out/downloaded engine pin. The engine's "
         "source set is DERIVED from it via _ENGINE_SOURCE_GLOBS rather than "
         "hand-listed, which is what keeps a new engine base family from "
-        "landing outside this gate's scan (model-zoo#276). Combinable with "
+        "landing outside this gate's scan (internal ref). Combinable with "
         "--engine; at least one of the two is required.",
     )
     ap.add_argument(
@@ -503,7 +503,7 @@ def main() -> int:
             # THE CLAIM IS CHECKED BEFORE IT IS USED. Deriving the set and
             # then gating on it without asking whether the set accounts for
             # the whole search space is how a two-of-seven list passed for
-            # years (model-zoo#276).
+            # years (internal ref).
             pinning, deriving = assert_engine_pin_coverage(candidates)
             derived = derive_engine_sources(candidates)
             assert derived == pinning, (derived, pinning)
@@ -542,7 +542,7 @@ def main() -> int:
     # NOT a try/except-pass. A `--mirror-at-base` that was handed a path this
     # tool cannot read is a broken invocation, and swallowing it would silently
     # demote every verdict to UNKNOWN — a checker that quietly stopped using
-    # the evidence it was given, which is model-zoo#274's shape one level up.
+    # the evidence it was given, which is (internal ref)'s shape one level up.
     #
     # EXIT 2, not 1, and not a traceback: 1 means "the two sides disagree" and
     # a broken invocation must not be mistaken for one. An EMPTY file is a
@@ -556,7 +556,7 @@ def main() -> int:
                 f"--mirror-at-base {base_path} is not a readable file, so the "
                 "which-side-moved derivation cannot run. Refusing rather than "
                 "falling back to an undiagnosed report: a checker that quietly "
-                "stops using the evidence it was handed is model-zoo#274 again.",
+                "stops using the evidence it was handed is (internal ref) again.",
                 file=sys.stderr,
             )
             return 2
@@ -582,7 +582,7 @@ def main() -> int:
                 "requirements — remove it or add it to the engine"
             )
         elif eng_ver != ver:
-            # STATE THE DISAGREEMENT, ATTRIBUTE NOTHING (model-zoo#274). This
+            # STATE THE DISAGREEMENT, ATTRIBUTE NOTHING (internal ref). This
             # line used to end "the engine moved; regenerate the mirror" in
             # BOTH directions. When the mirror is the side that moved — the
             # normal case, because someone opens the mirror PR before the
@@ -611,9 +611,9 @@ def main() -> int:
     if problems:
         # Name the mirror we were HANDED, never a hard-coded path: with two
         # mirrors checked in the same job, a fixed string would attribute every
-        # drift to the tools/ copy and send the fix at the wrong file (#229).
+        # drift to the tools/ copy and send the fix at the wrong file (internal ref).
         #
-        # AND "is stale" IS ITSELF AN ATTRIBUTION (model-zoo#274) — it names
+        # AND "is stale" IS ITSELF AN ATTRIBUTION (internal ref) — it names
         # the mirror as the wrong side, which is the same unfounded claim the
         # per-package line used to make. The header states the disagreement.
         print(

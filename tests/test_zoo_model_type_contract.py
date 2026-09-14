@@ -1,5 +1,5 @@
 """Every template's declared ``model_type`` is one the PLATFORM accepts
-(model-zoo#273).
+(internal ref).
 
 The defect this pins
 --------------------
@@ -31,7 +31,7 @@ An OD template must satisfy BOTH, and ``test_od_accepted_values_are_a_subset``
 below asserts the containment so the two cannot drift into contradiction.
 A keypoint template has no published routing schema, so storable is the
 strongest statement this repo can make about it — which is exactly the
-statement model-zoo#273 needed and nobody was making.
+statement (internal ref) needed and nobody was making.
 
 The accepted set is DERIVED, not transcribed
 --------------------------------------------
@@ -164,7 +164,7 @@ UNDECLARED_EXCEPTIONS = {
         "`model_type = \"\"` and this one declares nothing. Harmless today — "
         "the backend field defaults to `default` and time-series has no family "
         "routing — but it is an inconsistency rather than a convention, and "
-        "adding the declaration is outside the scope of model-zoo#273 (which "
+        "adding the declaration is outside the scope of (internal ref) (which "
         "is about declarations that are WRONG, not absent). Recorded here so "
         "the both-directions check above stays honest; filed separately."
     ),
@@ -393,7 +393,7 @@ def test_every_template_declares_a_storable_model_type() -> None:
     """The rule, asserted as one aggregate rather than parametrized per file.
 
     Aggregated on purpose: the useful failure for a vocabulary drift is the
-    whole list of offenders at once (all three of model-zoo#273's templates in
+    whole list of offenders at once (all three of (internal ref)'s templates in
     one message), not three separate reds that each look like an isolated typo.
 
     Both halves are asserted — the violations are empty AND the scan actually
@@ -448,7 +448,7 @@ def test_every_template_declares_a_storable_model_type() -> None:
         f"does not accept. `Experiment.model_type` is a ChoiceField, so an "
         f"experiment built from one of these is refused with a 400 BEFORE the "
         f"model is looked at, and the error names nothing that would point at "
-        f"the template (model-zoo#273).\n"
+        f"the template (internal ref).\n"
         + "\n".join(hints)
         + f"\n\nAccepted values ({len(ACCEPTED)}): {sorted(ACCEPTED)}\n"
         f"Pick the accepted value that matches what the model EMITS — for "
@@ -462,7 +462,7 @@ def test_every_template_declares_a_storable_model_type() -> None:
 
 
 def test_the_transformer_regression_stays_caught() -> None:
-    """The specific value model-zoo#273 was filed for.
+    """The specific value (internal ref) was filed for.
 
     Pinned by name because "not in a 16-element set" is a weak thing to trust
     on its own: a future contract refresh that ADDED ``transformer`` would make
@@ -473,7 +473,7 @@ def test_the_transformer_regression_stays_caught() -> None:
     assert "transformer" not in ACCEPTED, (
         "`transformer` is now in the vendored accepted set. If the platform "
         "really did add it, delete this test in the same commit as the "
-        "contract refresh and say so in the PR — model-zoo#273 exists because "
+        "contract refresh and say so in the PR — (internal ref) exists because "
         "three keypoint templates declared it while it was refused."
     )
     assert "transformer" in NOT_ACCEPTED_EXAMPLES, (
@@ -518,7 +518,7 @@ def test_the_readers_are_independent_and_discriminate(tmp_path) -> None:
 
     Also pins the trap this file's AST reader exists for — a nested
     ``"model_type"`` dict key must NOT be read as the declaration. All three
-    templates model-zoo#273 fixes carry one.
+    templates (internal ref) fixes carry one.
     """
     support = tmp_path / "loss.py"
     support.write_text("import torch\n\n\ndef loss(a, b):\n    return a - b\n", "utf-8")
@@ -614,7 +614,7 @@ def test_an_unparseable_template_is_a_loud_failure(tmp_path) -> None:
         _declared_model_type(broken)
 
 
-#: The boosting-classifier declarations model-zoo#272 corrected, PINNED PER FILE
+#: The boosting-classifier declarations (internal ref) corrected, PINNED PER FILE
 #: so the semantic mismatch cannot silently return. ``test_every_template_
 #: declares_a_storable_model_type`` only proves a value is STORABLE, and ``tree``
 #: is storable — so it never caught the classification boosting models being
@@ -626,12 +626,12 @@ def test_an_unparseable_template_is_a_loud_failure(tmp_path) -> None:
 #: stores as ``default`` but which the SDK coerces to ``None``, and ``None`` is in
 #: no accepted set, so both ebm templates were untrainable end to end
 #: (the EBM declaration incident). Each file's declaration comment records the reason.
-#: BOTH halves of the disagreement model-zoo#272 fixed, pinned per file. The
+#: BOTH halves of the disagreement (internal ref) fixed, pinned per file. The
 #: classifiers are what the ticket corrected; the REGRESSORS are the baseline the
 #: correction was measured against ("their regression siblings declare their
 #: library"). Pinning only the classifiers would leave the other half free to
 #: silently recreate the split — e.g. xgboost_regressor drifting to ``tree`` — so
-#: both are asserted here (@shujaatTracebloc on #288). ``test_every_template_
+#: both are asserted here (@shujaatTracebloc on (internal ref)). ``test_every_template_
 #: declares_a_storable_model_type`` only proves a value is STORABLE, and ``tree``
 #: is storable, so only a per-file pin catches a regression back to it.
 #: hist_gradient_boosting has no histgb value in the platform vocabulary and stays
@@ -651,7 +651,7 @@ _BOOSTING_MODEL_TYPES = {
 
 
 def test_boosting_siblings_declare_their_library() -> None:
-    """Each boosting classifier AND regressor declares the ``model_type`` #272 pinned.
+    """Each boosting classifier AND regressor declares the ``model_type`` (internal ref) pinned.
 
     A per-file assertion, not set membership: the defect was a value that is
     accepted (``tree``) yet wrong for the file, so only pinning the exact expected
@@ -673,6 +673,6 @@ def test_boosting_siblings_declare_their_library() -> None:
         if actual != expected:
             violations.append(f"{rel}: model_type={actual!r}, expected {expected!r}")
     assert not violations, (
-        "boosting model_type declarations drifted (model-zoo#272):\n  "
+        "boosting model_type declarations drifted (internal ref):\n  "
         + "\n  ".join(violations)
     )

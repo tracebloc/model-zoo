@@ -11,11 +11,11 @@ sequence_length = 128
 vocab_size = 30522
 # No ``tokenizer_id``. Subclassing BertForMaskedLM exposes ``.config``, so the
 # SDK treats this as a HuggingFace model and accepts EITHER a shipped tokenizer
-# file or a hub id for the mandatory-tokenizer rule (#805) — but a declared hub
-# id is refused outright by the upload rewriter (#1495), so the file is the only
+# file or a hub id for the mandatory-tokenizer rule (internal ref) — but a declared hub
+# id is refused outright by the upload rewriter (internal ref), so the file is the only
 # path that works. ``tokenizer_file`` above names the directory's shared
 # ``tokenizer.json``: the same bert-base-uncased vocabulary the BertConfig below
-# is sized to (30522), carrying [MASK] and [PAD] (model-zoo#284).
+# is sized to (30522), carrying [MASK] and [PAD] (internal ref).
 
 
 class WideMiniMLM(BertForMaskedLM):

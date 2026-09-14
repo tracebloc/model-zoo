@@ -1,5 +1,5 @@
 """Every torchvision builder with a separate BACKBONE must be called with both
-weight arguments pinned off (#289).
+weight arguments pinned off (internal ref).
 
 The defect this pins
 --------------------
@@ -27,7 +27,7 @@ shim maps it onto ``weights`` and never touches ``weights_backbone``.
 WHY THIS FILE EXISTS -- two guards, one blind spot each
 -------------------------------------------------------
 Neither existing half sees this shape, and this is @LukasWodka's observation on
-model-zoo#293 that neither alone is sufficient:
+(internal ref) that neither alone is sufficient:
 
 * ``test_model_contract.py::test_no_runtime_hub_fetch_patterns`` is the zoo-wide
   STATIC guard for runtime hub fetches. It was blind here by construction: its
@@ -103,7 +103,7 @@ _MODEL_SUBMODULES = (
 )
 
 #: Both arguments must be present AND pinned off. ``weights`` alone leaves the
-#: backbone downloading -- that IS #289 -- and ``weights_backbone`` alone leaves
+#: backbone downloading -- that IS (internal ref) -- and ``weights_backbone`` alone leaves
 #: the head able to default in a builder that gains one.
 _REQUIRED_OFF = ("weights", "weights_backbone")
 
@@ -224,7 +224,7 @@ def test_backbone_builders_are_called_with_both_weights_pinned_off() -> None:
                 )
 
     assert not offenders, (
-        "torchvision builder call(s) that download a pretrained BACKBONE (#289).\n"
+        "torchvision builder call(s) that download a pretrained BACKBONE (internal ref).\n"
         "These builders default `weights_backbone` to an ImageNet enum, so omitting "
         "it fetches a checkpoint from download.pytorch.org at construction time and "
         "unpickles it. `pretrained=False` does NOT disable it — on torchvision 0.28 "
@@ -243,7 +243,7 @@ def test_backbone_builders_are_called_with_both_weights_pinned_off() -> None:
 
 
 def test_the_detector_discriminates() -> None:
-    """Both directions, on the exact shapes #289 turned on.
+    """Both directions, on the exact shapes (internal ref) turned on.
 
     A guard nobody has watched fail is a guard that can quietly stop working.
     `pretrained=False` is the shape that shipped the bug and MUST read as an

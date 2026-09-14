@@ -27,9 +27,9 @@ To **fine-tune a pretrained** sentence encoder instead of training from scratch,
 
 ## Tokenizer
 
-The tokenizer is the federation's single source of truth, distributed to every client (issue #805). How it is supplied depends on whether the model is HuggingFace or custom:
+The tokenizer is the federation's single source of truth, distributed to every client (internal ref). How it is supplied depends on whether the model is HuggingFace or custom:
 
-- **`minilm.py` (HuggingFace)** ships [`pytorch/minilm_tokenizer.json`](pytorch/minilm_tokenizer.json) — all-MiniLM-L6-v2's own WordPiece tokenizer, which already defines `[PAD]`, `[CLS]`, and `[SEP]`. It names that file in `tokenizer_file` and declares no `tokenizer_id`: training runs with the hub closed, and the SDK refuses to upload a template that declares a hub id at all (#1495). The `<model>_tokenizer.json` name is auto-detected beside the model, so no tokenizer argument is needed:
+- **`minilm.py` (HuggingFace)** ships [`pytorch/minilm_tokenizer.json`](pytorch/minilm_tokenizer.json) — all-MiniLM-L6-v2's own WordPiece tokenizer, which already defines `[PAD]`, `[CLS]`, and `[SEP]`. It names that file in `tokenizer_file` and declares no `tokenizer_id`: training runs with the hub closed, and the SDK refuses to upload a template that declares a hub id at all (internal ref). The `<model>_tokenizer.json` name is auto-detected beside the model, so no tokenizer argument is needed:
 
   ```python
   user.upload_model("model_zoo/embeddings/pytorch/minilm.py")

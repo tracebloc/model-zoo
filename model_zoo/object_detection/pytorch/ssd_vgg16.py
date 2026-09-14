@@ -1,7 +1,7 @@
 """SSD300 with a VGG-16 backbone (Liu et al., ECCV 2016). The original single-shot detector — one forward pass, no proposal stage, multi-scale default boxes. Slower per FLOP than anything modern, but it is the reference point every later one-stage design is measured against, and at 300px it trains on very little.
 
 Offline variant: the architecture is built with ``weights=None``, so nothing
-is fetched from ``download.pytorch.org`` — the #199 egress lockdown blocks it
+is fetched from ``download.pytorch.org`` — the (internal ref) egress lockdown blocks it
 — and the template constructs anywhere, network or not. No seed is hosted for
 this template yet, so it random-initialises and there is no weight file:
 upload with ``weights=False``::
@@ -9,7 +9,7 @@ upload with ``weights=False``::
     user.upload_model("ssd_vgg16", weights=False)
 
 Hosting the torchvision COCO tensors as a tracebloc model-store seed (the
-#1499 pattern: a matched ``<stem>_weights.pkl`` prepped by
+(internal ref) pattern: a matched ``<stem>_weights.pkl`` prepped by
 ``tools/prep_offline_weights.py`` and strict-loaded after ``MyModel()`` has
 built the architecture) is follow-up work, not part of this roster addition.
 What makes it possible is the key-exactness recorded below — until a dump is
@@ -26,7 +26,7 @@ builds under torchvision 0.26.0, the engine pin).
 
 ``weights_backbone=None`` is NOT optional here: this builder defaults it to
 the ``VGG16_Weights`` ImageNet-features enum, so the bare ``ssd300_vgg16()`` call
-fetches ImageNet weights from ``download.pytorch.org`` — which the #199 egress
+fetches ImageNet weights from ``download.pytorch.org`` — which the (internal ref) egress
 lockdown blocks. Passing it explicitly is what keeps the template offline.
 
 The remaining difference from the checkpoint path is

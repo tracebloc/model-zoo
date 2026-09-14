@@ -348,7 +348,7 @@ def test_the_model_carries_no_batchnorm_running_buffers():
     ``FrozenBatchNorm2d`` — the escape hatch the torchvision family used to
     reach for — does not normalise anything on a from-scratch trunk, because
     its running statistics are the untouched 0/1 defaults, so it is not an
-    alternative either. That family moved to GroupNorm in model-zoo#262
+    alternative either. That family moved to GroupNorm in (internal ref)
 ; this template was already there.
     """
     model = MODULE.MyModel(3)
@@ -522,7 +522,7 @@ def test_the_declared_image_size_is_the_published_d0_resolution():
 
 
 def test_the_declared_image_size_is_wired_into_the_transform():
-    """The #3058 half, and NOT redundant with the test above — each is
+    """The (internal ref) half, and NOT redundant with the test above — each is
     individually mutable-to-red, which is the trap-29 test. Mutating
     ``image_size`` alone moves both sides and is caught above; removing the
     ``fixed_size`` wiring leaves the declaration at 512 while the transform

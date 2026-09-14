@@ -1,4 +1,4 @@
-"""The engine-pin drift guard must watch BOTH mirrors of the engine's pin (#229).
+"""The engine-pin drift guard must watch BOTH mirrors of the engine's pin (internal ref).
 
 There are two copies of the engine's pin in this repo:
 
@@ -17,7 +17,7 @@ checked, for two independent reasons, both of which had to be fixed:
   2. the guard step had exactly one ``--mirror``, pointed at the tools/ copy,
      so it would not have looked even if it had run.
 
-#227 is the proof case: as dependabot opened it, it touched only
+(internal ref) is the proof case: as dependabot opened it, it touched only
 ``pytorch.txt``, sat two minors ahead of the engine, and was **all green**.
 
 Each leg is asserted separately below, because either one alone restores the
@@ -62,7 +62,7 @@ _CUDA_PINS = ("torch", "torchvision")
 
 # THE ENGINE'S REAL CANDIDATE FILENAMES, measured on `tracebloc-engine@develop`
 # (`292fe502`) with `git grep -lP '(?:^|\s)torch=='` plus a full exact-pin scan
-# over `Dockerfile.base.*` + `use_cases/requirements*.txt` (model-zoo#276):
+# over `Dockerfile.base.*` + `use_cases/requirements*.txt` (internal ref):
 #
 #   10 candidates in the search space
 #    7 carry a literal `pkg==ver` -> the derived engine source set
@@ -89,7 +89,7 @@ _ENGINE_CPU_DOCKERFILES = (
 #: The GPU bases and the requirements file each one GREPS its torch pin out
 #: of, measured on `tracebloc-engine@develop` (292fe502) from their
 #: `ARG REQUIREMENTS_FILE=` defaults. `Dockerfile.base.cv.gpu` derives from
-#: the very file model-zoo#276 says was never read, which is what makes that
+#: the very file (internal ref) says was never read, which is what makes that
 #: file structurally required rather than merely desirable.
 _ENGINE_GPU_DERIVES_FROM = {
     "Dockerfile.base.gpu": "use_cases/requirements_cuda.txt",
@@ -137,7 +137,7 @@ def _event_paths(event: str) -> list[str]:
     """The ``paths:`` filter of ``on.<event>``, as written.
 
     Comment lines are skipped rather than terminating the list: the trigger
-    entry added for #229 carries a comment explaining why it is the whole
+    entry added for (internal ref) carries a comment explaining why it is the whole
     directory, and a naive reader would stop at it and report the filter as
     lacking the very entry it documents.
     """
@@ -266,7 +266,7 @@ def _guard_step_code() -> str:
     A `needle in raw_text` assertion is satisfiable by a comment quoting the
     needle — it greens with the code gone — and the negative direction is
     worse: a comment mentioning a removed flag reds a healthy tree. Both were
-    live in this file's model-zoo#276 assertions and are proved in
+    live in this file's (internal ref) assertions and are proved in
     `test_THE_STEP_ASSERTIONS_CANNOT_BE_SATISFIED_BY_A_COMMENT` with the
     three results that fix needs, including the negative control.
 
@@ -353,11 +353,11 @@ def test_the_paths_extractor_reads_the_real_filters():
 
 
 def test_A_PYTORCH_TXT_ONLY_CHANGE_TRIGGERS_THE_WORKFLOW():
-    """#229 leg 1. Without this the guard cannot fail because it never runs."""
+    """(internal ref) leg 1. Without this the guard cannot fail because it never runs."""
     for event in ("pull_request", "push"):
         assert _triggers(CI_MIRROR, event), (
             f"on.{event}.paths does not match {CI_MIRROR}: a PR touching only "
-            f"the CI pytorch mirror fires no job at all (#229). Filters: "
+            f"the CI pytorch mirror fires no job at all (internal ref). Filters: "
             f"{_event_paths(event)}"
         )
 
@@ -370,7 +370,7 @@ def test_the_tools_mirror_still_triggers_the_workflow():
 
 def test_the_filter_is_not_a_CATCH_ALL():
     """The control. If everything matched, the test above would be vacuous —
-    and the workflow would run its 60-minute sweep on every PR (#229's
+    and the workflow would run its 60-minute sweep on every PR ((internal ref)'s
     acceptance: a PR touching neither mirror still skips)."""
     for event in ("pull_request", "push"):
         for untouched in ("README.md", "LICENSE", "CLAUDE.md", "Makefile"):
@@ -398,7 +398,7 @@ def test_the_guard_job_invokes_the_drift_checker_at_all():
 
 
 def test_BOTH_MIRRORS_ARE_CHECKED():
-    """#229 leg 2. One `--mirror` pointed at the tools/ copy is what let a
+    """(internal ref) leg 2. One `--mirror` pointed at the tools/ copy is what let a
     pytorch.txt bump through even when the job did run."""
     mirrors = _guarded_mirrors()
     assert CI_MIRROR in mirrors, (
@@ -421,7 +421,7 @@ def test_every_guarded_mirror_actually_exists():
 def test_EVERY_CI_REQUIREMENT_FILE_THAT_MIRRORS_AN_ENGINE_PIN_IS_GUARDED():
     """The forward guard, and the reason the trigger is the whole directory.
 
-    #229 was not "pytorch.txt was forgotten" so much as "a file could mirror
+    (internal ref) was not "pytorch.txt was forgotten" so much as "a file could mirror
     the engine's pin and no one would notice it was unguarded". So the
     property is stated over the directory rather than over one filename: any
     requirement set that exact-pins a dump-invalidating package must appear in
@@ -442,14 +442,14 @@ def test_EVERY_CI_REQUIREMENT_FILE_THAT_MIRRORS_AN_ENGINE_PIN_IS_GUARDED():
             unguarded.append((rel, sorted(mirrored)))
     assert not unguarded, (
         "these CI requirement sets exact-pin dump-invalidating packages but are "
-        f"not in the drift guard's mirror list (#229): {unguarded}"
+        f"not in the drift guard's mirror list (internal ref): {unguarded}"
     )
 
 
 # --------------------------------------------------------------------------
 # LEG 2, BEHAVIOUR — the guard must be SEEN TO REFUSE.
 #
-# The #227 scenario is reconstructed from the REAL pytorch.txt rather than
+# The (internal ref) scenario is reconstructed from the REAL pytorch.txt rather than
 # from literal version strings: the mirror is left exactly as committed and a
 # synthetic engine pin is written two minors BEHIND it. That is "the mirror is
 # ahead of the engine", the direction the file's header forbids, and it stays
@@ -465,7 +465,7 @@ def _shift_minor(version: str, delta: int) -> str:
 def _write_engine_pin(dest: Path, pins: dict[str, str]) -> None:
     """The engine-pin artifact, at the layout the workflow actually downloads.
 
-    NOT A FLAT DIRECTORY OF TWO FILES ANY MORE (model-zoo#276). The artifact
+    NOT A FLAT DIRECTORY OF TWO FILES ANY MORE (internal ref). The artifact
     now carries the whole derivation search space, so `upload-artifact` roots
     it at `_engine/` rather than `_engine/use_cases/` and every requirements
     path keeps its `use_cases/` segment.
@@ -522,10 +522,10 @@ def _run_checker(
     """The checker, optionally handed the mirror's value at the merge base.
 
     `base` is the ONLY evidence that settles which side moved
-    (model-zoo#274); it is a keyword so every pre-existing caller keeps
+    (internal ref); it is a keyword so every pre-existing caller keeps
     exercising the no-evidence path, which is what push/schedule runs get.
 
-    `--engine-root`, matching what the workflow now passes (model-zoo#276), so
+    `--engine-root`, matching what the workflow now passes (internal ref), so
     these tests exercise the derivation rather than a hand-listed pair that CI
     no longer uses. The explicit `--engine` interface is still supported and is
     covered directly in LEG 5.
@@ -566,12 +566,12 @@ def test_THE_227_SCENARIO_IS_REFUSED(tmp_path, capsys):
     # Shown in the test log, so the refusal this guard exists for is visible in
     # the run rather than only inferable from a green assertion.
     with capsys.disabled():
-        print("\n--- #227 scenario, real refusal output ---")
+        print("\n--- (internal ref) scenario, real refusal output ---")
         print(proc.stderr.rstrip())
 
 
 def test_the_refusal_NAMES_WHICH_MIRROR_DRIFTED(tmp_path):
-    """#229's acceptance. The header used to be the literal string
+    """(internal ref)'s acceptance. The header used to be the literal string
     'tools/requirements-engine-pin.txt is stale', so a pytorch.txt drift would
     have sent the fix at the wrong file."""
     engine = tmp_path / "_engine_pin"
@@ -587,7 +587,7 @@ def test_the_refusal_NAMES_WHICH_MIRROR_DRIFTED(tmp_path):
 
 
 def test_an_engine_AHEAD_of_the_mirror_is_refused_too(tmp_path):
-    """Both directions, per #229's acceptance. This is the ordinary case: the
+    """Both directions, per (internal ref)'s acceptance. This is the ordinary case: the
     engine bumps, and every mirror is stale until it follows."""
     engine = tmp_path / "_engine_pin"
     _write_engine_pin(engine, _engine_pins_for(CI_MIRROR, shift=+1))
@@ -697,7 +697,7 @@ def test_THE_STEP_REPORTS_EVERY_DRIFTED_MIRROR_NOT_JUST_THE_FIRST(tmp_path):
 
 
 def test_THE_STEP_GOES_RED_ON_A_PYTORCH_TXT_ONLY_DRIFT(tmp_path):
-    """#227 replayed as a tree, which is the whole ticket in one test.
+    """(internal ref) replayed as a tree, which is the whole ticket in one test.
 
     The staged ``.github/requirements/pytorch.txt`` is bumped two minors — the
     dependabot PR, exactly as it was opened — while the tools/ mirror and the
@@ -721,7 +721,7 @@ def test_THE_STEP_GOES_RED_ON_A_PYTORCH_TXT_ONLY_DRIFT(tmp_path):
     combined = proc.stdout + proc.stderr
     assert proc.returncode != 0, (
         "a pytorch.txt-only bump two minors ahead of the engine went GREEN — "
-        f"#229 is back:\n{combined}"
+        f"(internal ref) is back:\n{combined}"
     )
     assert f"ENGINE PIN DRIFT — {CI_MIRROR}" in combined, (
         f"the step did not name {CI_MIRROR} as drifted:\n{combined}"
@@ -737,12 +737,12 @@ def test_THE_STEP_GOES_RED_ON_A_PYTORCH_TXT_ONLY_DRIFT(tmp_path):
 
 
 # --------------------------------------------------------------------------
-# model-zoo#274 — THE DIAGNOSIS. The detection above is correct and untouched;
+# (internal ref) — THE DIAGNOSIS. The detection above is correct and untouched;
 # what follows is about what the red SAYS.
 #
-# On #271 the guard printed "the engine moved; regenerate the mirror AND the
+# On (internal ref) the guard printed "the engine moved; regenerate the mirror AND the
 # dumps built against it" for torch and torchvision. The engine had not moved:
-# #271 WAS the mirror bump to 2.13.0, and the engine sat at 2.11.0 until
+# (internal ref) WAS the mirror bump to 2.13.0, and the engine sat at 2.11.0 until
 # (internal ref) merged at 11:44:02Z. Two pins tell you they disagree;
 # they carry no history, so they cannot tell you who changed.
 #
@@ -783,7 +783,7 @@ def test_THE_271_MESSAGE_NO_LONGER_ASSERTS_WHICH_SIDE_MOVED(tmp_path, capsys):
         engine, _engine_pins_for(CI_MIRROR, shift=-2, only=("torch", "transformers"))
     )
     proc = _run_checker(CI_MIRROR, engine)
-    assert proc.returncode == 1, "the detection was loosened — #271 must stay red"
+    assert proc.returncode == 1, "the detection was loosened — (internal ref) must stay red"
     assert _ATTRIBUTION not in proc.stderr, (
         "the report still asserts the engine moved, which is unknowable from "
         f"two pins and wrong half the time:\n{proc.stderr}"
@@ -798,7 +798,7 @@ def test_THE_271_MESSAGE_NO_LONGER_ASSERTS_WHICH_SIDE_MOVED(tmp_path, capsys):
     assert _ORDERING_RULE in proc.stderr
     assert "would revert your bump" in proc.stderr
     with capsys.disabled():
-        print("\n--- model-zoo#274: the #271 report, no base evidence ---")
+        print("\n--- (internal ref): the (internal ref) report, no base evidence ---")
         print(proc.stderr.rstrip())
 
 
@@ -806,7 +806,7 @@ def test_A_MIRROR_MOVED_PR_IS_TOLD_TO_LAND_THE_ENGINE_BUMP_FIRST(tmp_path, capsy
     """The direction that used to get the reverting advice, derived.
 
     The base snapshot carries the ENGINE's (older) versions, so the mirror
-    changed in this PR — #271 exactly. The remedy must be "land the engine
+    changed in this PR — (internal ref) exactly. The remedy must be "land the engine
     bump first", and must NOT be "regenerate the mirror"."""
     engine_pins = _engine_pins_for(CI_MIRROR, shift=-2, only=("torch", "transformers"))
     engine = tmp_path / "_engine_pin"
@@ -826,7 +826,7 @@ def test_A_MIRROR_MOVED_PR_IS_TOLD_TO_LAND_THE_ENGINE_BUMP_FIRST(tmp_path, capsy
     # "regenerate the mirror" instruction hiding in a menu.
     assert "If the ENGINE moved" not in proc.stderr
     with capsys.disabled():
-        print("\n--- model-zoo#274: derived MIRROR-MOVED (the #271 direction) ---")
+        print("\n--- (internal ref): derived MIRROR-MOVED (the internal ref direction) ---")
         print(proc.stderr.rstrip())
 
 
@@ -847,7 +847,7 @@ def test_AN_ENGINE_MOVED_PR_IS_STILL_TOLD_TO_REGENERATE(tmp_path, capsys):
     for line in lines:
         assert "mirror unchanged at the merge base" in line, line
     with capsys.disabled():
-        print("\n--- model-zoo#274: derived ENGINE-MOVED ---")
+        print("\n--- (internal ref): derived ENGINE-MOVED ---")
         print(proc.stderr.rstrip())
 
 
@@ -918,7 +918,7 @@ def test_AN_UNREADABLE_BASE_IS_A_LOUD_FAILURE_NOT_A_SILENT_UNKNOWN(tmp_path):
 
 
 def test_THE_DETECTION_IS_NOT_LOOSENED_IN_ANY_BASE_CONFIGURATION(tmp_path):
-    """#271's non-goal, asserted. A mirror ahead of the engine is a stack skew
+    """(internal ref)'s non-goal, asserted. A mirror ahead of the engine is a stack skew
     whichever side caused it, so every direction stays exit 1 — and an ALIGNED
     mirror stays exit 0, or the guard is noise people route around."""
     mirror_now = _exact_pins((REPO_ROOT / CI_MIRROR).read_text())
@@ -958,7 +958,7 @@ def test_a_MISSING_required_pin_does_not_get_a_which_side_moved_paragraph(tmp_pa
             str(empty_mirror),
             # The EXPLICIT interface, deliberately, so it keeps being
             # exercised alongside the derived one the workflow uses — at the
-            # real relative layout the artifact now has (model-zoo#276).
+            # real relative layout the artifact now has (internal ref).
             "--engine",
             str(engine / "use_cases" / "requirements.txt"),
             "--engine",
@@ -989,7 +989,7 @@ def test_the_header_no_longer_calls_the_mirror_STALE(tmp_path):
 # THE WORKFLOW HALF. The checker can derive a direction; the step has to
 # actually hand it the evidence, and the checkout has to be deep enough for
 # `git show <merge base>:<mirror>` to resolve. A step that named the flag but
-# ran against a shallow tip would be #229's shape again: wired but unable to
+# ran against a shallow tip would be (internal ref)'s shape again: wired but unable to
 # look.
 # --------------------------------------------------------------------------
 def _guard_job_checkout_is_deep() -> bool:
@@ -1004,7 +1004,7 @@ def test_THE_GUARD_STEP_PASSES_THE_MERGE_BASE_EVIDENCE(tmp_path):
     assert "--mirror-at-base" in shell, (
         "the guard step never passes --mirror-at-base, so every PR report falls "
         "back to 'both remedies' even though the evidence is one `git show` "
-        "away (model-zoo#274)"
+        "away (internal ref)"
     )
     assert "git merge-base" in shell, shell
 
@@ -1060,7 +1060,7 @@ def _run_guard_step_in_repo(root: Path, base_ref: str) -> subprocess.CompletedPr
 
 
 def test_THE_STEP_DERIVES_MIRROR_MOVED_FROM_A_REAL_MERGE_BASE(tmp_path, capsys):
-    """#271 replayed as a git history, which is the whole ticket end to end.
+    """(internal ref) replayed as a git history, which is the whole ticket end to end.
 
     The engine and both mirrors agree at the merge base; then this "PR" raises
     pytorch.txt two minors, exactly as the mirror bump did. The step must go
@@ -1094,10 +1094,10 @@ def test_THE_STEP_DERIVES_MIRROR_MOVED_FROM_A_REAL_MERGE_BASE(tmp_path, capsys):
     assert "Do NOT regenerate the mirror" in combined
     assert _ATTRIBUTION not in combined
     # The tools/ mirror is untouched by this PR and agrees with the engine, so
-    # it must not be accused — #229's property, still holding.
+    # it must not be accused — (internal ref)'s property, still holding.
     assert f"ENGINE PIN DRIFT — {TOOLS_MIRROR}" not in combined
     with capsys.disabled():
-        print("\n--- model-zoo#274: the real step, real git history, #271 ---")
+        print("\n--- (internal ref): the real step, real git history, (internal ref) ---")
         print(combined.rstrip())
 
 
@@ -1134,7 +1134,7 @@ def test_THE_STEP_STILL_WORKS_WITH_NO_BASE_REF(tmp_path):
 
 
 # --------------------------------------------------------------------------
-# LEG 5 — model-zoo#276. THE ENGINE'S OWN SIDE: a merge that refused a
+# LEG 5 — (internal ref). THE ENGINE'S OWN SIDE: a merge that refused a
 # disagreement by picking one, and a coverage claim that read two of seven.
 #
 # Two defects in one reducer:
@@ -1213,7 +1213,7 @@ def _run_checker_explicit(mirror: str, engine_paths: list[Path]):
     """The checker over an EXPLICIT `--engine` list, in the given order.
 
     The explicit interface deliberately, and in a caller that controls the
-    ORDER: it is the interface that existed before model-zoo#276, so these
+    ORDER: it is the interface that existed before (internal ref), so these
     assertions run against the unfixed checker and are seen to fail there.
     """
     return subprocess.run(
@@ -1263,13 +1263,13 @@ def test_THE_VERDICT_DOES_NOT_DEPEND_ON_ARGUMENT_ORDER(tmp_path, capsys):
     reversed_ = _run_checker_explicit(TOOLS_MIRROR, list(reversed(paths)))
 
     with capsys.disabled():
-        print("\n--- model-zoo#276: the disagreement, refused in both orders ---")
+        print("\n--- (internal ref): the disagreement, refused in both orders ---")
         print(forward.stderr)
 
     assert forward.returncode == reversed_.returncode, (
         "the verdict still depends on the ORDER of --engine arguments: "
         f"{[p.name for p in paths]} exited {forward.returncode} and the same "
-        f"files reversed exited {reversed_.returncode} (model-zoo#276)"
+        f"files reversed exited {reversed_.returncode} (internal ref)"
     )
     assert forward.returncode == 2, (
         "two engine sources disagreeing about torch must be REFUSED with exit "
@@ -1305,7 +1305,7 @@ def test_TWO_DISAGREEING_ENGINE_SOURCES_NAME_BOTH_FILES_AND_BOTH_VERSIONS(tmp_pa
 
 
 def test_THE_REFUSAL_DOES_NOT_ASSERT_WHICH_SOURCE_MOVED(tmp_path):
-    """model-zoo#274 must not come back through the new message.
+    """(internal ref) must not come back through the new message.
 
     Two pins cannot tell you which side moved, and neither can seven. The
     refusal states that they disagree and stops.
@@ -1427,13 +1427,13 @@ def test_AN_ENGINE_ROOT_WHOSE_GLOB_MATCHES_NOTHING_IS_REFUSED(tmp_path):
 # THE DERIVED COVERAGE CLAIM, and its counts.
 # --------------------------------------------------------------------------
 def test_THE_CV_GPU_REQUIREMENTS_FILE_IS_IN_THE_DERIVED_SET():
-    """The coverage half of model-zoo#276, as one assertion."""
+    """The coverage half of (internal ref), as one assertion."""
     mod = _checker_module()
     derived = mod.derive_engine_sources(_engine_like_candidates())
     assert CV_GPU_REQUIREMENTS in derived, (
         f"{CV_GPU_REQUIREMENTS} is still outside the engine-source scan, so a "
         "torch pin living only there — the cv:gpu base image's torch — cannot "
-        "disagree with a mirror and reports as agreement (model-zoo#276); "
+        "disagree with a mirror and reports as agreement (internal ref); "
         f"derived: {derived}"
     )
 
@@ -1478,7 +1478,7 @@ def test_AN_EMPTY_SEARCH_SPACE_DERIVES_A_REFUSAL_NOT_AN_EMPTY_SET():
         return
     raise AssertionError(
         "nothing looked at derived nothing missing, and that then 'agrees' "
-        "vacuously — the exact shape of model-zoo#276"
+        "vacuously — the exact shape of (internal ref)"
     )
 
 
@@ -1518,7 +1518,7 @@ def test_THE_OK_LINE_STATES_ITS_OWN_COVERAGE(tmp_path):
 # --------------------------------------------------------------------------
 # THE WORKFLOW HALF. The globs are the only hand-kept claim left, and they are
 # written down in THREE places — the sparse-checkout, the artifact path, and
-# the module constant. Three copies of one claim is how #229 happened.
+# the module constant. Three copies of one claim is how (internal ref) happened.
 # --------------------------------------------------------------------------
 def _engine_fetch_with(key: str) -> list[str]:
     """A block-scalar `with:` value from the fetch-engine-pin job, as a list."""
@@ -1551,7 +1551,7 @@ def test_THE_GUARD_STEP_DERIVES_THE_ENGINE_SET_RATHER_THAN_LISTING_IT():
         "the guard step still hands the checker a LIST of engine files. That "
         "list was the coverage claim and it named two of seven, and the "
         "reducer resolved a disagreement between them by argument order "
-        "(model-zoo#276). Pass --engine-root and let the set be derived.\n"
+        "(internal ref). Pass --engine-root and let the set be derived.\n"
         f"{shell}"
     )
     assert "--engine _engine_pin" not in shell, (
@@ -1717,7 +1717,7 @@ def test_AN_UNRECOGNISED_BASE_FAMILY_IS_REFUSED_NOT_QUIETLY_EXCLUDED():
         return
     raise AssertionError(
         "an engine base this tool cannot classify was excluded from the scan "
-        "in silence, which is model-zoo#276's disease one level up"
+        "in silence, which is (internal ref)'s disease one level up"
     )
 
 
@@ -1758,7 +1758,7 @@ def test_A_DERIVING_BASE_POINTED_OUTSIDE_THE_SCAN_IS_REFUSED():
     raise AssertionError(
         "a GPU base installing torch from a file outside the scanned set was "
         "accepted, so the version that image runs comes from where this gate "
-        "cannot see — model-zoo#276 exactly"
+        "cannot see — (internal ref) exactly"
     )
 
 

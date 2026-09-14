@@ -21,7 +21,7 @@ Not a quality question. On the OD roster it broke training outright:
 
 WHY THIS FILE EXISTS — the guard that read as complete
 ------------------------------------------------------
-model-zoo#262 converted twelve OD templates off this line, and
+(internal ref) converted twelve OD templates off this line, and
 ``test_od_norm_layers_normalise.py`` holds them correct. That guard is an
 **object-detection directory scan**. Its ``NON_NORMALISING`` set is empty and
 its ratchet is at 0, and both facts are true *and say nothing* about anything
@@ -302,7 +302,7 @@ def test_no_template_builds_a_frozen_bn_identity() -> None:
         f"sample, so it needs no checkpoint and adds no running statistics for "
         f"the averaging service to ship every federated round — which is the "
         f"whole reason frozen BN was reached for. The twelve OD templates in "
-        f"model-zoo#262 and the two keypoint templates in (internal ref) were "
+        f"(internal ref) and the two keypoint templates in (internal ref) were "
         f"all fixed this way; copy `_group_norm` from any of them (a template "
         f"is uploaded as ONE file and cannot import a sibling, so it is "
         f"duplicated per template on purpose).\n\n"

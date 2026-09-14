@@ -6,7 +6,7 @@ ships in BOTH `text_classification` and `sentence_pair_classification`, with a
 dump apiece. Indexing by basename means one silently wins and both dumps resolve
 to the same file — which `derive_seed_excluded.py` already avoided by keying on
 `category/stem`, and which `seed_contract.py` and `verify_backbone_seeds.py`
-then reintroduced by keying on the stem (Bugbot, model-zoo#217).
+then reintroduced by keying on the stem (Bugbot, (internal ref)).
 
 Fixing it in two places separately would leave a third copy free to drift, so the
 resolution lives here once and both tools import it.
@@ -169,7 +169,7 @@ def resolve(
 #: deriver and left wrong in `verify_backbone_seeds`, which went on rewriting
 #: both constants — so a backbone seed sized to a real feature count would fail
 #: the verifier's shape check the moment it was pointed at those families
-#: (Bugbot, model-zoo#217). Same instance-not-the-class mistake as the stem
+#: (Bugbot, (internal ref)). Same instance-not-the-class mistake as the stem
 #: lookup earlier in this PR; one definition removes the third chance.
 CLASS_CONSTANTS_BY_CATEGORY = {
     "keypoint_detection": ("output_classes", "num_feature_points"),

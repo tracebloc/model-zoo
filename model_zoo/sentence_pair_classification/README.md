@@ -31,7 +31,7 @@ apart.
 
 Every template names the tokenizer it ships in `tokenizer_file`, and none
 declares a `tokenizer_id`: training runs with the hub closed, and the SDK
-refuses to upload a template that declares a hub id at all (#1495). The
+refuses to upload a template that declares a hub id at all (internal ref). The
 HuggingFace `bert_base_uncased.py` ships
 [`pytorch/bert_base_uncased_tokenizer.json`](pytorch/bert_base_uncased_tokenizer.json)
 (bert-base-uncased's own WordPiece file); the non-HF `simple_sentence_pair.py` ships

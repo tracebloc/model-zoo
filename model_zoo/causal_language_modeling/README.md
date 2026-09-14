@@ -27,9 +27,9 @@ The first three are plain `nn.Module` decoders (no pretrained weights, no in-fil
 
 ## Tokenizer
 
-The tokenizer is the federation's single source of truth, distributed to every client (issue #805). How it is supplied depends on whether the model is HuggingFace or custom:
+The tokenizer is the federation's single source of truth, distributed to every client (internal ref). How it is supplied depends on whether the model is HuggingFace or custom:
 
-- **`distilgpt2.py` (HuggingFace)** ships [`pytorch/distilgpt2_tokenizer.json`](pytorch/distilgpt2_tokenizer.json) — distilgpt2's own GPT-2 byte-level BPE tokenizer, with `<|endoftext|>` as the end-of-text/eos token (the client sets `pad_token = eos_token`). It names that file in `tokenizer_file` and declares no `tokenizer_id`: training runs with the hub closed, and the SDK refuses to upload a template that declares a hub id at all (#1495). The `<model>_tokenizer.json` name is auto-detected beside the model, so no tokenizer argument is needed:
+- **`distilgpt2.py` (HuggingFace)** ships [`pytorch/distilgpt2_tokenizer.json`](pytorch/distilgpt2_tokenizer.json) — distilgpt2's own GPT-2 byte-level BPE tokenizer, with `<|endoftext|>` as the end-of-text/eos token (the client sets `pad_token = eos_token`). It names that file in `tokenizer_file` and declares no `tokenizer_id`: training runs with the hub closed, and the SDK refuses to upload a template that declares a hub id at all (internal ref). The `<model>_tokenizer.json` name is auto-detected beside the model, so no tokenizer argument is needed:
 
   ```python
   user.upload_model("model_zoo/causal_language_modeling/pytorch/distilgpt2.py")

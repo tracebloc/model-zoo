@@ -1,7 +1,7 @@
 """FCOS with a ConvNeXt-Small backbone (Tian et al., ICCV 2019; Liu et al., CVPR 2022). Anchor-free one-stage detection — per-pixel box regression with a centre-ness branch, no anchor tuning — on a modernised convolutional backbone. The one-stage counterpart to ``faster_rcnn_convnext_small``, and a much stronger baseline than the ResNet-50 FCOS the zoo already ships.
 
 Offline variant: the architecture is built with ``weights=None`` throughout, so
-nothing is fetched from ``download.pytorch.org`` — the #199 egress lockdown
+nothing is fetched from ``download.pytorch.org`` — the (internal ref) egress lockdown
 blocks it — and the template constructs anywhere, network or not. No seed is
 hosted for this template yet, so it random-initialises and there is
 no weight file — upload with ``weights=False``::
@@ -80,7 +80,7 @@ license = "BSD-3-Clause"
 # all declare 800 now, and `KNOWN_MISMATCHES` in
 # tests/test_od_declared_resolution.py is empty with its ratchet at zero.
 image_size = 800
-# Conservative on purpose. OD ships no SDK shape-probe (#270), so this value is
+# Conservative on purpose. OD ships no SDK shape-probe (internal ref), so this value is
 # taken at face value with nothing to correct it, and a ConvNeXt-Small backbone
 # at 800px is the memory driver rather than the anchor-free head.
 batch_size = 2
@@ -91,7 +91,7 @@ category = "object_detection"
 def MyModel(num_classes=output_classes):
     num_classes = num_classes + 1  # 1 for background
 
-    # weights=None: architecture only, no download (the #199 egress lockdown
+    # weights=None: architecture only, no download (the internal ref egress lockdown
     # blocks download.pytorch.org).
     backbone = convnext_small(weights=None)
 

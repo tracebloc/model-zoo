@@ -7,7 +7,7 @@ belong to the two convnext templates). So the sweep runs on demand and THIS
 file is what runs in CI: every assertion the sweep makes, fired at an input
 built to break it.
 
-WHY THAT IS THE WHOLE POINT. #3048 exists because this epic keeps producing
+WHY THAT IS THE WHOLE POINT. (internal ref) exists because this epic keeps producing
 false greens — most memorably an audit that scored ``mask_rcnn`` "uploadable"
 when it could not be uploaded at all. A sweep that reports 25 greens is worth
 nothing unless its checks can be shown going red, and shown on every run rather
@@ -91,7 +91,7 @@ def test_the_roster_is_not_empty_and_the_alias_is_in_play() -> None:
 def test_uncovered_templates_are_reported_and_are_the_yolo_family() -> None:
     """The 3/28 this sweep cannot cover must be enumerated, never dropped.
 
-    #3048 forbids a silent cap, so "25 of 25 pass" has to be impossible to
+    (internal ref) forbids a silent cap, so "25 of 25 pass" has to be impossible to
     write: the uncovered set is derived from the same partition as the covered
     set, so it cannot be empty while the yolo templates exist.
     """
@@ -144,7 +144,7 @@ def test_train_step_findings_refuses_a_non_scalar_loss() -> None:
 
 @pytest.mark.parametrize("bad", ["nan", "inf", "-inf"])
 def test_train_step_findings_refuses_a_non_finite_loss(bad) -> None:
-    """The half of #3048's train criterion that is achievable today.
+    """The half of (internal ref)'s train criterion that is achievable today.
 
     All three, not just NaN: an overflowing loss diverges to +/-Inf before it
     becomes NaN, and a check written only against NaN misses the step where it
@@ -182,7 +182,7 @@ def test_payload_findings_accepts_a_well_formed_payload() -> None:
 
 
 def test_an_image_the_detector_finds_nothing_on_is_a_PASS() -> None:
-    """#3048's exact wording is that an empty detection must "neither crash nor
+    """(internal ref)'s exact wording is that an empty detection must "neither crash nor
     silently drop the record" — it does not require a detection.
 
     This is the positive control that keeps the sweep honest in the direction it
@@ -199,7 +199,7 @@ def test_an_image_the_detector_finds_nothing_on_is_a_PASS() -> None:
 
 
 def test_payload_findings_refuses_a_dropped_record() -> None:
-    """The other half of #3048's empty-image clause, and the one an eval loop
+    """The other half of (internal ref)'s empty-image clause, and the one an eval loop
     that filters empties would trip: one entry PER IMAGE, always."""
     torch = pytest.importorskip("torch")
     findings = sweep_mod.payload_findings(torch, [_payload(torch, 2)], 2)
@@ -223,7 +223,7 @@ def test_payload_findings_refuses_a_missing_key(key) -> None:
 
 @pytest.mark.parametrize("key", ["scores", "labels"])
 def test_payload_findings_refuses_scores_or_labels_misaligned_with_boxes(key) -> None:
-    """#3048 asks for ``scores``/``labels`` ALIGNED. A payload whose scores are
+    """(internal ref) asks for ``scores``/``labels`` ALIGNED. A payload whose scores are
     one short is not merely malformed — the metrics zip them against boxes, so
     every box after the gap is scored with the wrong confidence."""
     torch = pytest.importorskip("torch")
@@ -242,7 +242,7 @@ def test_payload_findings_refuses_boxes_of_the_wrong_shape() -> None:
 
 
 def test_payload_findings_refuses_boxes_that_are_not_xyxy() -> None:
-    """Pixel xyxy is #3048's wording and the metrics' assumption. A cxcywh or
+    """Pixel xyxy is (internal ref)'s wording and the metrics' assumption. A cxcywh or
     xywh payload passes every shape check and scores near zero for a reason
     nobody would find — so the ORDERING is asserted, not just the width."""
     torch = pytest.importorskip("torch")
@@ -537,7 +537,7 @@ def test_the_quality_cause_is_derived_from_the_payload_not_a_template_list() -> 
     # `(A != B) and (B != C)` -- it never compares A with C, so
     # CAUSE_EMPTY_PAYLOAD and CAUSE_MEASURABLE could collide and every
     # assertion above would still pass (each would return the collided value).
-    # Flagged by @saqlainsyed007 on model-zoo#261. Includes CAUSE_NOT_REACHED,
+    # Flagged by @saqlainsyed007 on (internal ref). Includes CAUSE_NOT_REACHED,
     # which the chained form would have left out entirely.
     assert len({
         sweep_mod.CAUSE_EMPTY_PAYLOAD,
@@ -550,10 +550,10 @@ def test_the_quality_cause_is_derived_from_the_payload_not_a_template_list() -> 
 def test_the_seeding_column_covers_the_roster_and_reports_nothing_seeded() -> None:
     """Derived by calling ``check_dump_coverage.survey()``, not transcribed.
 
-    And the #2659 fact stated as a property: no OD seed is hosted, the sweep
+    And the (internal ref) fact stated as a property: no OD seed is hosted, the sweep
     loads no weights, so every row is "scratch". A template that declares a
-    seed is a DIFFERENT row from one that is random-init by design — #3055 asks
-    #3048 to say which, so the two phrasings must stay distinguishable.
+    seed is a DIFFERENT row from one that is random-init by design — (internal ref) asks
+    (internal ref) to say which, so the two phrasings must stay distinguishable.
     """
     index = sweep_mod.seeding_index()
     stems = {p.stem for p in sweep_mod.family_templates()}
@@ -569,7 +569,7 @@ def test_the_seeding_column_covers_the_roster_and_reports_nothing_seeded() -> No
 
 
 def test_the_markdown_report_is_per_template_and_names_what_ran() -> None:
-    """#3048: "All models pass" with no table is the shape of every false-green
+    """(internal ref): "All models pass" with no table is the shape of every false-green
     this epic has produced. So the renderer is asserted to emit a ROW PER
     TEMPLATE and to carry the uncovered block."""
     report = {
@@ -645,7 +645,7 @@ def test_the_markdown_report_is_per_template_and_names_what_ran() -> None:
     assert "**FAIL**" in table, "a red template is not marked as one"
     assert "**DIVERGENT**" in table, "a diverging template is not marked as one"
     assert "DIVERGED" in table, "the divergence note is not carried into the table"
-    assert "not finite" in table, "#3048 requires the failure WITH its cause"
+    assert "not finite" in table, "(internal ref) requires the failure WITH its cause"
     assert "yolo_v1/model.py" in table, "the uncovered templates are not named"
     assert "slow_one" in table, "a skipped template is not named"
     assert "empty-payload" in table and "random-init-scores" in table
@@ -664,7 +664,7 @@ def test_the_markdown_report_is_per_template_and_names_what_ran() -> None:
 
 
 def test_the_slow_skip_list_is_opt_in_and_named() -> None:
-    """A cost cap that is not in the report is a silent cap, which #3048
+    """A cost cap that is not in the report is a silent cap, which (internal ref)
     forbids. ``SLOW_TEMPLATES`` must be real templates, so the list cannot rot
     into a set of names that skip nothing."""
     keys = {sweep_mod.template_key(p) for p in sweep_mod.family_templates()}
@@ -811,7 +811,7 @@ def test_divergent_exits_non_zero_just_like_fail() -> None:
     assert sweep_mod.exit_code(report("DIVERGENT")) == 1
     # AN EMPTY REPORT IS NON-ZERO. This line asserted 0 -- `any([])` is False,
     # so "no rows" read as "every template passed". Cursor Bugbot found the
-    # live consequence on model-zoo#261: `--only <typo>` matched nothing and the
+    # live consequence on (internal ref): `--only <typo>` matched nothing and the
     # process exited clean. The accepting direction is line 801's
     # `report("PASS", "PASS")`, which is what this line was reaching for; an
     # empty list was never the same claim.
@@ -836,7 +836,7 @@ def test_sweep_aggregates_with_aggregate_status() -> None:
 
 
 # ---------------------------------------------------------------------------
-# An empty selection is never a pass (Cursor Bugbot, model-zoo#261)
+# An empty selection is never a pass (Cursor Bugbot, (internal ref))
 # ---------------------------------------------------------------------------
 #
 # The three mechanical states exist so a diverging template cannot look clean to
@@ -867,7 +867,7 @@ def test_the_only_validator_accepts_a_real_name_and_refuses_an_unknown() -> None
     My first version of this asserted that a name drawn from
     `family_templates()` was a member of that same set -- true by construction,
     and it would stay green if `validate_only_names` started rejecting
-    everything. Cursor Bugbot called it vacuous on model-zoo#261 and was right;
+    everything. Cursor Bugbot called it vacuous on (internal ref) and was right;
     the function was extracted from `sweep` precisely so the accepting direction
     could be exercised without running a cycle.
     """
@@ -908,7 +908,7 @@ def test_an_all_slow_selection_refuses_rather_than_reporting_zero_rows() -> None
 
 
 # ---------------------------------------------------------------------------
-# A designed cause must survive its own consequences (Cursor Bugbot, #261)
+# A designed cause must survive its own consequences (Cursor Bugbot, (internal ref))
 # ---------------------------------------------------------------------------
 #
 # `run_experiment` was not unit-tested at all -- it needs torch and a real
@@ -1105,7 +1105,7 @@ def test_findings_survive_an_exception_raised_after_they_were_collected(
 
 
 # ---------------------------------------------------------------------------
-# The row's numbers must come from the run its verdict came from (Bugbot, #261)
+# The row's numbers must come from the run its verdict came from (Bugbot, (internal ref))
 # ---------------------------------------------------------------------------
 
 
@@ -1186,12 +1186,12 @@ def test_sweep_takes_its_scalars_from_worst_run() -> None:
     # And nothing has gone back to indexing a run positionally for them.
     assert "first = runs[0]" not in source, (
         "a positional run pick is back in sweep(); that is the defect Bugbot "
-        "found on model-zoo#261"
+        "found on (internal ref)"
     )
 
 
 # ---------------------------------------------------------------------------
-# The shape capture must not run the model (@saqlainsyed007, model-zoo#261)
+# The shape capture must not run the model (@saqlainsyed007, (internal ref))
 # ---------------------------------------------------------------------------
 
 

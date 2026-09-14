@@ -9,7 +9,7 @@ The step used to guard with a single
 message for every no-op: *"dumps hosting is the hosting decision."* Two distinct
 failures wore that one sentence:
 
-  * the store location was undecided (true, and #2659's to decide); and
+  * the store location was undecided (true, and (internal ref)'s to decide); and
   * ``tools/sync_zoo_weights.py`` was **not in the repo at all** — it existed
     only as an uncommitted file on one laptop, so ``-f`` selected the no-op
     branch on every run and the message blamed hosting.
@@ -362,7 +362,7 @@ def test_missing_tool_says_missing_tool(checkout: Checkout):
 
 
 def test_no_store_uri_says_no_store_uri(checkout: Checkout):
-    """Manifest and hook both present, nowhere to fetch from: THIS is #2659."""
+    """Manifest and hook both present, nowhere to fetch from: THIS is (internal ref)."""
     checkout.stage("bert_base_uncased", b"dump-bytes")
     checkout.install_real_tool()
     proc = checkout.run(store_uri=None)
@@ -456,7 +456,7 @@ def test_step_plumbs_the_store_uri_variable():
 
 
 def test_fetch_hook_is_committed():
-    """#3060 in one line: the hook the workflow calls by path must exist at
+    """(internal ref) in one line: the hook the workflow calls by path must exist at
     that path in the repo, not in someone's working tree."""
     tool = REPO_ROOT / TOOL_REL
     assert tool.is_file(), f"{TOOL_REL} is not in the repo"
@@ -625,7 +625,7 @@ def test_no_single_key_manifest_can_arm_this_job(checkout: Checkout):
 # --------------------------------------------------------------------------
 # Neither tool's no-op message may promise a sweep it cannot deliver
 # --------------------------------------------------------------------------
-# model-zoo#248 removed "the verifier runs armed; it activates when a manifest
+# (internal ref) removed "the verifier runs armed; it activates when a manifest
 # lands" from the workflow's shell. The gate carried its own copy of the same
 # sentence and kept it, because the shell and the tool each phrase the skip in
 # their own words. Both are asserted now, in one place.
@@ -680,7 +680,7 @@ def test_neither_the_shell_nor_the_gate_claims_arming_on_a_manifest(
     checkout: Checkout,
 ):
     """Same claim, two sites, and they are what a CI log actually shows. The
-    shell's copy was fixed in model-zoo#248 and the gate's was not — a guard
+    shell's copy was fixed in (internal ref) and the gate's was not — a guard
     reading only one of them would have passed for the four days between. So
     both are asserted against their OUTPUT, in one test, on the branch CI takes.
 

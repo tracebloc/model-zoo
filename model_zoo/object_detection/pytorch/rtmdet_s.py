@@ -4,14 +4,14 @@ PyTorch.
 
 Offline variant: nothing is fetched at construction — no hub id, no
 ``timm``, no ``transformers``, no torchvision pretrained enum, no
-``download.pytorch.org`` (the #199 egress lockdown blocks it). Every layer
+``download.pytorch.org`` (the internal ref egress lockdown blocks it). Every layer
 comes from the inlined arch table below, so the template constructs on a
 closed edge. No seed is hosted for this template and there is no weight file:
 upload with ``weights=False``::
 
     user.upload_model("rtmdet_s", weights=False)
 
-Hosting COCO tensors as a tracebloc model-store seed (the #1499 pattern: a
+Hosting COCO tensors as a tracebloc model-store seed (the internal ref pattern: a
 matched ``<stem>_weights.pkl`` prepped by ``tools/prep_offline_weights.py``
 and strict-loaded after the architecture is built) is follow-up work, not part
 of this roster addition. Until a dump is staged,
@@ -97,9 +97,9 @@ conflate them, describing only the second:
 
 This template consequently REQUIRES the handler's shift; fed raw 0-based
 labels it would discard the first class (asserted by
-model-zoo#245). The pre-fix wording — "index 0 is a real class",
+(internal ref)). The pre-fix wording — "index 0 is a real class",
 "background is not a channel at all here" — was stale and is corrected here
-(model-zoo#237 review); these templates ship as a single uploaded ``.py``, so
+((internal ref) review); these templates ship as a single uploaded ``.py``, so
 the docstring is the spec.
 
 Regression parameterisation
@@ -135,7 +135,7 @@ GroupNorm rather than FrozenBatchNorm2d because Frozen BN moves
 invalidating the published-architecture guard. GroupNorm keeps them as
 parameters and carries no running statistics. Frozen BN was also a no-op on
 every from-scratch build, and the torchvision family moved to
-GroupNorm in model-zoo#262 -- so the roster is now GroupNorm throughout, and
+GroupNorm in (internal ref) -- so the roster is now GroupNorm throughout, and
 this template's choice is the one that generalised.
 
 The head's per-level norms remain per-level, which is the point of RTMDet's
@@ -303,7 +303,7 @@ class ConvBNAct(nn.Module):
     """conv -> GroupNorm -> SiLU.
 
     Named ``ConvBNAct`` after the upstream block it stands in for; the norm
-    is GroupNorm, not BatchNorm (model-zoo#237 review caught this docstring
+    is GroupNorm, not BatchNorm ((internal ref) review caught this docstring
     still claiming BN). See the federated note in the module docstring.
     """
 
@@ -387,7 +387,7 @@ class CSPLayer(nn.Module):
     call sites. This template originally built ``ChannelAttention``
     unconditionally, so the four PAFPN stages carried attention the published
     model does not: **+410,752 parameters, 4.59% over published RTMDet-S**
-    (model-zoo#237 review).
+    ((internal ref) review).
 
     A *defaulted* flag would have fixed only the instance. The reason it went
     unnoticed for four review passes is that nothing forced either call site
@@ -991,7 +991,7 @@ class RTMDetS(nn.Module):
             # family handler's shift. Fed raw 0-based dataset labels it would
             # discard the first class. That is the contract as of (internal ref),
             # and the zoo's own family train-step test asserts the `[1, C]`
-            # range (model-zoo#245).
+            # range (internal ref).
             class_scores = class_scores[:, 1:]
             num_priors, num_classes = class_scores.shape
             flat_scores = class_scores.reshape(-1)
@@ -1019,7 +1019,7 @@ class RTMDetS(nn.Module):
             # template's 0.001 threshold against the head's 1e-2 prior means
             # essentially all of them do: MEASURED 100,778 boxes at
             # initialisation, i.e. 8,400 priors x 12 real class channels
-            # (model-zoo#237 review).
+            # ((internal ref) review).
             #
             # torchvision dispatches `batched_nms` on `boxes.numel() > 4000` on
             # CPU -- 1,000 boxes -- so past that it takes

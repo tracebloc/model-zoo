@@ -41,7 +41,7 @@ PROBE_CLASSES = 7
 
 # Same resolver and same reader as seed_contract — a stem is not unique
 # (`bert_base_uncased` ships in two categories), and indexing by basename let one
-# silently win in BOTH tools (Bugbot, model-zoo#217). Fixed once, imported twice.
+# silently win in BOTH tools (Bugbot, (internal ref)). Fixed once, imported twice.
 from seed_index import (  # noqa: E402 — after the offline env is set, deliberately
     AmbiguousTemplate,
     build_index,
@@ -57,7 +57,7 @@ def build_at(path: Path, value: int, tmp: Path, category: str):
     The category is required, not optional: `num_feature_points` is an output
     for keypoint and an INPUT for tabular/time-series, so rewriting it blindly
     resizes the input projection and the seed then fails a shape check it should
-    have passed (Bugbot, model-zoo#217). `class_constants` is the one definition,
+    have passed (Bugbot, (internal ref)). `class_constants` is the one definition,
     shared with the deriver.
     """
     src = path.read_text(encoding="utf-8")

@@ -297,7 +297,7 @@ def guard_constructs_with_no_network(module) -> None:
             raise AssertionError(
                 f"{module.__name__}: construction or a forward pass tried to "
                 f"reach the network — {error}. These templates are written from "
-                f"scratch so that nothing is fetched; the #199 egress lockdown "
+                f"scratch so that nothing is fetched; the (internal ref) egress lockdown "
                 f"means a fetch is an edge-only failure, invisible on a warm "
                 f"local cache."
             ) from error
@@ -498,7 +498,7 @@ _PINNED_TOTALS = {
     # another stateful norm) came back.
     "YOLOXS": {"buffers": 0, "tensors": 240},
     # 274 -> 266 when the four PAFPN stages stopped building ChannelAttention
-    # (model-zoo#237 review): four Conv2d, weight and bias each.
+    # ((internal ref) review): four Conv2d, weight and bias each.
     "RTMDetS": {"buffers": 0, "tensors": 266},
 }
 
@@ -593,7 +593,7 @@ def guard_rtmdet_channel_attention_is_backbone_only(module) -> None:
     own default is ``True``), and ``CSPNeXtPAFPN`` passes no such argument at
     either of its two ``CSPLayer`` call sites. This template built it
     unconditionally, so all four PAFPN stages carried it — **+410,752
-    parameters, 4.59% over the published 8.89M** (model-zoo#237 review).
+    parameters, 4.59% over the published 8.89M** ((internal ref) review).
 
     ``published_architecture`` now also sees this, because the reference
     transcription was gated in the same change. This guard exists anyway
@@ -1507,7 +1507,7 @@ def guard_yolox_outside_penalty_survives_float32(module) -> None:
     return arbitrary ties. At ``1.0e8`` float32 destroyed exactly that (ULP
     8.0, so ``1e8 + x == 1e8`` for every ``x <= 4.0``) — the value was above
     the resolution of the numbers it was added to, and the guarantee in the
-    comment was false (model-zoo#237 review).
+    comment was false ((internal ref) review).
 
     Three assertions, because the two constraints pull in opposite directions
     and a value satisfying only one is what shipped:
@@ -1836,7 +1836,7 @@ def guard_rtmdet_decode_is_per_image_and_aligned(module) -> None:
     # confident logit on channel 2, which decodes to label 2 with the
     # `class_scores[:, 1:]` slice AND without it, and its -10.0 filler keeps
     # channel 0 under score_thresh. Reverting the slice and the `arange(1, ...)`
-    # offset therefore left this whole file green (model-zoo#237 review), while
+    # offset therefore left this whole file green ((internal ref) review), while
     # the YOLOX twin went red on its dedicated fixture. The fix was duplicated
     # across the two templates; its test was not — which is the exact failure
     # mode `rtmdet_s.py`'s own module docstring names.
@@ -1862,7 +1862,7 @@ def guard_rtmdet_decode_is_per_image_and_aligned(module) -> None:
     # And the label column must be OFFSET, not merely non-zero. Flipping only
     # the slice to `[:, 0:]` yields labels 1..classes -- mislabelled but never
     # zero -- so the assertion above alone does not discriminate between the
-    # two halves of the fix (model-zoo#237 review). The strongest real class
+    # two halves of the fix ((internal ref) review). The strongest real class
     # here is the last channel, which must decode to `classes - 1`.
     best = int(bg_results[0]["scores"].argmax())
     assert int(bg_labels[best]) == classes - 1, (
@@ -1908,7 +1908,7 @@ def guard_rtmdet_decode_caps_candidates_before_nms(module) -> None:
     ``detections_per_image`` caps only the OUTPUT. Without a pre-NMS cap every
     candidate clearing ``score_thresh`` enters NMS, and this template's 0.001
     threshold against the head's 1e-2 prior means essentially all of them do —
-    measured 100,778 boxes at initialisation (model-zoo#237 review), 25x past
+    measured 100,778 boxes at initialisation ((internal ref) review), 25x past
     the ``boxes.numel() > 4000`` point where torchvision drops to
     ``_batched_nms_vanilla`` and runs one NMS pass per class in Python.
 
@@ -2927,7 +2927,7 @@ MUTATIONS = [
         # 24,978 vs pinned 0 (tensors 512 vs 266). This note previously read
         # "buffers 23,178 ... tensors 462 vs 240" -- byte-identical to the
         # yolox note above and impossible for rtmdet, whose pin is 266
-        # (model-zoo#237 review). In the one file whose argument is that a
+        # ((internal ref) review). In the one file whose argument is that a
         # number derived from the model under test is self-consistency rather
         # than evidence, a copy-pasted provenance note is the wrong kind of
         # comment.
@@ -2965,7 +2965,7 @@ MUTATIONS = [
     (
         # The channel-0 fix shipped in BOTH templates and only YOLOX got a
         # guard; nothing in this table pinned the slice on either side, so the
-        # whole revert stayed green on rtmdet (model-zoo#237 review).
+        # whole revert stayed green on rtmdet ((internal ref) review).
         #
         # The anchor deliberately spans the slice AND the `arange` offset:
         # flipping only `[:, 1:]` to `[:, 0:]` gives labels 1..classes --
@@ -3000,7 +3000,7 @@ MUTATIONS = [
         # had no entry here -- `decode_per_image` was already satisfied by the
         # truncation and misalignment mutations, so deleting the background
         # scenario outright would still have passed
-        # `test_every_guard_has_a_mutation` (model-zoo#237 review).
+        # `test_every_guard_has_a_mutation` ((internal ref) review).
         "yolox/background_channel_leaks",
         YOLOX_PATH,
         "            class_scores = class_scores[:, 1:]\n"

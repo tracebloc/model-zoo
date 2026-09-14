@@ -85,7 +85,7 @@ image_size = 800
 # a net REDUCTION on the data plane rather than a 3.19x regression.
 #
 # Same convention as `fcos_convnext_small.py`: OD ships no SDK shape-probe
-# (#270), so this value is taken at face value with nothing to correct it.
+# (internal ref), so this value is taken at face value with nothing to correct it.
 batch_size = 4
 output_classes = 12
 category = "object_detection"

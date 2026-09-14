@@ -4,14 +4,14 @@ PyTorch.
 
 Offline variant: nothing is fetched at construction — no hub id, no ``timm``,
 no ``transformers``, no ``ultralytics``, no torchvision pretrained enum, no
-``download.pytorch.org`` (the #199 egress lockdown blocks it). Every layer is
+``download.pytorch.org`` (the internal ref egress lockdown blocks it). Every layer is
 built from the inlined architecture table below, so the template constructs on
 a closed edge. No seed is hosted for this template and there is no weight file:
 upload with ``weights=False``::
 
     user.upload_model("yolov9_s", weights=False)
 
-Hosting COCO tensors as a tracebloc model-store seed (the #1499 pattern: a
+Hosting COCO tensors as a tracebloc model-store seed (the internal ref pattern: a
 matched ``<stem>_weights.pkl`` prepped by ``tools/prep_offline_weights.py`` and
 strict-loaded after the architecture is built) is follow-up work, not part of
 this roster addition. Until a dump is staged, ``tools/check_dump_coverage.py``
@@ -208,7 +208,7 @@ clients (see CLAUDE.md). The torchvision family used to avoid that with
 on a ``weights=None`` backbone ``FrozenBatchNorm2d`` is a **bit-exact identity**
 (``weight=1``, ``bias=0``, ``running_mean=0``, ``running_var=1``, verified in
 (internal ref)), so freezing it on a from-scratch template normalises nothing at
-all. That whole family moved to GroupNorm in model-zoo#262; this note is kept
+all. That whole family moved to GroupNorm in (internal ref); this note is kept
 because it is the reasoning, not a description of the other templates.
 
 GroupNorm is preferred here over both for a specific reason: Frozen BN registers
@@ -416,7 +416,7 @@ class ConvNormAct(nn.Module):
         # average badly across non-IID clients. The torchvision family used
         # to avoid this with FrozenBatchNorm2d -- which on a weights=None
         # backbone is a bit-exact identity, i.e. no
-        # normalisation at all, and it moved to GroupNorm in model-zoo#262.
+        # normalisation at all, and it moved to GroupNorm in (internal ref).
         # GroupNorm is used here instead because Frozen BN also moves
         # weight/bias into buffers and would change the parameter count,
         # silently invalidating the published-architecture guard. GroupNorm

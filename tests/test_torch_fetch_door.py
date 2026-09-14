@@ -7,7 +7,7 @@ downloaded silently on a networked runner, and it passed.
 
 That is how `deeplab.py` shipped calling `deeplabv3_resnet50(pretrained=False, ...)` while
 its `weights_backbone` default fetched a 97.8 MB ResNet-50 checkpoint on every construction
-(#289). Nothing was watching the door, so nothing reported it opening.
+(internal ref). Nothing was watching the door, so nothing reported it opening.
 
 This file watches it, for the reason `test_dump_fetch_guard.py` gives about its own subject:
 a guard whose branch nobody asserts is a guard that can be deleted, or quietly stop working,
@@ -79,7 +79,7 @@ def test_the_real_builder_is_refused_not_just_the_patched_attribute():
     of the current layout rather than of the door.
 
     This test does not depend on it. It constructs `deeplabv3_resnet50(weights=None)` —
-    #289's exact shipped call, whose `weights_backbone` still defaults to
+    (internal ref)'s exact shipped call, whose `weights_backbone` still defaults to
     `ResNet50_Weights.IMAGENET1K_V1` — and asserts the construction is REFUSED. If the
     binding is ever captured early the download resumes and this test is what turns red.
     """
@@ -95,7 +95,7 @@ def test_the_fixed_call_constructs_offline():
 
     The other half of the test above: a message telling the next person to pass
     `weights=None` AND `weights_backbone=None` is only useful if that really does build
-    without touching the network. This is `deeplab.py`'s call after #289.
+    without touching the network. This is `deeplab.py`'s call after (internal ref).
     """
     models = pytest.importorskip("torchvision.models")
 

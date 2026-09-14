@@ -1,7 +1,7 @@
 """ATSS — Adaptive Training Sample Selection (Zhang et al., CVPR 2020) on a ResNet-50-FPN backbone. ATSS's finding is that the gap between anchor-based and anchor-free detectors is not the anchors, it is how training samples are assigned: replace RetinaNet's fixed IoU thresholds with a per-object adaptive threshold and one anchor per location, and RetinaNet matches FCOS. Same backbone, same head, same losses as the retinanet template — only the assignment differs, which makes this the cheapest real accuracy gain in the roster and a clean baseline for federated assignment experiments.
 
 Offline variant: the architecture is built with ``weights=None`` throughout, so
-nothing is fetched from ``download.pytorch.org`` — the #199 egress lockdown
+nothing is fetched from ``download.pytorch.org`` — the (internal ref) egress lockdown
 blocks it — and the template constructs anywhere, network or not. No seed is
 hosted for this template yet, so it random-initialises and there is
 no weight file — upload with ``weights=False``::
@@ -264,7 +264,7 @@ class _ATSSRetinaNet(RetinaNet):
 def MyModel(num_classes=output_classes):
     num_classes = num_classes + 1  # 1 for background
 
-    # weights=None: architecture only, no download (the #199 egress lockdown
+    # weights=None: architecture only, no download (the internal ref egress lockdown
     # blocks download.pytorch.org). GroupNorm and
     # trainable_layers=3 match the rest of this family. GroupNorm, not
     # FrozenBatchNorm2d: frozen BN answers the federated-averaging problem --

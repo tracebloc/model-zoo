@@ -294,7 +294,7 @@ def test_decode_clamps_negative_predicted_sizes(cn, model):
     # off before the top-k the fixture yielded ZERO boxes -- at which point
     # `.all()` over an empty comparison is vacuously True and dropping the size
     # clamp still passed. The suite stayed green while this test stopped
-    # asserting anything. Caught by Bugbot on model-zoo#236; the emptiness
+    # asserting anything. Caught by Bugbot on (internal ref); the emptiness
     # assertion below is what makes the vacuity impossible to reintroduce.
     foreground = model.num_classes - 1
     outputs["heatmap"][0, foreground, 8, 8] = 20.0
@@ -361,7 +361,7 @@ def test_peak_extraction_suppresses_non_maxima(cn, model):
     # An earlier version of this test ended with `assert ... or True`, which
     # made the expression unconditionally true — it asserted NOTHING and would
     # have passed against a peak filter that suppressed nothing at all. Caught
-    # in review on model-zoo#236. Restated as a positive claim about the
+    # in review on (internal ref). Restated as a positive claim about the
     # complete survivor set, which cannot be satisfied vacuously.
     assert surviving == [(4, 4)], (
         f"the peak filter left {sorted(surviving)}, expected exactly [(4, 4)]. "

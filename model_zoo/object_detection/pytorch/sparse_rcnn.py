@@ -2,7 +2,7 @@
 
 Offline variant: every module here is built from an inlined architecture
 description, the ResNet-50 trunk with ``weights=None``, so nothing is fetched
-from ``download.pytorch.org`` — the #199 egress lockdown blocks it — and the
+from ``download.pytorch.org`` — the (internal ref) egress lockdown blocks it — and the
 template constructs anywhere, network or not. No seed is hosted for this
 template yet, so it random-initialises and there is
 no weight file — upload with ``weights=False``::
@@ -373,7 +373,7 @@ class _DynamicConv(nn.Module):
         # own transcribed `PUBLISHED_NUM_DYNAMIC`, so the declared architecture
         # and the real one could disagree while the test stayed green. Removed
         # rather than generalised, because the pair is what the architecture is.
-        # Caught in review on model-zoo#246. See
+        # Caught in review on (internal ref). See
         # `test_the_dynamic_interaction_builds_exactly_two_blocks`.
         self.dynamic_layer = nn.Linear(d_model, 2 * self.num_params)
         self.down_norm = nn.LayerNorm(dim_dynamic)
@@ -628,7 +628,7 @@ class _SparseRCNN(nn.Module):
             # the standard 0.25 means 0.75/0.25 instead of 0.25/0.75. The
             # assignment then minimised a different objective than the loss
             # training the matched pair, so a close geometry-versus-class call
-            # picked the wrong proposal. Caught in review on model-zoo#246.
+            # picked the wrong proposal. Caught in review on (internal ref).
             #
             # Nothing here could see it: every matcher test asserted
             # CARDINALITY, which is invariant to any reweighting of the cost.
@@ -773,7 +773,7 @@ class _SparseRCNN(nn.Module):
 def MyModel(num_classes=output_classes):
     num_classes = num_classes + 1  # 1 for background
 
-    # weights=None: architecture only, no download (the #199 egress lockdown
+    # weights=None: architecture only, no download (the internal ref egress lockdown
     # blocks download.pytorch.org). GroupNorm and
     # trainable_layers=3 match the rest of this family. GroupNorm, not
     # FrozenBatchNorm2d: frozen BN answers the federated-averaging problem --

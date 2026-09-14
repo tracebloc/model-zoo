@@ -10,7 +10,7 @@ experiment as ``batchSize``), and the training plan has no setter for it -- a
 user cannot override what the template says. So the category README is the only
 other place the number lives, and it is the place a user sizing a run reads
 first. When ``seq2seq/pytorch/simple_seq2seq.py`` moved from 16 to 4 because 16
-was OOM-killed inside the training envelope (model-zoo#296), the seq2seq README
+was OOM-killed inside the training envelope (internal ref), the seq2seq README
 kept saying 16 -- documenting exactly the value that had just been removed as
 OOM-inducing -- and nothing in ``tests/`` referenced ``batch_size`` at all.
 
@@ -24,7 +24,7 @@ WHAT IS ASSERTED, and where each rule comes from
   ``upload_model()`` and gitignored) are excluded from the lookup -- they are
   verbatim copies that exist in any checkout that has run an upload and in no
   CI clone, so without the exclusion this suite is green in CI and red on every
-  developer's machine (model-zoo#296 review). The exclusion prefix is held
+  developer's machine ((internal ref) review). The exclusion prefix is held
   equal to the ``.gitignore`` pattern so the two cannot drift apart;
 * its single module-level ``batch_size`` literal equals ``N``;
 * PER README, not globally: every README that has a ``**Batch size**`` line
@@ -32,7 +32,7 @@ WHAT IS ASSERTED, and where each rule comes from
   ``PROSE_ONLY_BATCH_READMES``. A global "at least one claim somewhere" check
   stops discriminating the moment a second category adds a claim -- rewording
   one README's bullet out of the grammar's reach would then drop its claims
-  silently and free it to drift back (model-zoo#296 review). Per README,
+  silently and free it to drift back ((internal ref) review). Per README,
   coverage can only be removed by editing the allowlist, never by rewording;
 * the allowlist is exact in both directions: a listed category must still have
   a Batch size line and must yield no attributable claim. A category that

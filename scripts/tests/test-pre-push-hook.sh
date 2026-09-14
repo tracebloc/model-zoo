@@ -15,7 +15,7 @@
 #   * the hook skips delete-only / no-op pushes (all-zero local sha)
 #   * the hook degrades gracefully when `make` is off PATH (GUI clients)
 #   * the hook soft-passes when the venv toolchain is absent (guard-toolchain
-#     fails) rather than hard-blocking a GUI push that cannot --no-verify (#1749)
+#     fails) rather than hard-blocking a GUI push that cannot --no-verify (internal ref)
 #   * guard-toolchain fails on a tool it cannot run and passes when it can
 set -eu
 

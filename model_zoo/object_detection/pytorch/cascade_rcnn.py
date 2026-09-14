@@ -1,7 +1,7 @@
 """Cascade R-CNN — multi-stage IoU refinement (Cai & Vasconcelos, CVPR 2018) on a ResNet-50-FPN backbone. A single-stage R-CNN head is trained at one IoU threshold and is therefore good at exactly one thing: 0.5 is what makes training work at all (a higher threshold starves the head of positives), and 0.5 is also what makes the detector's high-IoU output mediocre. Cascade R-CNN resolves that by training THREE heads in sequence at 0.5 / 0.6 / 0.7, each one taking the previous head's regressed boxes as its proposals. Each stage sees a proposal distribution that is already better localised than the last, so a threshold that would have starved stage 1 is well populated by the time stage 3 sees it.
 
 Offline variant: the architecture is built with ``weights=None`` throughout, so
-nothing is fetched from ``download.pytorch.org`` — the #199 egress lockdown
+nothing is fetched from ``download.pytorch.org`` — the (internal ref) egress lockdown
 blocks it — and the template constructs anywhere, network or not. No seed is
 hosted for this template yet, so it random-initialises and there is
 no weight file — upload with ``weights=False``::
@@ -465,7 +465,7 @@ class _CascadeRCNN(GeneralizedRCNN):
 def MyModel(num_classes=output_classes):
     num_classes = num_classes + 1  # 1 for background
 
-    # weights=None: architecture only, no download (the #199 egress lockdown
+    # weights=None: architecture only, no download (the internal ref egress lockdown
     # blocks download.pytorch.org). GroupNorm and
     # trainable_layers=3 match the rest of this family. GroupNorm, not
     # FrozenBatchNorm2d: frozen BN answers the federated-averaging problem --

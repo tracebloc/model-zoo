@@ -3,14 +3,14 @@ decoupled head and SimOTA label assignment, written from scratch in PyTorch.
 
 Offline variant: nothing is fetched at construction — no hub id, no
 ``timm``, no ``transformers``, no torchvision pretrained enum, no
-``download.pytorch.org`` (the #199 egress lockdown blocks it). Every layer is
+``download.pytorch.org`` (the internal ref egress lockdown blocks it). Every layer is
 built from the inlined width/depth multipliers below, so the template
 constructs on a closed edge. No seed is hosted for this template and there is
 no weight file: upload with ``weights=False``::
 
     user.upload_model("yolox_s", weights=False)
 
-Hosting COCO tensors as a tracebloc model-store seed (the #1499 pattern: a
+Hosting COCO tensors as a tracebloc model-store seed (the internal ref pattern: a
 matched ``<stem>_weights.pkl`` prepped by ``tools/prep_offline_weights.py``
 and strict-loaded after the architecture is built) is follow-up work, not part
 of this roster addition. Until a dump is staged,
@@ -95,13 +95,13 @@ filter runs after this function has already spent detection slots on them.
 This template consequently REQUIRES the family handler's shift. Fed raw
 0-based dataset labels it would discard the first class. That is the contract
 as of (internal ref), and the zoo's own family train-step test asserts the
-``[1, C]`` range (model-zoo#245).
+``[1, C]`` range (internal ref).
 
 This section previously described the opposite contract — "index 0 is a real
 class", "nothing is silently folded into a background slot" — which was true
 before the channel-0 drop landed and stale after it. These templates ship as a
 single uploaded ``.py``, so the docstring is the spec; it was corrected in
-review (model-zoo#237).
+review (internal ref).
 
 Federated note (GroupNorm, not BatchNorm)
 -----------------------------------------
@@ -113,7 +113,7 @@ built its backbone with ``norm_layer=misc_nn_ops.FrozenBatchNorm``, i.e. FROZEN
 -- the running statistics never update, so there is nothing to average. This
 template carried 21,738 live buffer elements against ``efficientdet_d0``'s 0.
 (Frozen BN turned out to be a bit-exact no-op on those from-scratch builds,
-(internal ref), and they moved to GroupNorm in model-zoo#262. Note what that
+(internal ref), and they moved to GroupNorm in (internal ref). Note what that
 change is NOT: moving BN -> GroupNorm here left the parameter count identical
 and dropped 21,738 buffers, whereas moving FrozenBN -> GroupNorm there ADDED
 2 parameters per normalised channel, because frozen BN held weight/bias as
@@ -196,7 +196,7 @@ SIMOTA_IOU_COST_WEIGHT = 3.0
 #:   ties.
 #:
 #: This was ``1.0e8``, which satisfies the first and silently destroys the
-#: second (model-zoo#237 review). float32's ULP at 1e8 is **8.0**, so
+#: second ((internal ref) review). float32's ULP at 1e8 is **8.0**, so
 #: ``1e8 + x == 1e8`` for every ``x <= 4.0`` — the comment claimed
 #: comparability while the arithmetic erased it. Where it bites is a ground
 #: truth with no anchor centre inside it at any level: ``inside_both`` is then
@@ -265,7 +265,7 @@ class ConvBNAct(nn.Module):
 
     Named ``ConvBNAct`` after the upstream block it stands in for; the norm
     is GroupNorm, not BatchNorm. This docstring said "BatchNorm" until
-    model-zoo#237 review caught it -- the class name is a deliberate
+    (internal ref) review caught it -- the class name is a deliberate
     upstream-parity name, the docstring was simply stale, and these
     templates ship as a single uploaded ``.py`` where the docstring IS the
     spec. See the federated note in the module docstring for why GroupNorm.
@@ -935,7 +935,7 @@ class YOLOXS(nn.Module):
             # NOT acute at initialisation on THIS template, and the sentence
             # here used to claim it was: "SCORE_THRESH is 0.001 against a 0.01
             # prior, so channel 0 clears it constantly". Both halves were the
-            # rtmdet twin's, copied verbatim (model-zoo#237 review). YOLOX's
+            # rtmdet twin's, copied verbatim ((internal ref) review). YOLOX's
             # SCORE_THRESH is 0.01, and its score is
             # `obj.sigmoid() * cls.sigmoid()` = 1e-2 * 1e-2 = 1e-4 at the
             # prior -- two orders of magnitude BELOW its own threshold, where
@@ -952,7 +952,7 @@ class YOLOXS(nn.Module):
             # family handler's shift. Fed raw 0-based dataset labels it would
             # discard the first class. That is the contract as of (internal ref),
             # and the zoo's own family train-step test asserts the `[1, C]`
-            # range (model-zoo#245).
+            # range (internal ref).
             class_scores = class_scores[:, 1:]
             num_anchors, num_classes = class_scores.shape
             flat_scores = class_scores.reshape(-1)

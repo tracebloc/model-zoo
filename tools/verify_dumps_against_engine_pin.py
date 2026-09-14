@@ -51,7 +51,7 @@ the store exists.** Two preconditions are outstanding, not one:
 
 Nothing here says "armed, and it activates when a manifest lands": that
 sentence was in this docstring and in the workflow's shell, and it described an
-intent rather than the code (the arming overclaim, model-zoo#248).
+intent rather than the code (the arming overclaim, (internal ref)).
 
 Dumps are NOT committed to this repo (see ``prep_offline_weights.py``: they are
 served from the tracebloc model store). CI obtains them into ``--dumps-dir``
@@ -283,7 +283,7 @@ def run_sweep(
     if not manifest_path.exists():
         # This message used to read "The gate is ARMED and will verify every dump
         # the moment a manifest.json lands." Both halves were untrue, and it is
-        # the same overclaim model-zoo#248 removed from the workflow's shell one
+        # the same overclaim (internal ref) removed from the workflow's shell one
         # level up — missed here because the shell and this tool each describe the
         # skip in their own words (the arming overclaim).
         #

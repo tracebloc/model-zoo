@@ -1,7 +1,7 @@
 """TOOD — Task-aligned One-stage Object Detection (Feng et al., ICCV 2021) on a ResNet-50-FPN backbone. TOOD attacks a misalignment the rest of this family lives with: classification and localisation are learned by two parallel branches from the same features, so the anchor that scores highest is often not the anchor that localises best, and NMS then keeps the wrong one. Two changes address it — a head whose two task features are *derived from each other* rather than computed independently, and an assignment that scores an anchor by how well it does both at once.
 
 Offline variant: the architecture is built with ``weights=None`` throughout, so
-nothing is fetched from ``download.pytorch.org`` — the #199 egress lockdown
+nothing is fetched from ``download.pytorch.org`` — the (internal ref) egress lockdown
 blocks it — and the template constructs anywhere, network or not. No seed is
 hosted for this template yet, so it random-initialises and there is
 no weight file — upload with ``weights=False``::
@@ -650,7 +650,7 @@ class _TOOD(RetinaNet):
 def MyModel(num_classes=output_classes):
     num_classes = num_classes + 1  # 1 for background
 
-    # weights=None: architecture only, no download (the #199 egress lockdown
+    # weights=None: architecture only, no download (the internal ref egress lockdown
     # blocks download.pytorch.org). GroupNorm and
     # trainable_layers=3 match the rest of this family. GroupNorm, not
     # FrozenBatchNorm2d: frozen BN answers the federated-averaging problem --

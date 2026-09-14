@@ -3,14 +3,14 @@ detector with consistent dual assignments, written from scratch in PyTorch.
 
 Offline variant: nothing is fetched at construction — no hub id, no ``timm``,
 no ``transformers``, no ``ultralytics``, no torchvision pretrained enum, no
-``download.pytorch.org`` (the #199 egress lockdown blocks it). Every layer is
+``download.pytorch.org`` (the internal ref egress lockdown blocks it). Every layer is
 built from the inlined multipliers and architecture table below, so the
 template constructs on a closed edge. No seed is hosted for this template and
 there is no weight file: upload with ``weights=False``::
 
     user.upload_model("yolov10_s", weights=False)
 
-Hosting COCO tensors as a tracebloc model-store seed (the #1499 pattern: a
+Hosting COCO tensors as a tracebloc model-store seed (the internal ref pattern: a
 matched ``<stem>_weights.pkl`` prepped by ``tools/prep_offline_weights.py`` and
 strict-loaded after the architecture is built) is follow-up work, not part of
 this roster addition. Until a dump is staged, ``tools/check_dump_coverage.py``
@@ -180,7 +180,7 @@ the repo rather than implying a rule — it is **not** a repo-wide requirement
 today: four other templates (``vitpose``, ``vitpose_plus``, ``mask2former``,
 ``oneformer``) still compute attention by hand, and neither ``CLAUDE.md`` nor
 ``.cursor/BUGBOT.md`` states a requirement. It is adopted here because the
-conversion is provably numerics-neutral for this block, and #2090's own
+conversion is provably numerics-neutral for this block, and (internal ref)'s own
 acceptance bar — run the pre-conversion formula and the SDPA path on the same
 weights and require agreement in fp32 at tight tolerance — is applied to it in
 ``guard_attention_matches_the_manual_formula`` (measured deviation 6.3e-07).

@@ -121,7 +121,7 @@ def test_accepted_vocabulary_is_not_empty() -> None:
 def test_od_templates_declaring_model_type_were_found() -> None:
     """The parametrized test skips support files and empty declarations; if that
     left it with nothing to check, an OD template rename could hide real drift
-    behind an all-skipped run (the (internal ref) silent-green shape).
+    behind an all-skipped run (the internal ref silent-green shape).
 
     THIS USED TO BE A FLOOR (``len(declared) >= 6``), hand-recomputed on every
     change: lowered 10 -> 7 by an internal ticket's DETR deletions, 7 -> 6 by

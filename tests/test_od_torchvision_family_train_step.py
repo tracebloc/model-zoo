@@ -204,7 +204,7 @@ def _targets(torch, num_classes: int) -> list[dict]:
     ``num_classes = num_classes + 1  # 1 for background``.
 
     These labels used to be ``[1, max(1, num_classes - 1)]``: already
-    background-avoiding, so this file would have been red on the pre-#3062
+    background-avoiding, so this file would have been red on the pre-(internal ref)
     contract too, but spanning only ``[1, C-1]`` and never the top of the range.
     A template that allocated ``num_classes`` channels instead of
     ``num_classes + 1`` therefore passed here and then raised on the LAST class

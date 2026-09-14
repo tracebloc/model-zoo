@@ -20,14 +20,14 @@ readers' verdicts against each other to prove their roster partition is
 not vacuous, and that argument needs two independent implementations
 *within one file*. It was never an argument for re-typing
 ``declares_framework`` in three files — which is what the review on
-model-zoo#251 pointed out.
+(internal ref) pointed out.
 
-Migration status (model-zoo#251)
+Migration status (internal ref)
 --------------------------------
 ``test_od_norm_layers_normalise.py`` imports from here.
 ``test_od_declared_resolution.py`` and
 ``test_od_torchvision_family_train_step.py`` still hold their own copies:
-the first is being rewritten on another branch right now (model-zoo#252,
+the first is being rewritten on another branch right now ((internal ref),
 +571 lines in that one file), so moving its helpers here would conflict
 for no benefit. Their imports are a follow-up, to be done when nothing is
 in flight on them — the point of landing this module is that the count of

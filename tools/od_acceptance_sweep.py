@@ -11,7 +11,7 @@ WHAT THIS IS, AND WHAT IT IS NOT (the acceptance sweep's own framing)
 set that runs on every PR: count units, registry resolution, family resolution,
 sidecar pairing, over a two-image synthetic fixture. It trains zero models. This
 is the other artifact -- an ACCEPTANCE SWEEP that runs when epic (internal ref)
-claims to be finished. #3048 is explicit that the two must not be merged:
+claims to be finished. (internal ref) is explicit that the two must not be merged:
 folding them makes the fast one slow and the thorough one skippable.
 
 Which is also why this is a TOOL and not a pytest module. model-zoo CI's torch
@@ -31,12 +31,12 @@ waits on a credential. Nothing here pretends to be that.
 
 THE TWO VERDICTS ARE NOT ONE VERDICT
 ------------------------------------
-#3048's checklist asks for "finite loss and non-zero mAP". The second half is
+(internal ref)'s checklist asks for "finite loss and non-zero mAP". The second half is
 NOT ACHIEVABLE TODAY and this file does not pretend otherwise. (internal ref)
 (host COCO seeds) is blocked on the hosting decision (a store location and a credential),
 so every template here builds from RANDOM INITIALISATION -- including the three
 that declare a seed, because a declared seed that is not hosted is not a seed.
-(internal ref) states the fallback: #3048 must say, per template, whether it ran
+(internal ref) states the fallback: (internal ref) must say, per template, whether it ran
 seeded or from scratch. So the report carries:
 
   mechanical  -- PASS / DIVERGENT / FAIL (see `classify_status`)
@@ -45,7 +45,7 @@ seeded or from scratch. So the report carries:
 
 A template that trains and infers cleanly from scratch is a REAL PASS on the
 mechanical criterion and a PENDING on the quality one. `DIVERGENT` is the third
-mechanical state and it does NOT satisfy #3048's exit criterion -- see
+mechanical state and it does NOT satisfy (internal ref)'s exit criterion -- see
 `DIVERGENCE_FACTOR`, and `ssd_vgg16`, whose loss ends at 1.8e+17 and is finite. Reporting one green
 verdict by quietly lowering the bar is the shape of every false-green this epic
 has produced -- most memorably an audit that scored `mask_rcnn` "uploadable"
@@ -86,13 +86,13 @@ RESOLUTION IS RECORDED, NOT ASSUMED
 --------------------------------------------------
 `faster_rcnn_resnet`, `fcos` and `retinanet` USED to declare `image_size = 448`
 while overriding nothing, so they fell through to `GeneralizedRCNNTransform`'s
-default `min_size=800`/`max_size=1333`. (internal ref) (model-zoo#265) corrects
+default `min_size=800`/`max_size=1333`. (internal ref) (internal ref) corrects
 all three to 800.
 
 A CORRECTION TO WHAT THIS SECTION USED TO CLAIM. It said the fix meant "a
 native-aspect source lands near 800x1067 instead of an upscaled square 800x800,
 about a third more pixels" -- i.e. that the fix was not compute-neutral.
-**That is wrong**, and @saqlainsyed007 caught it on model-zoo#265.
+**That is wrong**, and @saqlainsyed007 caught it on (internal ref).
 `GeneralizedRCNNTransform` does not INTRODUCE an aspect ratio; it preserves
 whatever it is handed, and the platform hands it a SQUARE `image_size x
 image_size` (see `make_batch` below, and `test_od_declared_resolution.py`'s
@@ -124,7 +124,7 @@ Per template, steady-state train step: median 2.2s, min 0.37s (`yolov8_s`),
 max 44.4s (`faster_rcnn_convnext_small`). One step + one eval across all 25 is
 108s. A 20-step cycle x3 experiments is ~141 minutes, of which 86 belong to the
 two convnext templates alone. `--skip-slow` drops that pair; it is opt-in and
-named in the report's `skipped` list, because #3048 forbids a silent cap.
+named in the report's `skipped` list, because (internal ref) forbids a silent cap.
 
 WHY LOSS *DECREASE* IS RECORDED AND NOT GATED ON
 ------------------------------------------------
@@ -175,7 +175,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 # `tests/test_model_contract.py` rather than "add a THIRD copy" of the CI RAM
 # skip list. `_od.py`'s own docstring says the point of it landing is that "the
 # count of copies stops growing", and it had already caught a copy that
-# silently narrowed a roster scan (model-zoo#251). A fourth copy here is the
+# silently narrowed a roster scan (internal ref). A fourth copy here is the
 # defect that module exists to stop.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tests"))
 
@@ -228,7 +228,7 @@ SLOW_TEMPLATES = frozenset({"faster_rcnn_convnext_small", "fcos_convnext_small"}
 #: its loss ends at 1.8e+17, which is FINITE, so "trains for one full cycle
 #: with finite loss" is satisfied literally while the model is plainly not
 #: training. Tightening the finiteness gate to catch it would have redefined
-#: #3048's stated criterion to make an uncomfortable row disappear; a third
+#: (internal ref)'s stated criterion to make an uncomfortable row disappear; a third
 #: state reports the row for what it is instead.
 STATUS_PASS = "PASS"
 STATUS_DIVERGENT = "DIVERGENT"
@@ -259,7 +259,7 @@ CAUSE_EMPTY_PAYLOAD = "empty-payload"
 #: `image_size`, an import error) leaves `n_preds` absent, and defaulting that
 #: to `[]` gave it the same quality cause as a clean run that genuinely emitted
 #: no boxes. Two different facts, and this epic's whole complaint is causes that
-#: read as something they are not. Found by Cursor Bugbot on model-zoo#261.
+#: read as something they are not. Found by Cursor Bugbot on (internal ref).
 CAUSE_NOT_REACHED = "inference-not-reached"
 CAUSE_RANDOM_SCORES = "random-init-scores"
 CAUSE_MEASURABLE = "measurable"
@@ -481,7 +481,7 @@ def make_batch(torch, image_size: int, num_classes: int):
     `num_classes` channels pass here and raise on the last class at train time.
 
     THE SECOND IMAGE HAS ZERO OBJECTS -- the engine's explicit target for an
-    unannotated image, shapes and dtypes matched to that dataset. #3048 requires
+    unannotated image, shapes and dtypes matched to that dataset. (internal ref) requires
     that an image with nothing in it neither crashes nor is silently dropped.
     """
     images = [
@@ -542,7 +542,7 @@ def observed_input_shape(torch, model, images, targets) -> Optional[List[int]]:
         #
         # This used to complete the whole forward just to read a shape the
         # transform had already reported. Two costs, and @saqlainsyed007 flagged
-        # both on model-zoo#261:
+        # both on (internal ref):
         #
         #   * it built and discarded an autograd graph -- and for
         #     `faster_rcnn_convnext_small` that is the ~44s/step forward, paid
@@ -605,14 +605,14 @@ def train_step_findings(torch, losses: Any, step: int) -> List[str]:
 
 
 def payload_findings(torch, preds: Any, n_images: int) -> List[str]:
-    """The eval payload against #3048's inference checklist.
+    """The eval payload against (internal ref)'s inference checklist.
 
     Boxes in pixel xyxy; `scores`/`labels` ALIGNED with `boxes`; and an image the
     detector finds nothing on present as a zero-row entry rather than dropped.
 
     ON THE LAST POINT, precisely: this asserts the payload has one entry PER
     IMAGE. An empty entry is a PASS -- a detector finding nothing is a legitimate
-    result and #3048 asks only that it "neither crashes nor silently drops the
+    result and (internal ref) asks only that it "neither crashes nor silently drops the
     record". A check that required a non-empty payload would fail 11 of 25
     templates for being untrained, which is a quality question and belongs in
     the other column.
@@ -761,7 +761,7 @@ def divergence_findings(
         return [
             f"loss DIVERGED: {loss_first} -> {loss_last}, "
             f"{loss_last / loss_first:.3g}x its first step (> {DIVERGENCE_FACTOR:g}x). "
-            f"Finite, so it satisfies #3048's literal wording, and not training."
+            f"Finite, so it satisfies (internal ref)'s literal wording, and not training."
         ]
     return []
 
@@ -774,7 +774,7 @@ def validate_only_names(only: Sequence[str], known: Set[str]) -> None:
     test I first wrote asserted that a name drawn from `family_templates()` was
     in that same set, which is true by construction and stays true if this
     function starts rejecting everything. Cursor Bugbot called that vacuous on
-    model-zoo#261 and was right. A pure function has both directions available
+    (internal ref) and was right. A pure function has both directions available
     without torch and without a cycle.
     """
     unknown = sorted(set(only) - set(known))
@@ -801,7 +801,7 @@ def worst_run(runs: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
 def aggregate_status(statuses: Sequence[str]) -> str:
     """One template's several experiments collapsed to one status: WORST-OF.
 
-    Not majority and not first-run. #3048 asks for "multiple experiments per
+    Not majority and not first-run. (internal ref) asks for "multiple experiments per
     model, not one lucky run -- enough to show it is not flaky", and the whole
     point of running more than once is that the bad run is the informative one.
     A majority rule would report a template that diverges half the time as
@@ -859,7 +859,7 @@ def run_experiment(
 ) -> Dict[str, Any]:
     """Train ``steps`` steps and infer once. Never raises -- returns the failure.
 
-    #3048 asks for "the failure with its cause for anything red", so an
+    (internal ref) asks for "the failure with its cause for anything red", so an
     exception is DATA to be reported per template, not a reason to abandon the
     sweep 6 templates in.
     """
@@ -914,7 +914,7 @@ def run_experiment(
         # handler below then reported a `TypeError` in place of the precise
         # cause -- a worse diagnosis than the one already in hand, on a tool
         # whose entire purpose is an honest per-template cause. Found by Cursor
-        # Bugbot on model-zoo#261. The skipped fields are absent rather than
+        # Bugbot on (internal ref). The skipped fields are absent rather than
         # zero: they were not measured, and 0 would read as "measured, none".
         if findings:
             record["findings"] = findings
@@ -1001,7 +1001,7 @@ def sweep(
     # `if only and key not in only: continue` silently drops unmatched names, so
     # `--only fcos_resnet` (no such template) selected nothing, produced a
     # zero-row report, and `exit_code`'s `any(...)` over an empty list returned
-    # 0 -- a clean sweep. Cursor Bugbot found it on model-zoo#261. The third
+    # 0 -- a clean sweep. Cursor Bugbot found it on (internal ref). The third
     # mechanical state exists precisely so nothing can look clean while
     # diverging; this bypassed it by leaving nothing to judge.
     if only:
@@ -1083,7 +1083,7 @@ def sweep(
             # experiments, but these were copied from the first run -- so a
             # later divergent or failing experiment left the table showing the
             # LUCKY run's decreasing loss beside a DIVERGENT/FAIL status. Found
-            # by Cursor Bugbot on model-zoo#261, and it is the same defect class
+            # by Cursor Bugbot on (internal ref), and it is the same defect class
             # as the aggregation mutation that survived earlier in this PR: a
             # worst-of verdict whose supporting numbers came from elsewhere.
             worst = worst_run(runs)
@@ -1159,7 +1159,7 @@ _HEADERS = (
 
 
 def markdown(report: Dict[str, Any]) -> str:
-    """The per-template table. #3048: "All models pass" with no table is the
+    """The per-template table. (internal ref): "All models pass" with no table is the
     shape of every false-green this epic has produced."""
     out: List[str] = []
     roster = report["roster"]
@@ -1287,7 +1287,7 @@ def main(argv=None) -> int:
         "--experiments",
         type=int,
         default=2,
-        help="cycles per template -- #3048 asks for more than one lucky run",
+        help="cycles per template -- (internal ref) asks for more than one lucky run",
     )
     parser.add_argument("--num-classes", type=int, default=3)
     parser.add_argument(

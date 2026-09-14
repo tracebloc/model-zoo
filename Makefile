@@ -25,7 +25,7 @@ PYTEST ?= $(PYTHON) -m pytest
 # pinned version; a bare `ruff` would resolve to whatever happens to be
 # first on PATH — a homebrew build, another venv — and the pin the
 # comment promises would silently not be the thing that ran. (Bugbot,
-# tracebloc/data-ingestors#461.)
+# (internal ref).)
 
 # ci.yml fans the same `pytest tests/` out across three framework
 # environments. Locally you install one; FRAMEWORK picks which

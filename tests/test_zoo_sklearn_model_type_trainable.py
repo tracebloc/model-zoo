@@ -21,7 +21,7 @@ from the SDK at a pinned ref — never hand-transcribed (the OD vocabulary-drift
 
 WHAT THIS FILE DOES NOT CLAIM: that the estimator is federated-averageable.
 Membership only means the SDK's upload-time smoke fit routes. The SDK says so
-itself in ``SklTabularBase._ensemble_prefixes`` (SDK #361).
+itself in ``SklTabularBase._ensemble_prefixes`` (internal ref).
 """
 
 from __future__ import annotations

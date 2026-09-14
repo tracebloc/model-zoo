@@ -4,14 +4,14 @@ written from scratch in PyTorch.
 
 Offline variant: nothing is fetched at construction — no hub id, no ``timm``,
 no ``transformers``, no ``ultralytics``, no torchvision pretrained enum, no
-``download.pytorch.org`` (the #199 egress lockdown blocks it). Every layer is
+``download.pytorch.org`` (the internal ref egress lockdown blocks it). Every layer is
 built from the inlined width/depth multipliers and arch table below, so the
 template constructs on a closed edge. No seed is hosted for this template and
 there is no weight file: upload with ``weights=False``::
 
     user.upload_model("yolo11_s", weights=False)
 
-Hosting COCO tensors as a tracebloc model-store seed (the #1499 pattern: a
+Hosting COCO tensors as a tracebloc model-store seed (the internal ref pattern: a
 matched ``<stem>_weights.pkl`` prepped by ``tools/prep_offline_weights.py`` and
 strict-loaded after the architecture is built) is follow-up work, not part of
 this roster addition. Until a dump is staged,
@@ -143,8 +143,8 @@ a positive target — it is trained only as a negative — and ``_predictions``
 ordering is the whole point: the engine does drop channel-0 rows, but it does
 so downstream of this decode's budget, so a background candidate that survives
 to there has already spent a detection slot a real object should have had. Same
-argument as CenterNet's pre-slice fix in model-zoo#236 and the siblings' in
-model-zoo#237.
+argument as CenterNet's pre-slice fix in (internal ref) and the siblings' in
+(internal ref).
 
 Consequence, stated plainly: this template **requires** the family handler's
 shift. Fed raw 0-based dataset labels it would discard the first class.

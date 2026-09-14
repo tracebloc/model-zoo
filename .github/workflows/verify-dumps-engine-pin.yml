@@ -9,14 +9,14 @@ name: Verify dumps against engine pin
 # engine pin drifts from what the dumps were built with.
 
 # THERE ARE TWO MIRRORS OF THE ENGINE'S PIN, and for a long time this gate
-# watched only one (#229). `tools/requirements-engine-pin.txt` is what prep and
+# watched only one (internal ref). `tools/requirements-engine-pin.txt` is what prep and
 # `verify-dumps` install; `.github/requirements/pytorch.txt` is what ci.yml's
 # REQUIRED `test-pytorch` job installs, and its own header carries the rule —
 # "Bump these together with the engine's pins, never ahead of them". Nothing
 # enforced that header: the `paths:` lists below did not name the file, so a
 # lone bump there fired no job, and the guard step had a single `--mirror`
 # pointed at the tools/ copy, so it would not have looked even if it had run.
-# #227 is the proof case — as dependabot opened it, it touched only
+# (internal ref) is the proof case — as dependabot opened it, it touched only
 # pytorch.txt, sat two minors ahead of the engine, and was all green. Both
 # halves are fixed below: the trigger, and the invocation.
 on:
@@ -35,7 +35,7 @@ on:
       - "tools/requirements-engine-pin.txt"
       # The whole directory, not just pytorch.txt: a new CI requirement set
       # that mirrors an engine pin must arrive INSIDE the trigger, or it
-      # repeats #229 exactly. The guard job checks only the files that
+      # repeats (internal ref) exactly. The guard job checks only the files that
       # actually mirror the engine, and a test asserts that set is complete.
       - ".github/requirements/**"
       - "manifest.json"
@@ -112,7 +112,7 @@ jobs:
           # Belt and braces: don't persist the token into _engine/.git/config
           # either. The real isolation is that no PR code runs in this job.
           persist-credentials: false
-          # THE SEARCH SPACE, NOT A FILE LIST (model-zoo#276). These two
+          # THE SEARCH SPACE, NOT A FILE LIST (internal ref). These two
           # patterns used to be two exact paths, `use_cases/requirements.txt`
           # and `use_cases/requirements_cuda.txt`, and that pair WAS this
           # repo's claim about which engine files carry a pin. It was wrong:
@@ -179,7 +179,7 @@ jobs:
         with:
           # `git show <merge base>:<mirror>` needs history, not a shallow tip.
           # It is what lets the drift report DERIVE which side moved instead of
-          # asserting one (model-zoo#274); see the base-extraction step below.
+          # asserting one (internal ref); see the base-extraction step below.
           fetch-depth: 0
       - name: Download the engine pin files
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
@@ -201,10 +201,10 @@ jobs:
       # without appearing here.
       #
       # `--mirror-at-base` IS WHAT MAKES THE DIAGNOSIS DERIVED RATHER THAN
-      # ASSERTED (model-zoo#274). Two pins cannot say which side moved, and
+      # ASSERTED (internal ref). Two pins cannot say which side moved, and
       # the old message asserted "the engine moved" in both directions — which
       # on a mirror-moved PR sent you to regenerate the mirror back down to
-      # the engine's older pin and silently revert the bump (#271). The
+      # the engine's older pin and silently revert the bump (internal ref). The
       # mirror's own value at the merge base does settle it, so it is handed
       # over on a pull_request and OMITTED on push/schedule, where there is no
       # merge base and the honest verdict is "unknown, here are both
@@ -239,7 +239,7 @@ jobs:
             # error under `set -u` in bash 3.2 — which is what the extracted
             # step runs under in tests/test_engine_pin_drift_guard.py on macOS.
             # shellcheck disable=SC2086
-            # `--engine-root`, NOT A LIST OF `--engine` PATHS (model-zoo#276).
+            # `--engine-root`, NOT A LIST OF `--engine` PATHS (internal ref).
             # Two things were wrong with the list. It was incomplete — it named
             # two of the engine's seven pin-carrying files and missed
             # `use_cases/requirements_vision_cv_cuda.txt` entirely — and the
@@ -378,7 +378,7 @@ jobs:
   #    the declaration is quietly wrong -- after which a seed either carries head
   #    weights it must not, or excludes keys that no longer exist. That is the
   #    failure the backbone-only contract exists to remove, coming back through
-  #    the declaration instead of the load (Lukas, model-zoo#217).
+  #    the declaration instead of the load (Lukas, (internal ref)).
   #
   #    So the derivation is the CHECK rather than the authoring step. It runs
   #    under the ENGINE's pinned stack for the same reason `verify-dumps` does: a

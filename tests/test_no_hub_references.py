@@ -11,9 +11,9 @@ a fetch, because the SDK refuses the upload before the model is ever built —
 
     HuggingFace / hub-referenced models are no longer supported (declared: ...)
 
-when any of them carries a value (SDK #1495). So a declaration is not inert
+when any of them carries a value (internal ref). So a declaration is not inert
 documentation and not a fallback: it is the difference between a template that
-uploads and one that cannot (model-zoo#284, where
+uploads and one that cannot ((internal ref), where
 `masked_language_modeling/pytorch/wide_mini_mlm.py` shipped a correct
 `tokenizer.json` and still could not be uploaded, because it also declared
 `tokenizer_id = "bert-base-uncased"` beside it).
@@ -28,7 +28,7 @@ WHAT A TEMPLATE DECLARES INSTEAD
 `tokenizer_file` — the tokenizer that travels with the model, checked by
 `tests/test_tokenizer_declaration.py`. A pretrained architecture is built from
 an inlined config with its weights delivered from the tracebloc model store
-(issue #156), so no hub id is needed to name either the model or its tokenizer.
+(internal ref), so no hub id is needed to name either the model or its tokenizer.
 
 Stdlib only: runs in every CI framework job, including the ones with no torch.
 """

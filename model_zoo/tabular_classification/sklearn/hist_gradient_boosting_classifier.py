@@ -4,7 +4,7 @@ from sklearn.ensemble import HistGradientBoostingClassifier
 framework = "sklearn"
 # No histgb-specific value exists in the platform's model_type vocabulary
 # (model_type_choices.v1.json), so this GBDT stays "tree" — matching its
-# regressor sibling hist_gradient_boosting_regressor.py (model-zoo#272).
+# regressor sibling hist_gradient_boosting_regressor.py (internal ref).
 model_type = "tree"
 main_method = "MyModel"
 license = "BSD-3-Clause"

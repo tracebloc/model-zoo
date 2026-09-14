@@ -118,7 +118,7 @@ def test_a_declared_no_seed_template_is_recognised(tmp_path):
 
 
 def test_an_unmigrated_template_is_not_surveyed(tmp_path):
-    """The gate is scoped to #1499's migration; it must not indict the rest."""
+    """The gate is scoped to (internal ref)'s migration; it must not indict the rest."""
     tool = _tool()
     zoo = _zoo(tmp_path, {"image_classification/legacy": UNMIGRATED})
     assert tool.survey(zoo) == {}
@@ -539,7 +539,7 @@ def test_a_retired_dump_is_still_reported_every_run(tmp_path, capsys):
 def test_an_orphan_with_no_status_is_STILL_RED(tmp_path):
     """THE TEST THAT KEEPS THE EXEMPTION HONEST. If `retired` were read
     permissively — any status, or a missing one — this gate would go green over
-    the exact eight dumps it failed to catch, and #2985 would recur silently."""
+    the exact eight dumps it failed to catch, and (internal ref) would recur silently."""
     zoo = _zoo(tmp_path, {"object_detection/fcos": SEED_EXPECTING})
     manifest = _manifest(tmp_path, {"fcos": LIVE, "stranded": LIVE})
     assert _tool().main(["--zoo", str(zoo), "--manifest", str(manifest)]) == 1
@@ -670,7 +670,7 @@ def test_the_real_manifest_shape_is_read_by_status(tmp_path):
 #
 # So the arming itself now has a test. Dropping the flag again is a one-line
 # YAML edit that changes no Python, breaks no other test, and leaves this
-# workflow green — which is exactly the class of regression that produced #2985.
+# workflow green — which is exactly the class of regression that produced (internal ref).
 # --------------------------------------------------------------------------
 
 WORKFLOW = ROOT / ".github/workflows/verify-dumps-engine-pin.yml"
@@ -764,7 +764,7 @@ def test_the_manifest_presence_is_asserted_rather_than_assumed():
 
     `check_dump_coverage.py` exits 1 on a missing `--manifest`, so this is
     belt-and-braces -- but the braces are what stop a silent revert to the
-    classification-only run that #2985 was invisible behind.
+    classification-only run that (internal ref) was invisible behind.
     """
     block = _coverage_job_block()
     assert "manifest.json" in block and ("test -s" in block or "test -f" in block)

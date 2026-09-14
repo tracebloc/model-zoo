@@ -5,7 +5,7 @@ vocabulary the tracebloc training engine accepts. It is the single source of
 truth for which `model_type` strings an OD model template may declare.
 
 - **Upstream:** `tracebloc-engine` — `core/schema/object_detection_families.v2.json`
-- **Published by:** (internal ref) / PR #637 — the engine published this
+- **Published by:** (internal ref) / (internal ref) — the engine published this
   schema precisely so producers (this model-zoo, the backend's
   `MODEL_TYPE_CHOICES`) can assert in their own CI that what they emit the
   engine can route, instead of a user's experiment discovering the

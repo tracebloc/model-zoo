@@ -11,7 +11,7 @@ types — derived from `Experiment.MODEL_TYPE_CHOICES`, the `choices=` of the
   file is looked at** — and nothing in that error names the template as the
   cause. Three keypoint templates shipped `model_type = "transformer"`, which
   was never a member, so each was unusable as shipped with no hint why
-  (model-zoo#273).
+  (internal ref).
 
 `tests/test_zoo_model_type_contract.py` reads this file — it needs no network
 and no Django. It asserts every template's declared `model_type` is storable.

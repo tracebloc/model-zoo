@@ -2,7 +2,7 @@
 
 Offline variant: every module here is built from an inlined architecture
 description with randomly initialised weights, so nothing is fetched from
-``download.pytorch.org`` or any hub — the #199 egress lockdown blocks it — and
+``download.pytorch.org`` or any hub — the (internal ref) egress lockdown blocks it — and
 the template constructs anywhere, network or not. No seed is hosted for this
 template yet, so it random-initialises and there is
 no weight file — upload with ``weights=False``::
@@ -56,7 +56,7 @@ GroupNorm throughout, for two independent reasons:
 2. **The other templates' escape hatch is not available here.** The
    torchvision family used to reach for ``FrozenBatchNorm2d``, which is
    correct *when a pretrained seed supplies the running statistics* — it
-   followed this template to GroupNorm in model-zoo#262 for exactly the
+   followed this template to GroupNorm in (internal ref) for exactly the
    reason below. On a from-scratch,
    randomly-initialised trunk it supplies ``running_mean=0``/``running_var=1``,
    i.e. it does not normalise anything — measured on the ResNet-50 trunk the

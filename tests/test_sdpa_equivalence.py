@@ -111,7 +111,7 @@ def test_alibi_mask_dtype_follows_the_query(half_dtype, with_padding_mask):
     cast before the call — otherwise the fused kernels see a mask they will
     not take (ROCm's efficient attention warns and refuses outright) and the
     path silently falls back to math. The old add-after-matmul formulation
-    promoted dtypes for free; SDPA does not. Bugbot, #165.
+    promoted dtypes for free; SDPA does not. Bugbot, (internal ref).
     """
     mod = _load("model_zoo/masked_language_modeling/pytorch/relative_position_mlm.py")
 

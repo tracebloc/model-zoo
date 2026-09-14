@@ -15,7 +15,7 @@ layer degenerates to a no-op.
 
 Every template in this repo builds ``weights=None`` (the hub is a closed door,
 design note D6), and no OD seed is staged yet — (internal ref) is blocked on the
-store decision in the hosting decision. So until model-zoo#262, twelve shipped OD
+store decision in the hosting decision. So until (internal ref), twelve shipped OD
 templates trained with **no backbone normalisation at all**. Not weak
 normalisation: none. Measured downstream, activations reach sigma ~= 24 at the
 ROI head against ~= 3 with a live BatchNorm, and the loss stays finite and
@@ -33,7 +33,7 @@ The twelve are fixed, and this file is now a pure invariant
 When this file landed it deferred the norm DECISION and pinned the twelve as
 known-bad, because GroupNorm changes the state_dict key set of templates that
 exist to reproduce the torchvision checkpoint architecture for ``strict=True``
-seed loading. model-zoo#262 took that decision: all twelve moved to GroupNorm,
+seed loading. (internal ref) took that decision: all twelve moved to GroupNorm,
 ``NON_NORMALISING`` is empty and ``MAX_NON_NORMALISING`` is 0.
 
 What the decision cost is recorded in each template's own docstring rather than
@@ -170,7 +170,7 @@ _MAX_LEAK = 0.01
 #: modules)`` so a PARTIAL fix — some layers swapped, some not — is as loud as
 #: no fix.
 #:
-#: EMPTY as of model-zoo#262: the twelve FrozenBatchNorm2d entries were the
+#: EMPTY as of (internal ref): the twelve FrozenBatchNorm2d entries were the
 #: defect, and all twelve now build GroupNorm. Every template therefore takes
 #: the strong branch below — "every norm module must normalise" — and this dict
 #: exists only so that adding a row is still the thing the ratchet refuses.
@@ -235,7 +235,7 @@ NO_BACKBONE_ATTRIBUTE = {
 #: from ``tests/_od.py`` rather than being re-typed here. They were
 #: byte-identical in three OD test files and had already drifted in two ways
 #: (the build-module-name prefix and whether ``output_classes`` was consulted)
-#: — see model-zoo#251. The per-file "second independent reader" argument still
+#: — see (internal ref). The per-file "second independent reader" argument still
 #: holds where it was made: it is about comparing ``framework`` against
 #: ``model_type`` WITHIN one file, which this file does not do.
 OD_TEMPLATES = od_templates()
@@ -301,7 +301,7 @@ def _candidate_shapes(torch, module):
         # carries ``num_features``. Without this branch such a module yields
         # no candidate shape and is then hard-failed as unprobeable, which is
         # the opposite of what this file wants for a valid normaliser.
-        # Observed before the fallback was added (model-zoo#251 review):
+        # Observed before the fallback was added ((internal ref) review):
         #   AssertionError: norm module InstanceNorm2d could not be probed
         #   with any candidate input shape ... Attempts: []
         channels = int(module.num_features)
@@ -558,7 +558,7 @@ def test_the_non_normalising_list_only_ever_shrinks():
     )
     assert MAX_NON_NORMALISING == 0, (
         f"MAX_NON_NORMALISING is {MAX_NON_NORMALISING}, not the 0 recorded. "
-        f"(internal ref) is fixed (model-zoo#262) and 0 is the floor: there is "
+        f"(internal ref) is fixed (internal ref) and 0 is the floor: there is "
         f"no longer a known-bad template for a row to describe, so ANY row is "
         f"a regression and raising this to accommodate one defeats the "
         f"ratchet. It went 11 -> 12 once, for `sparse_rcnn`'s merge race, and "
@@ -572,7 +572,7 @@ def test_the_probe_discriminates_between_the_norm_kinds():
 
     This is the assertion that stops the whole file from being vacuous, and it
     became the ONLY such assertion when ``NON_NORMALISING`` emptied
-    (model-zoo#262). While twelve rows were recorded, a ``_leak`` that
+    (internal ref). While twelve rows were recorded, a ``_leak`` that
     regressed to "everything normalises" would at least have reddened those
     twelve; with no rows left, nothing on the roster would notice — every
     template would pass by checking nothing. So the discrimination is pinned
@@ -616,7 +616,7 @@ def test_the_probe_discriminates_between_the_norm_kinds():
         # nn.InstanceNorm2d at ITS DEFAULTS: affine=False, so no `weight`,
         # and track_running_stats=False, so no `running_mean` either. A
         # perfectly valid normaliser that exposes its channel count only as
-        # `num_features` — the latent gap review on model-zoo#251.
+        # `num_features` — the latent gap review on (internal ref).
         "InstanceNorm2d(defaults)": nn.InstanceNorm2d(64),
         "BatchNorm2d": nn.BatchNorm2d(64),
         "BatchNorm2d(eps=1e-3)": nn.BatchNorm2d(64, eps=1e-3),

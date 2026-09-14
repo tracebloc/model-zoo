@@ -680,7 +680,7 @@ def test_the_declared_image_size_is_the_published_resolution():
 
 
 def test_the_declared_image_size_is_wired_into_the_transform():
-    """The #3058 half, and NOT redundant with the test above — each is
+    """The (internal ref) half, and NOT redundant with the test above — each is
     individually mutable-to-red, which is the trap-29 test. Measured off the
     BUILT model, never asserted from the source."""
     model = MODULE.MyModel(3)
@@ -1080,7 +1080,7 @@ def test_the_giou_term_decides_the_match_where_l1_cannot():
     on the negative term instead of the positive. That made the class term
     1.77x weaker than the loss it is supposed to mirror (measured: class delta
     0.245 swapped vs 0.434 correct), which is what let a 0.324 GIoU gap
-    outweigh it. Correcting the alpha (model-zoo#246, Bugbot) flipped this test
+    outweigh it. Correcting the alpha ((internal ref), Bugbot) flipped this test
     to proposal 1.
     
     So the assertion was right and the MARGIN depended on the bug: not a
@@ -1254,7 +1254,7 @@ def test_the_dynamic_interaction_builds_exactly_two_blocks():
     guard is what keeps the removal honest, by pinning the structural fact to
     the built module instead of to a name.
 
-    Caught in review on model-zoo#246 as the "constant that lies" shape.
+    Caught in review on (internal ref) as the "constant that lies" shape.
     """
     module = _module()
     model = _small_model()

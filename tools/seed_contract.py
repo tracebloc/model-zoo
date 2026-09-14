@@ -83,7 +83,7 @@ def cmd_check(zoo: Path, verdict: Path) -> int:
     quietly wrong -- after which a seed either carries head weights it should
     not or excludes keys that no longer exist. That is the failure this whole
     contract exists to remove, coming back through the declaration instead of
-    the load (Lukas, model-zoo#217).
+    the load (Lukas, (internal ref)).
 
     So the derivation is the CHECK, not the authoring step.
 
@@ -134,7 +134,7 @@ def cmd_check(zoo: Path, verdict: Path) -> int:
 
         derived = tuple(record["prefixes"])
         if declared is None:
-            # NOT FATAL, AND THE REASON IS SCOPE (Bugbot, model-zoo#217).
+            # NOT FATAL, AND THE REASON IS SCOPE (Bugbot, (internal ref)).
             #
             # Having a head and shipping a hosted SEED are different things. The
             # contract binds templates whose seed is hosted; the rest of the
@@ -252,7 +252,7 @@ def cmd_strip(zoo: Path, weights: Path, dest: Path, dry_run: bool) -> int:
 
     # ONE resolver, shared with verify_backbone_seeds — a stem is not unique
     # (`bert_base_uncased` ships in two categories) and `.setdefault()` used to
-    # let one silently win (Bugbot, model-zoo#217).
+    # let one silently win (Bugbot, (internal ref)).
     index = build_index(zoo)
 
     entries: Dict[str, Dict] = {}

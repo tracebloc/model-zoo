@@ -751,7 +751,7 @@ def test_the_quality_target_comes_from_the_refined_box(vf, built):
     )
 
 
-# --- review findings on model-zoo#239 ---------------------------------------
+# --- review findings on (internal ref) ---------------------------------------
 
 
 def test_the_two_box_supervisions_are_separate(vf):

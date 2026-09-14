@@ -1,7 +1,7 @@
 """GFL — Generalized Focal Loss (Li et al., NeurIPS 2020) on a ResNet-50-FPN backbone. GFL makes two changes to the one-stage dense detector and both are about what the network is asked to predict rather than how it is built. Classification predicts localisation *quality* — the IoU the box will achieve — as a continuous target, which removes the separate centre-ness/IoU branch and the train/test misalignment that came with it. Box regression predicts a discrete *distribution* over each edge distance instead of a single number, which lets the network express uncertainty about an ambiguous boundary. Assignment is ATSS, so this is the ``atss_resnet`` template plus a different head and different losses.
 
 Offline variant: the architecture is built with ``weights=None`` throughout, so
-nothing is fetched from ``download.pytorch.org`` — the #199 egress lockdown
+nothing is fetched from ``download.pytorch.org`` — the (internal ref) egress lockdown
 blocks it — and the template constructs anywhere, network or not. No seed is
 hosted for this template yet, so it random-initialises and there is
 no weight file — upload with ``weights=False``::
@@ -595,7 +595,7 @@ class _GFL(RetinaNet):
 def MyModel(num_classes=output_classes):
     num_classes = num_classes + 1  # 1 for background
 
-    # weights=None: architecture only, no download (the #199 egress lockdown
+    # weights=None: architecture only, no download (the internal ref egress lockdown
     # blocks download.pytorch.org). GroupNorm and
     # trainable_layers=3 match the rest of this family. GroupNorm, not
     # FrozenBatchNorm2d: frozen BN answers the federated-averaging problem --

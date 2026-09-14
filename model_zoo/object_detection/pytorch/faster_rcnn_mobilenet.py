@@ -1,7 +1,7 @@
 """Faster R-CNN with a MobileNetV3-Large FPN backbone. The edge-class two-stage detector: the same Faster R-CNN head and RPN as ``faster_rcnn_resnet.py`` over a backbone roughly an order of magnitude cheaper, for federated clients whose hardware cannot carry a ResNet-50.
 
 Offline variant: the architecture is built with ``weights=None``, so nothing
-is fetched from ``download.pytorch.org`` — the #199 egress lockdown blocks it
+is fetched from ``download.pytorch.org`` — the (internal ref) egress lockdown blocks it
 — and the template constructs anywhere, network or not. No seed is hosted for
 this template yet, so it random-initialises and there is no weight file:
 upload with ``weights=False``::
@@ -9,7 +9,7 @@ upload with ``weights=False``::
     user.upload_model("faster_rcnn_mobilenet", weights=False)
 
 Hosting the torchvision COCO tensors as a tracebloc model-store seed (the
-#1499 pattern: a matched ``<stem>_weights.pkl`` prepped by
+(internal ref) pattern: a matched ``<stem>_weights.pkl`` prepped by
 ``tools/prep_offline_weights.py`` and strict-loaded after ``MyModel()`` has
 built the architecture) is follow-up work, not part of this roster addition.
 Until a dump is staged, ``tools/check_dump_coverage.py`` classifies this file

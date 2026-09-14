@@ -1,7 +1,7 @@
 """CenterNet — "Objects as Points" (Zhou et al., 2019) on a ResNet-50-FPN backbone. The simplest detector in the roster and the only NMS-free one: an object is a peak in a per-class heatmap, and its box is two more numbers read off at that peak. No anchors, no assignment step, no proposal stage, no non-maximum suppression — a 3x3 max-pool that keeps local maxima is the entire duplicate-removal mechanism. That makes it an unusually good federated baseline (few hyperparameters to disagree about across clients) and the clearest teaching example of a dense detector.
 
 Offline variant: the architecture is built with ``weights=None`` throughout, so
-nothing is fetched from ``download.pytorch.org`` — the #199 egress lockdown
+nothing is fetched from ``download.pytorch.org`` — the (internal ref) egress lockdown
 blocks it — and the template constructs anywhere, network or not. No seed is
 hosted for this template yet, so it random-initialises and there is
 no weight file — upload with ``weights=False``::
@@ -110,7 +110,7 @@ license = "BSD-3-Clause"
 image_size = 512
 # A stride-4 map at 512px is 128x128 = 16k locations with only three thin heads
 # on top, so this is lighter than the 800px pyramid templates despite the higher
-# resolution. OD ships no SDK shape-probe (#270), so the value is taken at face
+# resolution. OD ships no SDK shape-probe (internal ref), so the value is taken at face
 # value and chosen conservatively.
 batch_size = 8
 output_classes = 12
@@ -506,7 +506,7 @@ class CenterNet(nn.Module):
 def MyModel(num_classes=output_classes):
     num_classes = num_classes + 1  # 1 for background
 
-    # weights=None: architecture only, no download (the #199 egress lockdown
+    # weights=None: architecture only, no download (the internal ref egress lockdown
     # blocks download.pytorch.org). GroupNorm and
     # trainable_layers=3 match the rest of this family. GroupNorm, not
     # FrozenBatchNorm2d: frozen BN answers the federated-averaging problem --

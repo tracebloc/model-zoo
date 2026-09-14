@@ -254,7 +254,7 @@ def _apply_scale(module, scale) -> None:
 #:   YOLOv10n summary: 385 layers, 2775520 parameters, 2775504 gradients, 8.7 GFLOPs
 #:   YOLOv10s summary: 402 layers, 8128272 parameters, 8128256 gradients
 #:
-#: The n line is quoted verbatim from THU-MIG/yolov10 issue #226; both were
+#: The n line is quoted verbatim from THU-MIG/yolov10 (internal ref); both were
 #: reproduced independently against the THU-MIG fork at commit 453c6e38 and
 #: against ultralytics==8.4.138, which agree to the parameter.
 #:
@@ -3385,7 +3385,7 @@ def guard_constructs_with_no_network(module) -> None:
             raise AssertionError(
                 f"{module.__name__}: construction or a forward pass tried to "
                 f"reach the network — {error}. This template is written from "
-                f"scratch so that nothing is fetched; the #199 egress lockdown "
+                f"scratch so that nothing is fetched; the (internal ref) egress lockdown "
                 f"means a fetch is an edge-only failure, invisible on a warm "
                 f"local cache."
             ) from error

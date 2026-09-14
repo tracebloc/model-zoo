@@ -647,7 +647,7 @@ def test_the_declared_image_size_is_the_published_resolution():
 
 
 def test_the_declared_image_size_is_wired_into_the_transform():
-    """The #3058 half, and it is NOT redundant with the test above — each is
+    """The (internal ref) half, and it is NOT redundant with the test above — each is
     individually mutable-to-red, which is the trap-29 test.
 
     Mutating ``image_size`` alone moves both sides here and is caught by the

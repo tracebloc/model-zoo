@@ -1,7 +1,7 @@
 """VarifocalNet (VFNet, Zhang et al., CVPR 2021) on a ResNet-50-FPN backbone. VFNet is the roster's answer to a specific question: given that a dense detector's ranking should reflect localisation quality, how should the classifier be *trained* to produce that ranking, and how can the box it is ranking be made good enough to rank? Two answers, and they are independent contributions — the **Varifocal Loss**, which is asymmetric where focal loss is symmetric, and **star-shaped box refinement**, which spends one deformable convolution sampling the box a location already predicted and correcting it.
 
 Offline variant: the architecture is built with ``weights=None`` throughout, so
-nothing is fetched from ``download.pytorch.org`` — the #199 egress lockdown
+nothing is fetched from ``download.pytorch.org`` — the (internal ref) egress lockdown
 blocks it — and the template constructs anywhere, network or not. No seed is
 hosted for this template yet, so it random-initialises and there is
 no weight file — upload with ``weights=False``::
@@ -330,7 +330,7 @@ class _VFNetHead(nn.Module):
             # initial estimate gets trained to make the refinement's job easy
             # rather than to be a good first estimate in its own right. That is
             # not a deviation this template set out to make — it was an
-            # oversight, caught in review on model-zoo#239 — and given every
+            # oversight, caught in review on (internal ref) — and given every
             # other gradient path here is deliberately controlled, leaving it
             # undocumented would be the worst of the three options.
             #
@@ -616,7 +616,7 @@ class _VFNet(RetinaNet):
 def MyModel(num_classes=output_classes):
     num_classes = num_classes + 1  # 1 for background
 
-    # weights=None: architecture only, no download (the #199 egress lockdown
+    # weights=None: architecture only, no download (the internal ref egress lockdown
     # blocks download.pytorch.org). GroupNorm and
     # trainable_layers=3 match the rest of this family. GroupNorm, not
     # FrozenBatchNorm2d: frozen BN answers the federated-averaging problem --

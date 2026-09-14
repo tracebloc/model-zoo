@@ -1,7 +1,7 @@
 """DeepLab semantic segmentation. Atrous convolutions give multi-scale context without losing resolution.
 
 Builds RANDOM-INIT: both `weights` and `weights_backbone` are None, so nothing is
-fetched at construction (#289). Accuracy comes from training or from a seed loaded
+fetched at construction (internal ref). Accuracy comes from training or from a seed loaded
 after construction -- this file promises the architecture, not a starting quality.
 """
 import torch.nn as nn

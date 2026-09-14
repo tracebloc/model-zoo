@@ -35,7 +35,7 @@ with grad norm going to inf, where GroupNorm on the same script and seeds gave
 GroupNorm normalises per sample, so it is correct with no checkpoint and adds
 no running statistics for the averaging service to ship each federated round
 -- both halves of the constraint that produced frozen BN in the first place.
-This is the same conversion model-zoo#262 applied to twelve OD templates; the
+This is the same conversion (internal ref) applied to twelve OD templates; the
 two keypoint templates carrying the identical line were outside that PR's
 directory scan.
 

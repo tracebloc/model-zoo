@@ -1,7 +1,7 @@
 """Faster R-CNN with a ConvNeXt-Small backbone (Liu et al., CVPR 2022). ConvNeXt modernises the plain ResNet stack with depthwise 7x7 convolutions, an inverted bottleneck and LayerNorm, matching transformer accuracy at convolutional cost. A large accuracy step over the ResNet-50 the zoo's other two-stage templates use, at a similar parameter budget.
 
 Offline variant: the architecture is built with ``weights=None`` throughout, so
-nothing is fetched from ``download.pytorch.org`` — the #199 egress lockdown
+nothing is fetched from ``download.pytorch.org`` — the (internal ref) egress lockdown
 blocks it — and the template constructs anywhere, network or not. No seed is
 hosted for this template yet, so it random-initialises and there is
 no weight file — upload with ``weights=False``::
@@ -75,7 +75,7 @@ license = "BSD-3-Clause"
 # this model actually runs at. (Not overridden here: the whole roster shares
 # the torchvision default, and a per-template override is a silent divergence.)
 image_size = 800
-# Conservative on purpose. OD ships no SDK shape-probe (#270), so this value is
+# Conservative on purpose. OD ships no SDK shape-probe (internal ref), so this value is
 # taken at face value with nothing to correct it, and a ConvNeXt-Small backbone
 # at 800px is the memory driver rather than the detector heads. 2 matches the
 # other 800px two-stage templates in the roster.
@@ -87,7 +87,7 @@ category = "object_detection"
 def MyModel(num_classes=output_classes):
     num_classes = num_classes + 1  # 1 for background
 
-    # weights=None: architecture only, no download (the #199 egress lockdown
+    # weights=None: architecture only, no download (the internal ref egress lockdown
     # blocks download.pytorch.org). ConvNeXt's ImageNet weights are the only
     # thing this argument would fetch; the detector heads are random-init
     # either way.

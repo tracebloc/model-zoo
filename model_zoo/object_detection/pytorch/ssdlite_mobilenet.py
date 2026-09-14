@@ -1,7 +1,7 @@
 """SSDLite320 with a MobileNetV3-Large backbone (Howard et al., ICCV 2019). The smallest detector in the zoo — separable convolutions throughout the head, a reduced-tail backbone and a 320px input. The mobile end of the accuracy/latency curve, and the natural choice for a federated client with no GPU worth the name.
 
 Offline variant: the architecture is built with ``weights=None``, so nothing
-is fetched from ``download.pytorch.org`` — the #199 egress lockdown blocks it
+is fetched from ``download.pytorch.org`` — the (internal ref) egress lockdown blocks it
 — and the template constructs anywhere, network or not. No seed is hosted for
 this template yet, so it random-initialises and there is no weight file:
 upload with ``weights=False``::
@@ -9,7 +9,7 @@ upload with ``weights=False``::
     user.upload_model("ssdlite_mobilenet", weights=False)
 
 Hosting the torchvision COCO tensors as a tracebloc model-store seed (the
-#1499 pattern: a matched ``<stem>_weights.pkl`` prepped by
+(internal ref) pattern: a matched ``<stem>_weights.pkl`` prepped by
 ``tools/prep_offline_weights.py`` and strict-loaded after ``MyModel()`` has
 built the architecture) is follow-up work, not part of this roster addition.
 What makes it possible is the key-exactness recorded below — until a dump is
@@ -31,7 +31,7 @@ equals its maximum (6), so both paths train the whole backbone.
 ``weights_backbone=None`` is NOT optional here: the builder defaults it to
 the ``MobileNet_V3_Large_Weights`` ImageNet enum, so a bare
 ``ssdlite320_mobilenet_v3_large()`` call both fetches from
-``download.pytorch.org`` — which the #199 egress lockdown blocks — and, by
+``download.pytorch.org`` — which the (internal ref) egress lockdown blocks — and, by
 flipping ``reduce_tail`` to False, silently builds a DIFFERENT architecture
 from the one the COCO checkpoint (and so any future seed) matches.
 

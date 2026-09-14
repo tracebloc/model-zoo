@@ -64,7 +64,7 @@ from seed_index import (  # noqa: E402 — sibling tool module, same directory
     zoo_root,
 )
 
-#: The phrase every #1499-migrated template carries in its docstring. Not a
+#: The phrase every (internal ref)-migrated template carries in its docstring. Not a
 #: clever heuristic — it is the one sentence the migration wrote into all 57,
 #: and `check_migration_marker` below keeps it honest by failing when the count
 #: of markers and the count of classified templates disagree.

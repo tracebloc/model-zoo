@@ -712,7 +712,7 @@ def test_the_template_declares_the_family_contract():
         assert banned not in source, f"{banned!r} is not permitted in a cv template"
 
 
-# --- review findings on model-zoo#238 ---------------------------------------
+# --- review findings on (internal ref) ---------------------------------------
 #
 # Two real defects, both found by review and by Bugbot independently, and both
 # quiet: they degrade supervision rather than breaking training. The gap that
@@ -793,7 +793,7 @@ def test_the_alignment_target_comes_from_the_matched_object(tood):
     ``normalised.max(dim=0)`` for the alignment decouples the two, so an anchor
     selected by both a well-predicted object and a degenerate one gets the
     degenerate one's hard 1.0 written onto the *good* object's channel. Review
-    finding on model-zoo#238.
+    finding on (internal ref).
 
     An earlier version of this test used the real model's anchors with two
     overlapping objects and SURVIVED the mutation, because neither object ended
