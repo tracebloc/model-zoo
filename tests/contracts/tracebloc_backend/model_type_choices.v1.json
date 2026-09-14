@@ -1,0 +1,127 @@
+{
+  "version": "1",
+  "description": "The complete model_type vocabulary the tracebloc platform accepts, across ALL task types. metaApi.models.Experiment.model_type is a Django CharField with choices=MODEL_TYPE_CHOICES, so a value outside this set is refused by the ChoiceField at experiment creation with a 400 -- before the model file is looked at, and with nothing in the error naming the template as the cause. Published here so the model-zoo can assert in its own CI that every template's declared model_type is one the platform can actually store (model-zoo#273). This is a SUPERSET of the per-task-type routing vocabularies: object_detection_families.v2.json narrows the OD subset to {rcnn, torchvision_detection, yolo}, and the engine's keypoint strategy routes only {rcnn, heatmap} specially. Membership here means STORABLE, not necessarily well-routed for a given category.",
+  "owner": "backend -- metaApi/models/Experiment.py (Experiment.MODEL_TYPE_CHOICES)",
+  "generated_from": {
+    "repo": "backend",
+    "path": "metaApi/models/Experiment.py",
+    "ref": "daa607e5c7e1d051eb4ee7b8ffcd023f3b5c0371",
+    "ref_branch": "develop",
+    "ref_date": "2026-09-07",
+    "method": "ast.parse of Experiment.MODEL_TYPE_CHOICES, resolving each choice's MODEL_TYPE_* constant to its string literal. Derived mechanically, never hand-transcribed -- a hand-copied list is how the OD vocabulary drift shipped."
+  },
+  "blank_is_accepted": true,
+  "blank_note": "The field is blank=True/null=True and ExperimentSerializer.validate_model_type coerces a falsy value to 'default', so an empty declaration is STORED, not refused. Most zoo templates declare \"\". Note this is only about the backend: the engine's keypoint _infer_model_type falls an empty value through to an RCNN_FAMILY fallback, so \"\" is not automatically the right declaration for a keypoint model.",
+  "choices": [
+    {
+      "constant": "MODEL_TYPE_DEFAULT",
+      "value": "default",
+      "label": "Default"
+    },
+    {
+      "constant": "MODEL_TYPE_R_CNN",
+      "value": "rcnn",
+      "label": "RCNN Model"
+    },
+    {
+      "constant": "MODEL_TYPE_YOLO",
+      "value": "yolo",
+      "label": "YOLO Model"
+    },
+    {
+      "constant": "MODEL_TYPE_TORCHVISION_DETECTION",
+      "value": "torchvision_detection",
+      "label": "Torchvision Detection Model"
+    },
+    {
+      "constant": "MODEL_TYPE_HEATMAP",
+      "value": "heatmap",
+      "label": "Heatmap Model"
+    },
+    {
+      "constant": "MODEL_TYPE_DIRECT",
+      "value": "direct",
+      "label": "Direct Regression Model"
+    },
+    {
+      "constant": "MODEL_TYPE_LINEAR",
+      "value": "linear",
+      "label": "Linear Model"
+    },
+    {
+      "constant": "MODEL_TYPE_TREE",
+      "value": "tree",
+      "label": "Tree Model"
+    },
+    {
+      "constant": "MODEL_TYPE_ENSEMBLE",
+      "value": "ensemble",
+      "label": "Ensemble Model"
+    },
+    {
+      "constant": "MODEL_TYPE_NAIVE",
+      "value": "naive",
+      "label": "Naive Bayes Model"
+    },
+    {
+      "constant": "MODEL_TYPE_NN",
+      "value": "neural_network",
+      "label": "Neural Model"
+    },
+    {
+      "constant": "MODEL_TYPE_SVM",
+      "value": "svm",
+      "label": "SVM Model"
+    },
+    {
+      "constant": "MODEL_TYPE_CLUSTERING",
+      "value": "clustering",
+      "label": "Clustering Model"
+    },
+    {
+      "constant": "MODEL_TYPE_XGB",
+      "value": "xgboost",
+      "label": "XGBoost Model"
+    },
+    {
+      "constant": "MODEL_TYPE_CGB",
+      "value": "catboost",
+      "label": "Cat Boost Model"
+    },
+    {
+      "constant": "MODEL_TYPE_LGB",
+      "value": "lightgbm",
+      "label": "Light GBM Model"
+    }
+  ],
+  "accepted_model_type_values": [
+    "catboost",
+    "clustering",
+    "default",
+    "direct",
+    "ensemble",
+    "heatmap",
+    "lightgbm",
+    "linear",
+    "naive",
+    "neural_network",
+    "rcnn",
+    "svm",
+    "torchvision_detection",
+    "tree",
+    "xgboost",
+    "yolo"
+  ],
+  "not_accepted": {
+    "description": "Values a producer has actually shipped that this ChoiceField refuses. Listed explicitly so a consumer's check reports them by name rather than as an anonymous miss.",
+    "examples": [
+      "transformer",
+      "hf_transformer"
+    ],
+    "notes": {
+      "transformer": "Declared by three keypoint templates (sapiens, vitpose, vitpose_plus) until model-zoo#273. Never a member of MODEL_TYPE_CHOICES; an experiment built from any of the three was refused with a 400.",
+      "hf_transformer": "WAS a choice and is not one now -- (internal ref) retired the DETR/HuggingFace detection family and removed it from MODEL_TYPE_CHOICES. Kept here so a template reintroducing it fails by name."
+    }
+  },
+  "matching": "Django's ChoiceField compares the stored string exactly. The engine's resolvers lowercase and strip before their own lookups, so a consumer check that normalises the same way is no weaker on values already lowercase -- every value above is."
+}

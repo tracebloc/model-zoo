@@ -1,0 +1,73 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main, develop]
+  push:
+    branches: [main, develop]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  ruff:
+    timeout-minutes: 10
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: .github/requirements/lint.txt
+      - run: pip install -r .github/requirements/lint.txt
+      # `make lint`. The RULE SELECTION was the duplicated part:
+      # `--select=F401,F821,E9` was written out here and again in the Makefile,
+      # so widening the set in one place would have left the other checking the
+      # narrower one — and a lint job that silently checks less than the
+      # contributor's pre-push hook is the wrong way round.
+      #
+      # The pin is already single-source and stays that way: lint.txt declares
+      # ruff==0.15.20, this step installs it, and `make setup` installs the same
+      # file.
+      - run: make lint
+
+  test-pytorch:
+    timeout-minutes: 30
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: .github/requirements/pytorch.txt
+      - run: pip install -r .github/requirements/pytorch.txt
+      - run: pytest tests/ -v
+
+  test-sklearn:
+    timeout-minutes: 30
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: .github/requirements/sklearn.txt
+      - run: pip install -r .github/requirements/sklearn.txt
+      - run: pytest tests/ -v
+
+  test-survival:
+    timeout-minutes: 30
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: .github/requirements/survival.txt
+      - run: pip install -r .github/requirements/survival.txt
+      - run: pytest tests/ -v
