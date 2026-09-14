@@ -1,0 +1,520 @@
+# GENERATED FILE -- DO NOT EDIT BY HAND.
+#
+# Self-contained copy of the reusable workflow `.github/workflows/set-pr-status.yml`
+# (blob 9b17d4baf12a291c1ab79758017d1520ff801e4f) folded with the private source repo's own caller of it,
+# `.github/workflows/set-pr-status-caller.yml` (blob cc4bdf86add1f96e79ee3a1b3c7ae426e97b003f), for a PUBLIC repo: GitHub lets a
+# public repo `uses:` a reusable workflow only from a public repo, and the
+# reusables live in the private source repo. So this file carries the
+# reusable's jobs inline -- the triggers are the caller's; every `inputs.*` is
+# resolved to a literal (repo-inventory.yml's `caller_inputs` floor, else the
+# reusable's default -- the caller's own toolchain choices are NOT copied); the
+# App-token secrets are named directly; a job whose condition resolves to a
+# constant false is omitted; and each job's display name keeps the
+# `set-status / ` prefix so the check contexts branch protection requires do
+# not change. Scripts are still fetched from the private source repo at run time with a
+# read-only App installation token; on a fork PR that token cannot be minted
+# (no secrets), so the checkout fails closed rather than running untrusted input.
+#
+# PUBLIC SURFACE. This file is delivered to a public repo. Exactly what was
+# scrubbed, and what was not:
+#
+#   * COMMENT TEXT -- a whole-line YAML `#` comment, a `#`-first line of a `run:`
+#     script that is not inside a heredoc, and this header -- was scrubbed: every
+#     private-repo issue reference, org-qualified private repo name, RFC id and
+#     tenant name became `(internal ref)`, and the private repo this file was
+#     generated from became `the private source repo`.
+#   * CODE -- everything else: commands, heredoc bodies, strings a workflow posts,
+#     `repository:` values, URLs, step names -- was NOT edited. An internal
+#     reference there refuses the render (it is a defect in the source), with one
+#     exception: the name of the private repo this file was generated from, which
+#     the code states verbatim because the workflow checks that repo out and
+#     fetches its scripts from it at run time. Its bare, unqualified name is not
+#     scrubbed anywhere.
+#
+# Regenerate:  python3 scripts/render-self-contained.py          (in the private source repo)
+# Verify:      python3 scripts/render-self-contained.py --check  (make selftest-self-contained)
+#
+# The comments below are the reusable's own and describe the reusable; where
+# they mention `inputs.*` or callers, read them as history.
+
+name: Set PR card Status on project
+
+# Reusable workflow. Called from each active repo on PR open / reopen /
+# draft-toggle / title-or-body edit (`edited`, added under (internal ref)
+# so the `closing-ref` job re-runs when the fields it reads change).
+# Moves the PR's card to the right Status:
+#   - draft PR  → In progress
+#   - non-draft → Code review
+#
+# TWO JOBS, and the second one is here on purpose ((internal ref)).
+#
+#   set-status    writes the card's Status (below)
+#   closing-ref   checks that a PR whose TITLE names a ticket actually LINKS it
+#
+# WHY closing-ref LIVES HERE rather than in a new reusable or in code-quality.yml.
+# Three constraints, and this file is the only host that satisfies all three:
+#
+#   1. It needs a token that can read the PR *and* an issue in ANOTHER repo --
+#      almost every house ticket is in `(internal ref)`, and nearly every repo
+#      is private. This file already mints an ORG-SCOPED installation token for
+#      the `tracebloc-release-train` App (measured 2026-08-23: `issues: write`,
+#      `pull_requests: write`, `repository_selection: all`), and every one of its
+#      19 callers already passes `secrets: inherit`. `code-quality.yml` cannot:
+#      it is deliberately secretless and declares `contents: read` only, and a
+#      called workflow may not hold more than its caller grants -- adding
+#      `pull-requests: read` there would fail all 16 callers at startup with no
+#      jobs, before any of them could be updated.
+#   2. It must run on the SAME event that puts a card in `Code review`, because
+#      the convention it enforces is what makes that card move again later. That
+#      event is this file's trigger set by construction.
+#   3. A NEW reusable would need a `repo-inventory.yml` row for all 19 repos, and
+#      that file is guarded by `conformance-gate.yml` -- a required check that
+#      every other merge invalidates. A job in an existing reusable needs no
+#      inventory row at all: the inventory tracks CALLERS, one row per reusable.
+#
+# NOT A REQUIRED STATUS CHECK ANYWHERE, measured before landing: no repo's
+# protection or rulesets name `set-status`, and `closing-ref` is new. So a
+# finding here is loud and blocks nothing -- which is the point while the fleet
+# is still non-compliant (measured 2026-08-23: of the last 25 merged PRs in each
+# of 19 repos, 44 pass, 192 would report a finding, 239 name no ticket at all).
+# Arming it as a required context is a separate, later decision that belongs
+# after that backlog, not in the change that introduces the check.
+
+on:
+  pull_request:
+    # `edited` is load-bearing, not decoration ((internal ref)). The
+    # `closing-ref` job decides its verdict from the PR TITLE and the PR BODY, and
+    # `edited` is the ONLY event GitHub fires when either changes. Without it the
+    # two fields the gate reads are the two fields that can change without
+    # re-running it, which is a bypass rather than a gap: open a PR titled
+    # `chore: tidy up`, the gate records NOTHING_NAMED and goes green, then
+    # retitle it to `fix(1234): …` with nothing linked -- no event fires, the
+    # green stands, and the PR merges having defeated the check.
+    #
+    # It also makes the remediation usable at all. Retitling or editing a body to
+    # SATISFY the gate did not re-run it either, so a red persisted on a PR that
+    # now complied: 20 sync PRs had to be cleared with 20 manual `gh run rerun`
+    # calls ((internal ref)), because the only in-band re-trigger was closing and
+    # reopening someone else's PR.
+    #
+    # Same one-word fix, same reason, as `fr-gate-caller.yml` ((internal ref)): a
+    # gate whose verdict depends on a mutable field must re-run when that field
+    # mutates.
+    types: [opened, reopened, ready_for_review, converted_to_draft, edited]
+
+# ONE RUN PER PR WINS, AND IT IS THE NEWEST ((internal ref)).
+#
+# Every trigger this file answers can fire twice in quick succession -- a
+# title fixed straight after a body edit, a ready_for_review immediately
+# after an edit -- and `edited` made that ordinary rather than rare: the
+# 19-PR sweep for (internal ref) armed `edited` on all 20 callers, so what
+# was latent on one repo is now live fleet-wide.
+#
+# Without a group the runs race and the LOSER writes last: an older
+# evaluation of the title/body overwrites a newer one, and the card (or the
+# closing-ref verdict) settles on stale input. Nothing errors; the board is
+# simply wrong, which is the failure mode this whole workflow exists to
+# prevent one level down.
+#
+# `github.ref` is `refs/pull/<n>/merge` on these events, so the group is
+# already per-PR; `github.workflow` is the CALLER's workflow name, which
+# keeps two different callers in one repo apart. Same shape as
+# `rfcs`'s code-quality-caller.yml, deliberately -- one house pattern.
+#
+# QUEUE, DO NOT CANCEL. The previous revision said "CANCELLING IS SAFE HERE,
+# and that is measured rather than assumed ... GitHub surfaces the newest per
+# context ... so a cancelled older run blocks nothing." Half of that holds and
+# the half that does not is the half that matters.
+#
+# `gh pr checks` does dedupe to the newest per context, which is where the
+# claim came from. `statusCheckRollup.state` does NOT: it aggregates
+# WORST-OF across every check run on the commit, so one CANCELLED run sits
+# beside three SUCCESS runs of the same name and the rollup reports FAILURE.
+# That is what the PR's red X renders from, and what every tool reading the
+# rollup sees -- including our own `ship.py` scan.
+#
+# Measured on `.github#387` (2026-08-30, four runs at 07:39 -- the train
+# creates the PR, then edits the body, and `edited` cancelled the in-flight
+# `opened` run):
+#
+#   mergeStateStatus=BLOCKED  rollup=FAILURE
+#   EVERY non-SUCCESS context:
+#      set-status / set-status  = CANCELLED
+#      set-status / closing-ref = CANCELLED
+#      quality / format         = SKIPPED
+#
+# Nothing else was non-green. "Blocks nothing" was right about MERGING -- these
+# are not required contexts -- and wrong about what a human sees. A red X that
+# is not a real failure is not cosmetic: on 2026-08-28 two reviewers withheld
+# approval over exactly this shape of stale red (@saqlainsyed007 on .github#369,
+# @aptracebloc on client#890), and both were reading the evidence correctly.
+#
+# Keeping the GROUP still solves what the group was for. With
+# `cancel-in-progress: false` a second run goes PENDING until the first
+# finishes rather than running beside it, so the newer evaluation still writes
+# last and the card cannot settle on stale input.
+#
+# THAT IS ORDERING WITHIN THE GROUP, AND ONLY THAT (@saadqbal on #388). An
+# earlier draft said "nothing is lost", which is too strong. Cancelling also
+# TRUNCATED a superseded run; queuing guarantees it completes. Both the
+# `if: state == 'open'` condition and the draft read come off the FROZEN event
+# payload, so an `edited` run that lands after the closure router has already
+# moved a merged card can still drag it back to `Code review`. Cancelling
+# narrowed that window by accident, not by design, and it paid for it with a red
+# X on every superseded run. Queuing is the better trade, not a free one.
+#
+# RESIDUAL, stated rather than glossed: GitHub cancels a previously PENDING run
+# when a third event supersedes it, so a burst of 3+ rapid edits can still
+# leave one CANCELLED entry. The create-then-edit the train actually does is
+# two events, which this removes entirely.
+concurrency:
+  group: set-pr-status-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  # ONLY WHILE THE PR IS OPEN ((internal ref)). This condition is a
+  # DIRECT CONSEQUENCE of adding `edited` to the callers, and it is not optional.
+  #
+  # Before `edited`, every trigger this workflow had -- opened, reopened,
+  # ready_for_review, converted_to_draft -- was reachable only on an OPEN PR, so
+  # an unconditional write to `Code review` was always correct. `edited` is not:
+  # GitHub fires it when a MERGED PR's title or body is edited, and this job
+  # writes Status unconditionally. Editing a typo in a shipped PR's description
+  # would therefore drag its card from `Prod` back to `Code review` -- a
+  # DEMOTION, in the one file in the fleet whose board writes are not already
+  # monotonic (`advance-deploy-env.yml` compares pipeline rank; this job does
+  # not, because until now it could not need to).
+  #
+  # Guarded by state rather than by event name on purpose: `if: github.event.action
+  # != 'edited'` would have kept the demotion out but also disabled the board write
+  # for a DRAFT toggled by an edit, and it states the exception instead of the rule.
+  # The rule is that this job describes an open PR's review state.
+  set-status:
+    name: set-status / set-status
+    if: ${{ github.event.pull_request.state == 'open' }}
+    runs-on: ubuntu-slim
+    steps:
+      - name: Determine target Status
+        id: target
+        run: |
+          if [ "${{ github.event.pull_request.draft }}" = "true" ]; then
+            echo "status_name=In progress" >> "$GITHUB_OUTPUT"
+          else
+            echo "status_name=Code review" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Board writes authenticate as the tracebloc-release-train App, not a human's
+      # PAT ((internal ref)). The App's installation budget is separate from any
+      # person's interactive `gh` usage and does not vanish when someone is
+      # offboarded -- `PROJECTS_KANBAN_TOKEN` was ONE user PAT shared by every
+      # caller in the fleet, both crons, and that person's own shell, and it was
+      # measured exhausted in practice (client-runtime run 31776053792, exit 1).
+      #
+      # `owner:` makes this an ORG-scoped installation token. Without it the token
+      # is scoped to the calling repository, which cannot write an org ProjectV2.
+      #
+      # NO FALLBACK TO THE PAT, deliberately. A fallback would make a broken App
+      # path look like a working migration, which is the exact failure class this
+      # work exists to remove. If the mint fails, this job fails.
+      - name: Mint an installation token
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.RELEASE_TRAIN_APP_ID }}
+          private-key: ${{ secrets.RELEASE_TRAIN_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          # SCOPED TO WHAT THIS JOB ACTUALLY DOES ((internal ref)). Without these
+          # it minted the App's ENTIRE permission set -- contents:write,
+          # issues:write, administration:read and the rest -- across every repo
+          # the installation covers, on every PR event in the fleet. Of the four
+          # mints (internal ref) left, this one has the largest exposure purely
+          # because of how often it runs.
+          #
+          # DERIVED FROM THE CALLS BELOW rather than copied from a template:
+          #   organization.projectV2 { fields }     -> projects, read
+          #   repository.pullRequest.projectItems   -> pull-requests, read
+          #   updateProjectV2ItemFieldValue         -> projects, WRITE
+          #
+          # NO `issues` SCOPE: this job is PR-only (`github.event.pull_request`).
+          # The second mint in this file already carries `permission-issues:
+          # read` because the closing-ref job reads the linked ISSUE -- the two
+          # differ because their calls differ, not by oversight.
+          #
+          # A PASSING MINT IS NOT THE PROOF. `release-train/add-to-kanban.yml`
+          # records why: "a mint can succeed with a scope the board write then
+          # needs and lacks". The evidence is a card that actually moves.
+          permission-pull-requests: read
+          permission-organization-projects: write
+
+      - name: Update PR Status on project
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          ORG: ${{ 'tracebloc' }}
+          PROJECT_NUMBER: ${{ 2 }}
+          STATUS_NAME: ${{ steps.target.outputs.status_name }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO_FULL: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          REPO_NAME="${REPO_FULL#*/}"
+
+          # selftest:graphql-read-start  (byte-identical in every workflow that carries it)
+          # THE BODY DECIDES WHETHER A GraphQL READ SUCCEEDED, never the exit code
+          # alone. An HTTP 200 whose body carries `errors[]` (rate limit, partial
+          # payload, a NOT_FOUND on a sub-field) fed straight into `.data...nodes[]?`
+          # produces NOTHING, and nothing read as "not on the project" -- so the
+          # Item-closed automation could write Cancelled over shipped work
+          # (Bugbot on quickstart#5, (internal ref)). Empty and non-object bodies are
+          # refused for the same reason: a search over nothing finds nothing, and
+          # "found nothing" must never mean "absent". This function never
+          # whitelists an error type; the one benign NOT_FOUND is the caller's call.
+          #   $1  the raw payload   $2  what was being read (prefixes the message)
+          reject_graphql_errors() {
+            if ! jq -e 'type == "object"' >/dev/null 2>&1 <<< "$1"; then
+              echo "::error::$2: the response was not readable JSON (empty, truncated or not an object), so it cannot be shown to be error-free -- UNREADABLE, not absent" >&2
+              return 1
+            fi
+            if jq -e 'has("errors")' <<< "$1" >/dev/null 2>&1; then
+              echo "::error::$2: the response carries GraphQL errors[] ($(jq -r '[.errors[]? | ((.type // "?") + ": " + (.message // "?"))] | join("; ")' <<< "$1")) -- UNREADABLE, not absent" >&2
+              return 1
+            fi
+            return 0
+          }
+          # selftest:graphql-read-end
+
+          # shellcheck disable=SC2016  # the $names here are GraphQL variables, not shell - keep literal
+          PROJ=$(gh api graphql -f query='
+            query($org: String!, $num: Int!) {
+              organization(login: $org) {
+                projectV2(number: $num) {
+                  id
+                  fields(first: 50) {
+                    nodes {
+                      ... on ProjectV2SingleSelectField { id name options { id name } }
+                    }
+                  }
+                }
+              }
+            }' -F org="$ORG" -F num="$PROJECT_NUMBER")
+          reject_graphql_errors "$PROJ" "project #$PROJECT_NUMBER field read" || exit 1
+
+          PROJECT_ID=$(echo "$PROJ" | jq -r '.data.organization.projectV2.id')
+          STATUS_FIELD=$(echo "$PROJ" | jq -r '.data.organization.projectV2.fields.nodes[]
+            | select(.name=="Status") | .id')
+          STATUS_OPT=$(echo "$PROJ" | jq -r --arg s "$STATUS_NAME" '.data.organization.projectV2.fields.nodes[]
+            | select(.name=="Status") | .options[] | select(.name==$s) | .id')
+
+          # Wait briefly for the kanban auto-add workflow to register the PR on the project
+          for i in 1 2 3 4 5; do
+            # THE BODY DECIDES, WHATEVER THE EXIT CODE ((internal ref)). This used to
+            # pipe the response straight into jq, so an exit-0 body carrying
+            # `errors[]` (rate limit, partial payload) read as "not yet on
+            # project" and, after five such reads, as a card to ADD -- a write
+            # decided on a board nobody had read. An unreadable response aborts
+            # instead, as a non-zero exit always did here; the next PR event
+            # re-runs this step.
+            # shellcheck disable=SC2016  # the $names here are GraphQL variables, not shell - keep literal
+            if ! RESP=$(gh api graphql -f query='
+              query($org: String!, $repo: String!, $num: Int!) {
+                repository(owner: $org, name: $repo) {
+                  pullRequest(number: $num) {
+                    projectItems(first: 10) { nodes { id project { number } } }
+                  }
+                }
+              }' -F org="$ORG" -F repo="$REPO_NAME" -F num="$PR_NUMBER") \
+               || ! reject_graphql_errors "$RESP" "PR #$PR_NUMBER project-item lookup"; then
+              echo "::error::PR #$PR_NUMBER project-item lookup FAILED -- its board state is UNKNOWN, not absent, so nothing was added or written."
+              exit 1
+            fi
+            ITEM_ID=$(jq -r --arg n "$PROJECT_NUMBER" 'first(.data.repository.pullRequest.projectItems.nodes[]?
+                  | select(.project.number == ($n | tonumber)) | .id) // ""' <<<"$RESP")
+            if [ -n "$ITEM_ID" ] && [ "$ITEM_ID" != "null" ]; then break; fi
+            echo "PR not yet on project, waiting ($i/5)…"
+            sleep 5
+          done
+
+          # FAIL CLOSED ((internal ref)). This used to log the miss and `exit 0`, so a
+          # PR that lost the add-to-kanban race stayed at No Status behind a GREEN
+          # check -- nothing surfaced it, and the board's "no card sits at No Status"
+          # invariant was broken by the workflow that reports it upheld. (internal ref)
+          # lost that race by four seconds and sat unnoticed.
+          #
+          # THE MEASUREMENT THAT BUDGET WAS HELD OPEN FOR HAS ARRIVED ((internal ref)).
+          # The previous note kept the retry budget at 5 x 5s on purpose -- "widening
+          # it would hide how often the race is actually lost, and the point of
+          # failing closed is to find that out." The answer came back on 2026-08-27:
+          # `.github#361` and `#362` both lost it within seconds, and on `#362` the
+          # board ended in the exact state this job would have written. So the job's
+          # PURPOSE was achieved and only its VERDICT was wrong -- the worst shape a
+          # check can fail in, because nothing is broken and the habit it teaches is
+          # to merge past red.
+          #
+          # So END the race rather than widen the window. A bigger number would still
+          # be a guess, and a longer wait is still a wait on a sibling workflow that
+          # may simply never have run. This job already holds a token with
+          # `organization-projects: write`, and `addProjectV2ItemById` is IDEMPOTENT
+          # -- adding an item already on the board returns the existing item id -- so
+          # there is nothing here that add-to-kanban would duplicate. That workflow
+          # does exactly one thing (an `actions/add-to-project` step and nothing
+          # else), which is what makes taking it over in the missing case safe.
+          #
+          # STILL FAIL-CLOSED. "The card is missing" stays a real finding when it is
+          # real: if the PR cannot be resolved to a node, or the add does not come
+          # back with an item id, this goes RED exactly as before. What changed is
+          # only that "not yet" no longer reports as "missing".
+          if [ -z "$ITEM_ID" ] || [ "$ITEM_ID" = "null" ]; then
+            echo "card absent after 5 retries - adding it here rather than waiting on add-to-kanban"
+            # The node-id read's BODY is inspected before jq reduces it. Piped
+            # straight into `jq -r '... // empty'`, an exit-0 errors[] payload
+            # became an empty id and the refusal below named the wrong cause
+            # ("could not be resolved" for a rate limit). Same function as the
+            # reads above, then the reduction.
+            # shellcheck disable=SC2016  # the $names here are GraphQL variables, not shell - keep literal
+            NODE_RESP=$(gh api graphql -f query='
+              query($org: String!, $repo: String!, $num: Int!) {
+                repository(owner: $org, name: $repo) { pullRequest(number: $num) { id } }
+              }' -F org="$ORG" -F repo="$REPO_NAME" -F num="$PR_NUMBER" 2>&1) \
+              || { echo "::error::PR #$PR_NUMBER node-id read failed: $NODE_RESP" >&2; exit 1; }
+            reject_graphql_errors "$NODE_RESP" "PR #$PR_NUMBER node-id read" || exit 1
+            PR_NODE_ID=$(jq -r '.data.repository.pullRequest.id // empty' <<< "$NODE_RESP")
+            if [ -z "$PR_NODE_ID" ]; then
+              echo "::error::PR #$PR_NUMBER could not be resolved to a node id, so its card" \
+                   "cannot be added. Refusing to report a status nobody wrote."
+              exit 1
+            fi
+            # The add's BODY is read before the item id is taken from it: an exit-0
+            # response carrying errors[] has no item id to give, and must fail as
+            # a refused write, not fall through to "could not be added" as if the
+            # board had simply said no.
+            # shellcheck disable=SC2016  # the $names here are GraphQL variables, not shell - keep literal
+            ADD_RESP=$(gh api graphql -f query='
+              mutation($p: ID!, $c: ID!) {
+                addProjectV2ItemById(input: {projectId: $p, contentId: $c}) { item { id } }
+              }' -F p="$PROJECT_ID" -F c="$PR_NODE_ID" 2>&1) \
+              || { echo "::error::PR #$PR_NUMBER add-to-project write failed: $ADD_RESP" >&2; exit 1; }
+            reject_graphql_errors "$ADD_RESP" "PR #$PR_NUMBER add-to-project write" || exit 1
+            ITEM_ID=$(jq -r '.data.addProjectV2ItemById.item.id // empty' <<< "$ADD_RESP")
+          fi
+
+          if [ -z "$ITEM_ID" ] || [ "$ITEM_ID" = "null" ]; then
+            echo "::error::PR #$PR_NUMBER is not on project $PROJECT_NUMBER and could not be" \
+                 "added to it. The board write cannot proceed; this is not a race."
+            exit 1
+          fi
+
+          # Pass the option ID with -f (raw string), NOT -F: ProjectV2 option IDs can
+          # be all-numeric, and -F coerces all-digit values to an integer, which the
+          # $o: String! variable rejects. -f forces a string. (Some option IDs contain
+          # letters today, but don't rely on that — IDs regenerate if recreated.)
+          # THE WRITE'S BODY IS READ TOO: an exit-0 response carrying errors[] means
+          # the Status was NOT written; the success line below must not print.
+          # shellcheck disable=SC2016  # the $names here are GraphQL variables, not shell - keep literal
+          WRESP=$(gh api graphql -f query='
+            mutation($p: ID!, $i: ID!, $f: ID!, $o: String!) {
+              updateProjectV2ItemFieldValue(input: {
+                projectId: $p, itemId: $i, fieldId: $f,
+                value: {singleSelectOptionId: $o}
+              }) { projectV2Item { id } }
+            }' -F p="$PROJECT_ID" -F i="$ITEM_ID" -F f="$STATUS_FIELD" -f o="$STATUS_OPT" 2>&1) \
+            || { echo "::error::PR #$PR_NUMBER Status=$STATUS_NAME write failed: $WRESP" >&2; exit 1; }
+          reject_graphql_errors "$WRESP" "PR #$PR_NUMBER Status=$STATUS_NAME write" || exit 1
+
+          echo "→ PR #$PR_NUMBER → Status=$STATUS_NAME"
+
+  # ------------------------------------------------------------------------
+  # A PR whose TITLE names a ticket must LINK it ((internal ref)).
+  #
+  # Measured 2026-08-23: `closingIssuesReferences` was 0 on 7 of 7 epic-relevant
+  # merged PRs. The house convention puts the ticket in the TITLE; GitHub creates
+  # a closing link ONLY from a keyword in the BODY. So the title reference is
+  # inert, `kanban-closure-router.yml` finds no linked issue, and correctly does
+  # nothing -- every kanban workflow green, every card unmoved. The board has
+  # been wrong for weeks behind a green pipeline.
+  #
+  # This job is a SEPARATE job from `set-status` deliberately, the same reason
+  # code-quality.yml keeps six: a finding here must not stop the card being
+  # written, and a failed board write must not hide the finding. Steps inside one
+  # job short-circuit; jobs do not.
+  #
+  # NOTHING FROM THE PR IS INTERPOLATED INTO A `run:` BLOCK. The title is read
+  # from the API by the checker itself, so a title containing shell or an
+  # expression is data, never code. The only expressions below are the repo name
+  # and the PR number.
+  # ------------------------------------------------------------------------
+  closing-ref:
+    name: set-status / closing-ref
+    # Open PRs only, for the same reason as `set-status` above but a smaller
+    # consequence: on a merged PR this would be advice about a merge that already
+    # happened, and a red X arriving on a shipped PR hours later is noise that
+    # teaches people to ignore the check (rule 4). The case `edited` exists to
+    # catch -- a retitle -- happens while the PR is open, which is exactly when
+    # this still runs.
+    if: ${{ true && github.event.pull_request.state == 'open' }}
+    runs-on: ubuntu-slim
+    timeout-minutes: 5
+    steps:
+      # The checker lives here, not in the calling repo, so the reusable fetches
+      # it -- same shape as code-quality.yml, blocked-gate.yml and
+      # bugbot-gate.yml. This repo is PRIVATE (org-config replaced the public
+      # `.github` as the host on 2026-09-10), so the checkout needs a read-only
+      # App installation token; the App id and key arrive because every caller
+      # of this reusable passes `secrets: inherit` (header, point 1).
+      - name: Mint a read-only token for org-config (private; the caller's own token cannot read it)
+        id: org-config-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.RELEASE_TRAIN_APP_ID }}
+          private-key: ${{ secrets.RELEASE_TRAIN_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: org-config
+          permission-contents: read
+
+      - name: Check out the shared checker
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: tracebloc/org-config
+          token: ${{ steps.org-config-token.outputs.token }}
+          ref: ${{ 'main' }}
+          path: .closing-ref-tools
+          persist-credentials: false
+
+      # WHY AN APP TOKEN AND NOT `github.token`. The link this reads points at an
+      # issue in ANOTHER repo -- `(internal ref)` for most of the fleet -- and
+      # a repo-scoped GITHUB_TOKEN cannot see it. A node the token cannot read
+      # comes back missing from `nodes` while `totalCount` still counts it, which
+      # the checker reports as "cannot tell" rather than "not linked". That is the
+      # right refusal, but it would be EVERY cross-repo PR's verdict, so the
+      # token has to be the org-scoped one.
+      #
+      # SCOPED, unlike the mint in `set-status` above ((internal ref)): this job
+      # reads two things and needs nothing else. `set-pr-status.yml` keeps its
+      # `mint-scope` exemption for the unscoped board-write mint above; this mint
+      # does not use it.
+      - name: Mint an installation token
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.RELEASE_TRAIN_APP_ID }}
+          private-key: ${{ secrets.RELEASE_TRAIN_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          permission-pull-requests: read
+          permission-issues: read
+          # NO `contents` scope, on purpose ((internal ref)). The gate used to read
+          # `baseRepository { defaultBranchRef { name } }` over GraphQL; a Ref is
+          # a contents object, world-readable on a public repo and gated on a
+          # private one, and from 2026-09-06 06:29Z that single field made every
+          # private-repo run fail with "Resource not accessible by integration"
+          # while public repos passed in the same minute. This token is
+          # org-scoped (`owner:` + an all-repositories installation), so adding
+          # contents:read here would have widened it on every repo for a value
+          # the event payload already carries: it is passed in below as
+          # PR_BASE_DEFAULT_BRANCH instead, and the query no longer asks.
+
+      - name: The title names a ticket, so the PR must link it
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_BASE_DEFAULT_BRANCH: ${{ github.event.pull_request.base.repo.default_branch }}
+          SOFT_FAIL: ${{ true && 'true' || 'false' }}
+        run: python3 .closing-ref-tools/scripts/closing-ref-gate.py
