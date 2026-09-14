@@ -1,0 +1,609 @@
+name: Verify dumps against engine pin
+
+# Prevention half of (internal ref). A prepped <base>_weights.pkl
+# state_dict's key layout is decided by the transformers/timm/torchvision
+# version that built the module tree, and the engine strict-loads seeds. So a
+# dump built under a different version than the engine pins is a silent,
+# edge-only training abort. This gate rebuilds each shipped template under the
+# ENGINE's pin and strict-loads the staged dump into it, and fails if the
+# engine pin drifts from what the dumps were built with.
+
+# THERE ARE TWO MIRRORS OF THE ENGINE'S PIN, and for a long time this gate
+# watched only one (internal ref). `tools/requirements-engine-pin.txt` is what prep and
+# `verify-dumps` install; `.github/requirements/pytorch.txt` is what ci.yml's
+# REQUIRED `test-pytorch` job installs, and its own header carries the rule —
+# "Bump these together with the engine's pins, never ahead of them". Nothing
+# enforced that header: the `paths:` lists below did not name the file, so a
+# lone bump there fired no job, and the guard step had a single `--mirror`
+# pointed at the tools/ copy, so it would not have looked even if it had run.
+# (internal ref) is the proof case — as dependabot opened it, it touched only
+# pytorch.txt, sat two minors ahead of the engine, and was all green. Both
+# halves are fixed below: the trigger, and the invocation.
+on:
+  pull_request:
+    branches: [develop]
+    paths:
+      - "model_zoo/**"
+      - "tools/prep_offline_weights.py"
+      - "tools/verify_dumps_against_engine_pin.py"
+      - "tools/check_engine_pin_drift.py"
+      - "tools/derive_seed_excluded.py"
+      - "tools/seed_contract.py"
+      - "tools/seed_index.py"
+      - "tools/check_dump_coverage.py"
+      - "tools/sync_zoo_weights.py"
+      - "tools/requirements-engine-pin.txt"
+      # The whole directory, not just pytorch.txt: a new CI requirement set
+      # that mirrors an engine pin must arrive INSIDE the trigger, or it
+      # repeats (internal ref) exactly. The guard job checks only the files that
+      # actually mirror the engine, and a test asserts that set is complete.
+      - ".github/requirements/**"
+      - "manifest.json"
+      - ".github/workflows/verify-dumps-engine-pin.yml"
+  push:
+    branches: [develop]
+    paths:
+      - "model_zoo/**"
+      - "tools/prep_offline_weights.py"
+      - "tools/verify_dumps_against_engine_pin.py"
+      - "tools/check_engine_pin_drift.py"
+      - "tools/derive_seed_excluded.py"
+      - "tools/seed_contract.py"
+      - "tools/seed_index.py"
+      - "tools/check_dump_coverage.py"
+      - "tools/sync_zoo_weights.py"
+      - "tools/requirements-engine-pin.txt"
+      - ".github/requirements/**"
+      - "manifest.json"
+      - ".github/workflows/verify-dumps-engine-pin.yml"
+  # An engine transformers bump invalidates hosted seeds WITHOUT touching this
+  # repo. The scheduled run makes the drift guard go red on such a bump even
+  # with no model-zoo change, so a seed-invalidating change fails loudly rather
+  # than stranding every dump silently (an internal ticket acceptance).
+  schedule:
+    - cron: "17 6 * * 1-5"
+  workflow_dispatch:
+    inputs:
+      engine-ref:
+        description: "tracebloc-engine ref to pin against"
+        default: develop
+
+concurrency:
+  group: verify-dumps-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+env:
+  ENGINE_REF: ${{ github.event.inputs.engine-ref || 'develop' }}
+
+jobs:
+  # 1a) Fetch the engine's pin files in an ISOLATED job that runs NO PR-controlled
+  #     code. The contents:read App token for private tracebloc-engine is minted
+  #     and used ONLY here, alongside trusted actions (create-github-app-token,
+  #     checkout, upload-artifact). Because nothing from the PR executes in this
+  #     job, the token — even as it sits in the runner's step-output files — is
+  #     never reachable by PR code. The two pin files are handed to the guard
+  #     job below as an artifact; the token itself never leaves this job.
+  fetch-engine-pin:
+    timeout-minutes: 10
+    runs-on: ubuntu-latest
+    steps:
+      # tracebloc-engine is a separate private repo; GITHUB_TOKEN cannot read it.
+      # Mint an installation token scoped to that one repo, contents:read only
+      # (same App as add-to-kanban.yml, least-privilege per (internal ref)).
+      - name: Mint an engine-read token
+        id: engine-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.RELEASE_TRAIN_APP_ID }}
+          private-key: ${{ secrets.RELEASE_TRAIN_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: tracebloc-engine
+          permission-contents: read
+      - name: Check out the engine pin
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.repository_owner }}/tracebloc-engine
+          ref: ${{ env.ENGINE_REF }}
+          token: ${{ steps.engine-token.outputs.token }}
+          path: _engine
+          # Belt and braces: don't persist the token into _engine/.git/config
+          # either. The real isolation is that no PR code runs in this job.
+          persist-credentials: false
+          # THE SEARCH SPACE, NOT A FILE LIST (internal ref). These two
+          # patterns used to be two exact paths, `use_cases/requirements.txt`
+          # and `use_cases/requirements_cuda.txt`, and that pair WAS this
+          # repo's claim about which engine files carry a pin. It was wrong:
+          # the engine pins torch in five files and something a mirror mirrors
+          # in seven, and `use_cases/requirements_vision_cv_cuda.txt` — the
+          # torch version of the `cv:gpu` base image, which
+          # `Dockerfile.base.cv.gpu` greps its pin out of — was in neither
+          # path, so no gate here had ever compared a mirror against it. An
+          # unread source cannot disagree.
+          #
+          # So the whole space is fetched and `check_engine_pin_drift.py`
+          # DERIVES which of it pins anything (`_ENGINE_SOURCE_GLOBS`, kept
+          # equal to these patterns by a test). Fetching files that pin nothing
+          # is the point, not waste: the derivation has to be able to see that
+          # the three GPU Dockerfiles pin torch via a cu129 wheel index rather
+          # than a literal `pkg==ver`, and a candidate never fetched is
+          # indistinguishable from one that pins nothing.
+          #
+          # LEADING SLASHES ANCHOR THESE AT THE ENGINE'S ROOT. Non-cone sparse
+          # patterns are gitignore-style, where a pattern with no slash matches
+          # at ANY depth — `Dockerfile.base.*` unanchored would also pull a
+          # vendored `sub/Dockerfile.base.cpu`, which `Path.glob` on the
+          # consuming side would not then match.
+          sparse-checkout: |
+            /Dockerfile.base.*
+            /use_cases/requirements*.txt
+          sparse-checkout-cone-mode: false
+      - name: Upload the engine pin files
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: engine-pin
+          # Only the pin files — never _engine/.git — cross to the
+          # PR-controlled job.
+          #
+          # `_engine/Dockerfile.base.*` IS LOAD-BEARING FOR THE LAYOUT, not
+          # only for coverage: upload-artifact roots the archive at the least
+          # common ancestor of the paths it is given. With only
+          # `_engine/use_cases/...` that was `_engine/use_cases`, and the guard
+          # job saw `_engine_pin/requirements.txt`; with a root-level
+          # Dockerfile pattern it is `_engine`, so the paths keep their
+          # `use_cases/` segment and `--engine-root _engine_pin` globs the same
+          # relative shape the engine has. Dropping the Dockerfile pattern
+          # would silently re-flatten it.
+          path: |
+            _engine/Dockerfile.base.*
+            _engine/use_cases/requirements*.txt
+          if-no-files-found: error
+          retention-days: 1
+
+  # 1b) The mirror tools/requirements-engine-pin.txt must EQUAL the engine's live
+  #     pin. This job runs the PR-controlled drift checker (check_engine_pin_drift
+  #     imports verify_dumps_against_engine_pin), but holds NO engine token — it
+  #     only receives the two pin files as an artifact from the isolated fetch job
+  #     above. So even PR-modified code here has nothing to reach private
+  #     tracebloc-engine with. This is what makes the mirror safe to install from
+  #     and what turns an engine `transformers` bump red until the mirror (and
+  #     then the dumps) are regenerated.
+  engine-pin-drift-guard:
+    needs: fetch-engine-pin
+    timeout-minutes: 10
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # `git show <merge base>:<mirror>` needs history, not a shallow tip.
+          # It is what lets the drift report DERIVE which side moved instead of
+          # asserting one (internal ref); see the base-extraction step below.
+          fetch-depth: 0
+      - name: Download the engine pin files
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: engine-pin
+          path: _engine_pin
+      # ONE INVOCATION PER MIRROR, deliberately, rather than one multi-mirror
+      # call: the failure header names the file it was handed, so a red job
+      # says WHICH copy drifted instead of that "a" copy did.
+      #
+      # AND THE LOOP DOES NOT STOP AT THE FIRST FAILURE. An engine bump moves
+      # both mirrors at once, so `set -e` on the first check would report half
+      # the work and hide the rest until the next round-trip. Each exit status
+      # is collected and the step exits non-zero if ANY mirror drifted.
+      #
+      # The mirror list is the ONLY place these two files are named together;
+      # tests/test_engine_pin_drift_guard.py reads it back out of this YAML and
+      # fails if a file under .github/requirements/ mirrors an engine pin
+      # without appearing here.
+      #
+      # `--mirror-at-base` IS WHAT MAKES THE DIAGNOSIS DERIVED RATHER THAN
+      # ASSERTED (internal ref). Two pins cannot say which side moved, and
+      # the old message asserted "the engine moved" in both directions — which
+      # on a mirror-moved PR sent you to regenerate the mirror back down to
+      # the engine's older pin and silently revert the bump (internal ref). The
+      # mirror's own value at the merge base does settle it, so it is handed
+      # over on a pull_request and OMITTED on push/schedule, where there is no
+      # merge base and the honest verdict is "unknown, here are both
+      # remedies".
+      #
+      # A merge-base extraction that FAILS is a hard error, not a fallback to
+      # the unknown branch: a checker that quietly stopped using its evidence
+      # is this ticket's own shape one level up.
+      - name: Assert every mirror matches the engine's pin
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          set -euo pipefail
+          rc=0
+          for mirror in tools/requirements-engine-pin.txt .github/requirements/pytorch.txt; do
+            echo "::group::$mirror"
+            base_arg=""
+            if [ -n "${BASE_REF:-}" ]; then
+              base_file="${RUNNER_TEMP:-/tmp}/$(basename "$mirror").base"
+              merge_base="$(git merge-base "origin/$BASE_REF" HEAD)"
+              # A mirror ADDED by this PR does not exist at the merge base.
+              # That is determinate — the PR added the pin, so the PR moved —
+              # and an empty base file derives exactly that, so it is written
+              # rather than treated as a failure.
+              git show "$merge_base:$mirror" > "$base_file" 2>/dev/null \
+                || : > "$base_file"
+              base_arg="--mirror-at-base $base_file"
+            fi
+            # A deliberate word-split, the same idiom as `${only:+--only $only}`
+            # in the seed-contract job below, and preferred over an array
+            # because `"${a[@]}"` on an EMPTY array is an unbound-variable
+            # error under `set -u` in bash 3.2 — which is what the extracted
+            # step runs under in tests/test_engine_pin_drift_guard.py on macOS.
+            # shellcheck disable=SC2086
+            # `--engine-root`, NOT A LIST OF `--engine` PATHS (internal ref).
+            # Two things were wrong with the list. It was incomplete — it named
+            # two of the engine's seven pin-carrying files and missed
+            # `use_cases/requirements_vision_cv_cuda.txt` entirely — and the
+            # checker reduced whatever it was given with `dict.update`, which
+            # is last-write-wins, so the ORDER of these lines decided the
+            # verdict whenever two sources disagreed. The same three files in a
+            # different order produced a red and a green. Deriving the set
+            # removes both: there is no order to get wrong and no list to keep
+            # up to date, and a disagreement between engine sources is now
+            # refused with exit 2 instead of resolved by argument position.
+            python3 tools/check_engine_pin_drift.py \
+              --mirror "$mirror" \
+              --engine-root _engine_pin \
+              $base_arg || rc=1
+            echo "::endgroup::"
+          done
+          exit "$rc"
+
+  # 2) Rebuild each shipped template under the engine pin and strict-load its
+  #    staged dump. Fails closed on any KEY_MISMATCH / BUILD_FAIL / provenance
+  #    drift. Runs only after the mirror is confirmed == the engine.
+  verify-dumps:
+    needs: engine-pin-drift-guard
+    timeout-minutes: 30
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # THE INSTALL RUNS ONLY WHEN THERE IS SOMETHING TO VERIFY. Nothing in this
+      # job puts a manifest.json in the checkout (the fetch step below says why),
+      # so every run to date took the verifier's "nothing to verify" branch --
+      # after spending ~2 minutes on setup-python plus installing the engine's
+      # pinned stack, which that branch never imports: the verifier is
+      # stdlib-only until it has a dump to build a template for, and the fetch
+      # step's skip branches are plain shell. So the two install steps are
+      # conditional on the manifest being present, and skipped otherwise; on
+      # the skip path the two tools run under the runner's own python3, which
+      # their no-manifest branches need nothing more than.
+      #
+      # The condition decides ONLY whether to install. It makes no pass/fail
+      # judgement and gates neither of the two steps that do: the fetch step
+      # and the verifier still run on every path and still own the verdict
+      # (armed-green on an ABSENT manifest, red on a present one they cannot
+      # account for), exactly as before. With a manifest present every step
+      # runs unchanged. tests/test_dump_fetch_guard.py asserts both halves --
+      # which steps carry the condition and which must not, and that the
+      # no-manifest path imports nothing the install provides.
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        if: hashFiles('manifest.json') != ''
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: tools/requirements-engine-pin.txt
+      # Install the engine's pinned stack (guard above proved it == the engine).
+      # A failure here is a hard error, never a swallowed green (fail-closed).
+      - run: pip install -r tools/requirements-engine-pin.txt
+        if: hashFiles('manifest.json') != ''
+      # Obtain the staged dumps. They are NOT committed (served from the
+      # tracebloc model store; hosting is the hosting decision). tools/sync_zoo_weights.py
+      # is the fetch hook (an internal ticket refs) and fetches the
+      # <base>_weights.pkl files into ./dist.
+      #
+      # Each precondition is reported BY NAME. The previous guard was a single
+      # `[ -f manifest.json ] && [ -f tools/sync_zoo_weights.py ]`, which
+      # attributed every no-op to hosting — including the case where the fetch
+      # hook itself was not in the repo. It was: the tool existed only as an
+      # uncommitted file on one laptop, so `-f` selected the no-op branch on
+      # every run and printed a reassuring hosting message, which is why the
+      # gap survived unnoticed (the arming overclaim). A missing tool and an undecided
+      # bucket are different problems and now say so.
+      #
+      # Still exit 0 in every skip branch: verify_dumps_against_engine_pin.py
+      # owns the fail-closed decision (armed-green on an ABSENT manifest, red on
+      # a manifest present with dumps it cannot account for), and duplicating
+      # that judgement here is how the two drift apart.
+      #
+      # WHICH BRANCH IS TAKEN TODAY, and it is the first one: nothing in THIS
+      # job puts a manifest.json in the checkout. The manifest lives in
+      # `backend` and reaches CI as the `dump-manifest` artifact minted by job
+      # 4a — which only `dump-coverage` (4b) consumes. Wiring 4a's artifact in
+      # here is NOT a free arming, and the schema divergence cuts BOTH ways —
+      # measured, not reasoned about:
+      #
+      #   * an `entries`-keyed manifest (the shape sync_zoo_weights.py writes,
+      #     and the only shape its `fetch-all` can consume) fetches fine, and
+      #     then verify_dumps_against_engine_pin.py exits 2 on its "no `dumps`
+      #     list" fail-closed branch — red on a schema mismatch, not a bad dump;
+      #   * a `dumps`-keyed manifest (the shape the verifier reads) never gets
+      #     that far: `fetch-all` exits 1 with "declares no 'entries'", so THIS
+      #     step reddens first and no dump is ever fetched.
+      #
+      # So no single-key manifest can take this job green. Arming it needs a
+      # manifest carrying BOTH keys, or the schemas reconciled — which is
+      # the schema reconciliation's call, not this workflow's. Both tools' messages now name
+      # that precondition instead of implying a manifest is all that is missing;
+      # tests/test_dump_fetch_guard.py drives both directions.
+      - name: Obtain staged dumps from the model store
+        env:
+          # The store URI is the hosting decision, so it is configuration and
+          # not a literal here. Unset resolves to the empty string and selects
+          # the "no store URI" branch below.
+          TRACEBLOC_ZOO_WEIGHTS_URI: ${{ vars.TRACEBLOC_ZOO_WEIGHTS_URI }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          if [ ! -f manifest.json ]; then
+            echo "SKIP (no manifest): no manifest.json in this checkout, so no"
+            echo "  dumps are declared for verification here. This branch is"
+            echo "  STRUCTURAL, not incidental: no step in this job puts one"
+            echo "  here. The manifest lives in backend under tools/offline_weights"
+            echo "  and reaches CI as the dump-manifest artifact, which only the"
+            echo "  dump-coverage job consumes. Until this job consumes it too,"
+            echo "  this skip is taken on every run (see the arming overclaim)."
+          elif [ ! -f tools/sync_zoo_weights.py ]; then
+            echo "SKIP (no sync tool): manifest.json declares dumps, but the"
+            echo "  fetch hook tools/sync_zoo_weights.py is NOT in this checkout."
+            echo "  This is a DEFECT in the repo, not a pending decision — the"
+            echo "  hook is committed (the arming overclaim); restore it. The verifier"
+            echo "  below will report every declared dump as MISSING."
+          elif [ -z "${TRACEBLOC_ZOO_WEIGHTS_URI:-}" ]; then
+            echo "SKIP (no store URI): manifest.json and the fetch hook are both"
+            echo "  present, but TRACEBLOC_ZOO_WEIGHTS_URI is unset, so there is"
+            echo "  nowhere to fetch from. THIS is the hosting decision —"
+            echo "  the hosting decision. Set the repo variable once the store exists."
+          else
+            python3 tools/sync_zoo_weights.py --staging . fetch-all --dest dist
+          fi
+      # The gate. Exits non-zero on any dump that cannot strict-load into its
+      # template under the engine pin, or any built_with-vs-engine drift.
+      - run: python3 tools/verify_dumps_against_engine_pin.py
+
+  # 3) SEED_EXCLUDED_PREFIXES must keep agreeing with what the template BUILDS.
+  #
+  #    The constant is a literal, and a literal rots. `seed_contract.py apply`
+  #    runs once, at authoring time; from then on the templates restate a
+  #    derivation that nothing re-runs. Rename `fc.` to `head.`, add a layer, and
+  #    the declaration is quietly wrong -- after which a seed either carries head
+  #    weights it must not, or excludes keys that no longer exist. That is the
+  #    failure the backbone-only contract exists to remove, coming back through
+  #    the declaration instead of the load (Lukas, (internal ref)).
+  #
+  #    So the derivation is the CHECK rather than the authoring step. It runs
+  #    under the ENGINE's pinned stack for the same reason `verify-dumps` does: a
+  #    head's shape is decided by the libraries that build the module tree, so a
+  #    derivation under any other stack describes a model nobody runs.
+  #
+  #    SCOPE IS DELIBERATE. Each template is BUILT TWICE, so re-deriving all 46
+  #    every PR is ~92 model builds -- slow enough that people would route around
+  #    it. A PR re-derives only the templates it TOUCHES, which is exactly where
+  #    drift is introduced; the scheduled run re-derives everything, which is
+  #    where a drift introduced any other way gets caught.
+  seed-contract-drift:
+    needs: engine-pin-drift-guard
+    # 60, not 30, and the reason is the full-sweep path rather than the common
+    # one. A PR touching a few templates finishes in minutes; a PR touching the
+    # seed-contract TOOLING re-derives all ~140, and each is BUILT TWICE. That
+    # measured ~30 minutes locally with a warm cache, which is exactly the
+    # budget -- so the sweep this gate exists for would be the run that times
+    # out, and a timeout reads as a broken gate rather than a slow one.
+    timeout-minutes: 60
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # `git diff base...HEAD` needs the merge base, not a shallow tip.
+          fetch-depth: 0
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: tools/requirements-engine-pin.txt
+      # The drift guard above proved this mirror == the engine's live pin.
+      - run: pip install -r tools/requirements-engine-pin.txt
+      - name: Decide which templates to re-derive
+        id: scope
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" != "pull_request" ]; then
+            echo "reason=full sweep (${{ github.event_name }})" >> "$GITHUB_OUTPUT"
+            echo "only=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          base="origin/${{ github.base_ref }}"
+          changed="$(git diff --name-only "$base...HEAD")"
+          # A change to the tooling can move EVERY answer, so it forces a full
+          # sweep -- narrowing to touched templates there would be checking the
+          # new tool against the files least likely to expose its bug.
+          #
+          # THE PIN COUNTS AS TOOLING, and missing that was a real hole (Bugbot):
+          # a head's shape is decided by the LIBRARY VERSIONS that build the
+          # module tree, so bumping `requirements-engine-pin.txt` can stale every
+          # prefix while the dumps still strict-load at each template's default.
+          # That PR triggers this workflow via `paths:` but touches no template,
+          # so it would have exited "nothing to re-derive" and gone green on the
+          # one change most able to invalidate the constants. The weekday sweep
+          # would find it eventually; the PR that caused it would not.
+          #
+          # The workflow file is here for the same reason: editing the gate
+          # should re-run the gate in full, not trust it narrowed correctly.
+          if echo "$changed" | grep -qE '^(tools/(derive_seed_excluded|seed_contract|seed_index)\.py|tools/requirements-engine-pin\.txt|\.github/workflows/verify-dumps-engine-pin\.yml)$'; then
+            echo "reason=full sweep (seed-contract tooling or engine pin changed)" >> "$GITHUB_OUTPUT"
+            echo "only=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # `|| true` because grep exits 1 on NO MATCH, and `pipefail` would
+          # turn "this PR touches no template" into a failed job. `-e` on each
+          # path drops templates the PR DELETED -- `--only` on a stem that no
+          # longer exists makes the derivation exit 2.
+          stems=""
+          while IFS= read -r f; do
+            [ -n "$f" ] && [ -e "$f" ] && stems="$stems $(basename "$f" .py)"
+          done <<EOF
+          $(echo "$changed" | grep -E '^model_zoo/[^/]+/pytorch/[^/]+\.py$' || true)
+          EOF
+          # DEDUPE ONLY IF THERE IS SOMETHING TO DEDUPE (Bugbot). Running the
+          # empty string through `tr | sort -u | tr` yields a single SPACE, not
+          # "", so `[ -z "$only" ]` never held and `${only:+--only $only}` still
+          # emitted a bare `--only` -- which made a PR touching no template
+          # re-derive the entire zoo, the exact opposite of this step's purpose.
+          #
+          # My first "proof" of this step printed "${stems## }", which strips the
+          # leading space and so displayed [] for a value that was " ". The test
+          # below asserts the RAW length instead.
+          if [ -n "${stems// /}" ]; then
+            stems="$(echo "$stems" | tr ' ' '\n' | sort -u | tr '\n' ' ')"
+            stems="${stems# }"
+            stems="${stems% }"
+          else
+            stems=""
+          fi
+          echo "reason=changed templates: ${stems:-none}" >> "$GITHUB_OUTPUT"
+          echo "only=$stems" >> "$GITHUB_OUTPUT"
+      - name: Re-derive and compare against the declared constants
+        run: |
+          set -euo pipefail
+          echo "Scope: ${{ steps.scope.outputs.reason }}"
+          only="${{ steps.scope.outputs.only }}"
+          if [ "${{ github.event_name }}" = "pull_request" ] && [ -z "$only" ] \
+             && ! echo "${{ steps.scope.outputs.reason }}" | grep -q '^full sweep'; then
+            echo "No template touched — nothing to re-derive."
+            exit 0
+          fi
+          # $only is a deliberate word-split list of template stems.
+          # shellcheck disable=SC2086
+          python3 tools/derive_seed_excluded.py --zoo . --out seed_derived.json \
+            ${only:+--only $only}
+          python3 tools/seed_contract.py --zoo . check --verdict seed_derived.json
+
+  # the hosting decision — THE COMPLEMENT DIRECTION. Every other gate in this workflow is
+  # keyed on the dumps that exist and asks "are they good?". None asks "is there
+  # one for every template that needs one?", so a template that was migrated but
+  # never prepped passes them all BY BEING ABSENT, and trains from random init on
+  # an edge while the migration's premise is that it does not. Two slipped
+  # through exactly this way: `faster_rcnn_resnet` and, found by this gate,
+  # `text_classification/bert_base_uncased`.
+  #
+  # DELIBERATELY INDEPENDENT OF THE ENGINE PIN, and of every other job here bar
+  # its own manifest fetch. The check is template text and set arithmetic — no
+  # torch, no transformers, no build — so it runs in seconds on stdlib alone.
+  # Making it `needs:` a pin guard would let a slow or red pin hide a coverage
+  # answer that does not depend on the pin at all.
+  #
+  # It DOES now `needs:` job 4a below, and that is not a walk-back of the line
+  # above: 4a is a 10-second sparse checkout of one 9 KB JSON file, it carries
+  # no torch and no pin, and the dependency exists to keep the `backend` token
+  # out of this job rather than to order any work. The property being protected
+  # is which job the token lives in, not how fast the answer arrives.
+  # 4a) THE TOKEN LIVES IN ITS OWN JOB, and that split is the security boundary,
+  #     not a tidiness preference. This job mints a `backend`-scoped App token
+  #     and runs NO PR-controlled code; the coverage job below runs the
+  #     PR-controlled checker and holds NO token. Collapsing the two lets a PR
+  #     that edits `tools/check_dump_coverage.py` read private `backend`:
+  #     `persist-credentials: false` keeps the token out of `_backend/.git/config`
+  #     but NOT out of the runner's step-output files, so it is reachable from
+  #     any code running in the same job.
+  #
+  #     This is exactly the `fetch-engine-pin` / `engine-pin-drift-guard` pair
+  #     above, for the same reason and with the same shape — "the real isolation
+  #     is that no PR code runs in this job". The first revision of (internal ref)
+  #     armed the manifest read inside the coverage job and reintroduced the
+  #     hazard that pattern exists to prevent; Cursor Bugbot caught it on a
+  #     learned rule naming this repo's own token-split convention.
+  fetch-dump-manifest:
+    timeout-minutes: 10
+    runs-on: ubuntu-latest
+    steps:
+      - name: Mint a backend-read token
+        id: backend-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.RELEASE_TRAIN_APP_ID }}
+          private-key: ${{ secrets.RELEASE_TRAIN_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: backend
+          permission-contents: read
+      - name: Check out the dump manifest
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.repository_owner }}/backend
+          ref: develop
+          token: ${{ steps.backend-token.outputs.token }}
+          path: _backend
+          # Belt and braces: don't persist the token into _backend/.git/config
+          # either. The real isolation is that no PR code runs in this job.
+          persist-credentials: false
+          sparse-checkout: tools/offline_weights/manifest.json
+          sparse-checkout-cone-mode: false
+      # FAIL IF THE SPARSE CHECKOUT MATCHED NOTHING, here as well as in the
+      # consumer. A miss would otherwise upload an empty artifact and the
+      # failure would surface one job later as a confusing download error.
+      - name: The manifest must actually be present
+        run: test -s _backend/tools/offline_weights/manifest.json
+      - name: Upload the dump manifest
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: dump-manifest
+          # Only manifest.json — never _backend/.git — crosses to the
+          # PR-controlled job.
+          path: _backend/tools/offline_weights/manifest.json
+          if-no-files-found: error
+          retention-days: 1
+
+  # 4b) The coverage answer itself. Runs the PR-controlled checker with NO token
+  #     of any kind: the manifest arrives as an artifact from 4a, so even
+  #     PR-modified code here has nothing to reach private `backend` with.
+  dump-coverage:
+    needs: fetch-dump-manifest
+    timeout-minutes: 5
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+      # (internal ref) — THE ORPHAN HALF IS NOW ARMED, and the reason it had to be
+      # is that eight orphans accumulated while it was not. `check_dump_coverage`
+      # is fail-closed BOTH ways by its own docstring, but this step passed no
+      # `--manifest`, so `have_inventory` was false and the orphan branch never
+      # executed. THAT IS WHY A HUMAN HAD TO NOTICE the seven retired DETR seeds
+      # and `mask_rcnn`: the guard written to catch exactly this was here, green,
+      # and running only half of itself.
+      #
+      # The manifest lives in `backend`, not here, which is the whole reason it
+      # was left out: the previous comment said "on hosting, add --manifest",
+      # and hosting (the hosting decision) is not what supplies it — a cross-repo read
+      # is. Job 4a performs that read; this job only consumes its artifact.
+      #
+      # STILL NO `--dumps-dir`: the store's blobs are not reachable from CI
+      # (the hosting decision is open — TRACEBLOC_ZOO_WEIGHTS_URI is unset). The
+      # manifest is the right inventory to gate on anyway. It is the artifact a
+      # PR review can see, and (internal ref) is what happens when it and the
+      # store disagree: gate the reviewable side, and the store is reconciled to
+      # it by `tools/offline_weights/prune_dumps.py`.
+      - name: Download the dump manifest
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: dump-manifest
+          path: _manifest
+      # FAIL IF THE MANIFEST IS NOT THERE, rather than falling through to the
+      # classification-only run. An artifact that silently arrived empty would
+      # restore the exact unarmed state this step exists to end, and it would
+      # read as green — which is the defect, not a degraded mode of it.
+      - name: The manifest must actually be present
+        run: test -s _manifest/manifest.json
+      - name: Every migrated template accounts for its seed, and every dump a template
+        run: |
+          python3 tools/check_dump_coverage.py --zoo . \
+            --manifest _manifest/manifest.json
