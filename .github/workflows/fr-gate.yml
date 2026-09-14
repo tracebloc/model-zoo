@@ -1,0 +1,254 @@
+# GENERATED FILE -- DO NOT EDIT BY HAND.
+#
+# Self-contained copy of the reusable workflow `.github/workflows/fr-gate.yml`
+# (blob 97fcf6a3fb0bbb3ff46f3a3f2a9be7e471ae89ee) folded with the private source repo's own caller of it,
+# `.github/workflows/fr-gate-caller.yml` (blob b2e63da19a0d0369a7d7364b4596f53128f3c8ca), for a PUBLIC repo: GitHub lets a
+# public repo `uses:` a reusable workflow only from a public repo, and the
+# reusables live in the private source repo. So this file carries the
+# reusable's jobs inline -- the triggers are the caller's; every `inputs.*` is
+# resolved to a literal (repo-inventory.yml's `caller_inputs` floor, else the
+# reusable's default -- the caller's own toolchain choices are NOT copied); the
+# App-token secrets are named directly; a job whose condition resolves to a
+# constant false is omitted; and each job's display name keeps the
+# `gate / ` prefix so the check contexts branch protection requires do
+# not change. Scripts are still fetched from the private source repo at run time with a
+# read-only App installation token; on a fork PR that token cannot be minted
+# (no secrets), so the checkout fails closed rather than running untrusted input.
+#
+# PUBLIC SURFACE. This file is delivered to a public repo. Exactly what was
+# scrubbed, and what was not:
+#
+#   * COMMENT TEXT -- a whole-line YAML `#` comment, a `#`-first line of a `run:`
+#     script that is not inside a heredoc, and this header -- was scrubbed: every
+#     private-repo issue reference, org-qualified private repo name, RFC id and
+#     tenant name became `(internal ref)`, and the private repo this file was
+#     generated from became `the private source repo`.
+#   * CODE -- everything else: commands, heredoc bodies, strings a workflow posts,
+#     `repository:` values, URLs, step names -- was NOT edited. An internal
+#     reference there refuses the render (it is a defect in the source), with one
+#     exception: the name of the private repo this file was generated from, which
+#     the code states verbatim because the workflow checks that repo out and
+#     fetches its scripts from it at run time. Its bare, unqualified name is not
+#     scrubbed anywhere.
+#
+# Regenerate:  python3 scripts/render-self-contained.py          (in the private source repo)
+# Verify:      python3 scripts/render-self-contained.py --check  (make selftest-self-contained)
+#
+# The comments below are the reusable's own and describe the reusable; where
+# they mention `inputs.*` or callers, read them as history.
+
+name: FR gate
+
+# Reusable workflow. Called from each active repo on pull_request events
+# targeting staging, main, or master. Blocks the merge unless every item
+# included in the promotion is at or beyond the correct "Ready for X" column:
+#
+#   target = staging  → all items must be at "On dev" or later (automatic — D6)
+#   target = main/master → all items must be at "Ready for prod" or later
+#
+# "or later" means an item already further down the pipeline (e.g. "Prod")
+# satisfies an earlier gate ("On dev") instead of being falsely
+# blocked. See the rank() helper below for the canonical stage ordering.
+#
+# This enforces the "FR must pass before promotion" rule. It runs as a
+# required status check (configured via branch protection) so the merge
+# button stays grey until the gate passes.
+#
+# Override: add the "skip-fr-gate" label to bypass the check (for hotfixes
+# or emergency releases). The label is a deliberate, visible action so we
+# can audit overrides after the fact.
+#
+# Item discovery: authoritative commit->PR attribution via the
+# commits/{sha}/pulls API between base and head (see the discovery step).
+# Release-train promotion PRs (head release-train/*) are transparent
+# plumbing: they never appear as gated items and never vouch for their
+# range -- attribution passes through to the cargo PRs they carry. If
+# discovery yields no PRs at all, falls back to checking the promotion
+# PR's own Status.
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, ready_for_review, labeled, unlabeled, edited]
+
+jobs:
+  gate:
+    name: gate / gate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Determine required Status from target branch
+        id: target
+        env:
+          BASE: ${{ github.base_ref }}
+        run: |
+          case "$BASE" in
+            staging)     echo "required=On dev" >> "$GITHUB_OUTPUT" ;;
+            main|master) echo "required=Ready for prod"    >> "$GITHUB_OUTPUT" ;;
+            *)           echo "required="                  >> "$GITHUB_OUTPUT" ;;
+          esac
+
+      - name: Skip if not promoting to staging/main/master
+        if: steps.target.outputs.required == ''
+        run: echo "Target branch '${{ github.base_ref }}' is not gated — nothing to enforce."
+
+      - name: Check for skip-fr-gate label
+        id: skip
+        if: steps.target.outputs.required != ''
+        env:
+          LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
+        run: |
+          if echo "$LABELS" | grep -q '"skip-fr-gate"'; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "::warning::FR gate bypassed via 'skip-fr-gate' label."
+            # (promotion-shape guard below is also bypassed by this label)
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Promotion-shape guard — only the train promotes
+        if: steps.target.outputs.required != '' && steps.skip.outputs.skip != 'true'
+        env:
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
+        run: |
+          # Manual promotion PRs bypass the release train's Bugbot soft-gate,
+          # its tagging, and its run records — and indirect-merge the train's
+          # own PRs ((internal ref) / averaging-service, 2026-07-29). Promotions
+          # into staging/main/master are the train's job. Sanctioned lanes:
+          #   release-train/*       the train's own mirror PRs
+          #   hotfix-backmerge/*    hotfix.yml's automated back-merges
+          #   'hotfix' label        single-repo emergency fix (D14a, audited)
+          #   'skip-fr-gate' label  full gate override (handled above, audited)
+          case "$HEAD_REF" in
+            release-train/*|hotfix-backmerge/*) exit 0 ;;
+          esac
+          if echo "$LABELS" | grep -q '"hotfix"'; then
+            exit 0
+          fi
+          echo "::error::Manual promotion PRs are retired — promotions into this branch go through the org's release train (a maintainer dispatches its 'Release train' workflow). For a single-repo emergency prod fix use the 'hotfix' label; 'skip-fr-gate' remains the audited full override."
+          exit 1
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: steps.target.outputs.required != '' && steps.skip.outputs.skip != 'true'
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      # THE WALK LIVES HERE, NOT IN THE CALLING REPO ((internal ref), (internal ref) D6).
+      # The two steps below used to carry it inline; the release train needs the
+      # same walk to cut the prod hop at the FR frontier, and a second copy in
+      # release-train is the drift rule 9 forbids. So the script is checked out
+      # of the private source repo -- same shape as bugbot-gate.yml and
+      # code-quality.yml -- into a path beside the caller's checkout. org-config
+      # is PRIVATE (it replaced the public `.github` as the host on 2026-09-10),
+      # so the checkout carries a read-only App installation token minted just
+      # for it; the App id and key arrive because every fr-gate caller passes
+      # `secrets: inherit` (this reusable minted an App token long before the
+      # move). `persist-credentials: false` because the walk itself reads with
+      # the wider App token minted further below, never with the checkout's.
+      - name: Mint a read-only token for org-config (private; the caller's own token cannot read it)
+        id: org-config-token
+        if: steps.target.outputs.required != '' && steps.skip.outputs.skip != 'true'
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.RELEASE_TRAIN_APP_ID }}
+          private-key: ${{ secrets.RELEASE_TRAIN_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: org-config
+          permission-contents: read
+
+      - name: Check out the shared walk script
+        if: steps.target.outputs.required != '' && steps.skip.outputs.skip != 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: tracebloc/org-config
+          token: ${{ steps.org-config-token.outputs.token }}
+          ref: ${{ 'main' }}
+          path: .fr-gate-tools
+          persist-credentials: false
+
+      # Authenticates as the tracebloc-release-train App ((internal ref)) instead of a
+      # human's PAT. `owner:` yields an ORG-scoped installation token, which this gate
+      # needs: it reads the org PROJECT, and a repo-scoped token cannot.
+      #
+      # READ-ONLY, and that is the whole reason this gate could move. It reads
+      # `commits/{sha}/pulls`, `compare/{base}...{head}` and the ProjectV2 graphql --
+      # every one covered by permissions the App already holds. It never writes a
+      # card, a label or a comment; the gate's only output is its own conclusion.
+      #
+      # Gated behind the same `if:` as the steps that use it, so a PR this gate skips
+      # (not promoting, or `skip-fr-gate`) mints nothing.
+      #
+      # NO FALLBACK TO THE PAT: a fallback would let a broken App path keep working
+      # silently, and this gate blocking wrongly is far better than it passing wrongly.
+      - name: Mint an installation token
+        id: app-token
+        if: steps.target.outputs.required != '' && steps.skip.outputs.skip != 'true'
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.RELEASE_TRAIN_APP_ID }}
+          private-key: ${{ secrets.RELEASE_TRAIN_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          # THREE READS AND NOTHING ELSE ((internal ref)). Without these it minted
+          # the App's whole set -- contents:write, issues:write,
+          # organization_projects:write, administration:read -- across every repo
+          # the installation covers, to run a gate that writes nothing at all.
+          # A pure reader holding org-wide write is the sharpest mismatch of the
+          # four this ticket found.
+          #
+          # NOT DERIVED FROM A TEMPLATE -- from the three calls the comment above
+          # already names, which is why it could be checked rather than guessed:
+          #   commits/{sha}/pulls      -> contents: read + pull-requests: read
+          #   compare/{base}...{head}  -> contents: read
+          #   ProjectV2 graphql        -> organization-projects: read
+          #
+          # `actions/checkout` above is NOT on this token -- it takes the job's
+          # default GITHUB_TOKEN, so nothing here needs contents:write for the
+          # checkout either.
+          #
+          # IF THIS SCOPE IS SHORT the gate fails closed and blocks promotions,
+          # which is loud, immediate and recoverable with the `skip-fr-gate`
+          # label. That is the failure direction this gate already chose for
+          # itself: "blocking wrongly is far better than passing wrongly".
+          permission-contents: read
+          permission-pull-requests: read
+          permission-organization-projects: read
+
+      - name: Discover items in this promotion
+        id: items
+        if: steps.target.outputs.required != '' && steps.skip.outputs.skip != 'true'
+        env:
+          BASE_REF: ${{ github.base_ref }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          REPO_FULL: ${{ github.repository }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          # Make the base branch tip available locally for the diff.
+          git fetch origin "$BASE_REF":"refs/remotes/origin/$BASE_REF" --depth=200 2>/dev/null || true
+          BASE_SHA=$(git rev-parse "origin/$BASE_REF")
+          export BASE_SHA
+          # Commit->PR attribution, the promotion-PR transparency, the two-pass
+          # merge handling (Bugbot #72/#73) and the three-dot file count all live
+          # in the script's header and body -- one implementation, shared with the
+          # train's frontier resolver. It writes prs= / unattributed= /
+          # changed_files= to $GITHUB_OUTPUT exactly as this step always did.
+          bash .fr-gate-tools/scripts/fr-gate-walk.sh discover
+
+      - name: Verify each item is in required Status
+        if: steps.target.outputs.required != '' && steps.skip.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          ORG: ${{ 'tracebloc' }}
+          PROJECT_NUMBER: ${{ 2 }}
+          REPO_FULL: ${{ github.repository }}
+          REQUIRED: ${{ steps.target.outputs.required }}
+          PRS: ${{ steps.items.outputs.prs }}
+          UNATTRIB: ${{ steps.items.outputs.unattributed }}
+          PROMOTION_PR: ${{ github.event.pull_request.number }}
+          CHANGED_FILES: ${{ steps.items.outputs.changed_files }}
+        run: |
+          # The rank() ordering, resolve_status's race-aware retries and the
+          # fail-closed verdict (blocked / missing / unreadable / unattributable
+          # all block) are the script's `verify` mode. Same text, same exit code.
+          bash .fr-gate-tools/scripts/fr-gate-walk.sh verify
