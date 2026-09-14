@@ -1,0 +1,49 @@
+{
+  "version": "1",
+  "description": "The model_type values the tracebloc SDK's SKLEARN TABULAR upload path accepts, per family. This is a DIFFERENT gate from model_type_choices.v1.json: that one says what the backend can STORE, this one says what survives the SDK's model_func_checks. A value can be storable and still fail here -- an empty declaration is stored by the backend as 'default' but the SDK coerces it to None (tracebloc/validation/rewriter.py::_parse_constant_rhs) and no accepted set contains None, so average_estimators raises 'model type None is not supported for Sklearn' and the template is untrainable end to end. That is the EBM declaration incident: both ebm templates shipped \"\" and neither could train. 'default' itself is also absent from every set below, so the blank was never going to work by that route either.",
+  "owner": "tracebloc-py-package -- tracebloc/upload/skl_tabular_{base,classifier,regression}.py",
+  "generated_from": {
+    "repo": "tracebloc-py-package",
+    "paths": [
+      "tracebloc/upload/skl_tabular_base.py",
+      "tracebloc/upload/skl_tabular_classifier.py",
+      "tracebloc/upload/skl_tabular_regression.py"
+    ],
+    "ref": "293ac3245a9b9ffd0970af8c1e9505e20d0ced3a",
+    "ref_branch": "develop",
+    "ref_date": "2026-09-10",
+    "method": "ast.parse of each module: the keys of the ClassDef's _ensemble_prefixes dict (the ensemble-packed types), unioned with every string literal compared against the `model_type` parameter inside average_estimators and _average_family_specific (the parameter-averaged and family strategies). Derived mechanically, never hand-transcribed -- a hand-copied list is how the earlier OD vocabulary drift shipped."
+  },
+  "note_not_averageability": "Membership means the upload-time smoke fit ROUTES, not that the estimator is federated-averageable. SklTabularBase._ensemble_prefixes says so explicitly: several entries have no cross-edge parameter average and are refused for a multi-edge dataset by the client's link-time gate and the averaging-service refuse-list. Do not read averageability into this file (SDK #361).",
+  "accepted_by_family": {
+    "classifier": [
+      "catboost",
+      "clustering",
+      "ensemble",
+      "lightgbm",
+      "linear",
+      "naive",
+      "neural_network",
+      "svm",
+      "tree",
+      "xgboost"
+    ],
+    "regression": [
+      "ensemble",
+      "lightgbm",
+      "linear",
+      "neural_network",
+      "svm",
+      "tree",
+      "xgboost"
+    ]
+  },
+  "blank_is_accepted": false,
+  "refused_shapes": {
+    "description": "Shapes that reach the SDK's gate as something outside every accepted set. Listed by the route each takes, because they do not all arrive the same way.",
+    "empty_string": "model_type = \"\"  -> _parse_constant_rhs returns None (explicit `if parsed == \"\": return None`).",
+    "whitespace": "model_type = \"  \" -> survives coercion as '  ', then the model_type canonicaliser applies .strip().lower() (rewriter.py, the canonicaliser change) giving '' -- refused by a different route than the empty literal.",
+    "absent": "no module-level model_type assignment -> the attribute is never set from the file.",
+    "default": "model_type = \"default\" -> storable by the backend, absent from every family set above."
+  }
+}

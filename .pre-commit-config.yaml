@@ -1,0 +1,20 @@
+# Pre-commit hooks for model-zoo.
+#
+# Scope is deliberately narrow: the zoo is a collection of tutorial-style
+# model templates, not a codebase. Stylistic rules (line length, quote
+# style, etc.) would churn every file without improving template clarity.
+# These rules catch mistakes that actually bite users:
+#   F401 — unused imports (a real copy-paste bug we've hit)
+#   F821 — undefined names (catches broken symbol references)
+#   E9   — syntax errors
+#
+# To install locally: `pip install pre-commit && pre-commit install`
+# To run on all files: `pre-commit run --all-files`
+
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.6.9
+    hooks:
+      - id: ruff
+        args: ["--select=F401,F821,E9", "--no-fix"]
+        files: ^model_zoo/.*\.py$

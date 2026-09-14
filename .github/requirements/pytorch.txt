@@ -1,0 +1,45 @@
+# Pinned to tracebloc-engine's runtime versions so CI validates templates
+# against what the fleet actually runs.
+#
+# Unpinned, CI resolved the latest releases (transformers 5.12.x) while the
+# engine pins 5.8.0 — so a template could pass here and be broken on the edge.
+# That is not hypothetical: sapiens' LoRA target_modules were written for
+# 5.12's attention naming, CI went green, and the template could not be
+# constructed on the edge at all.
+#
+# torch/torchvision come from tracebloc-engine's Dockerfile.base.text.cpu;
+# the rest from its use_cases/requirements.txt. Bump these together with the
+# engine's pins, never ahead of them.
+#
+# THAT RULE IS NOW A CHECK, not just this comment (internal ref). This file is the
+# second mirror of the engine's pin (the first is tools/requirements-engine-pin.txt),
+# and until (internal ref) no guard looked at it: verify-dumps-engine-pin.yml did not
+# name .github/requirements/** in its `paths:`, so a lone bump here fired no
+# job, and its drift step had a single `--mirror` pointed at the tools/ copy.
+# (internal ref) is the proof — opened by dependabot against this file alone, two minors
+# ahead of the engine, all green. Both halves are wired now: a change to this
+# file triggers that workflow, and `engine-pin-drift-guard` runs
+# tools/check_engine_pin_drift.py against this file as well, so a bump ahead of
+# the engine goes red here instead of reaching the edge.
+pytest
+torch==2.13.0
+torchvision==0.28.0
+transformers==5.10.1
+timm==1.0.26
+# peft: no `import peft` anywhere in model_zoo/, tests/ or tools/ -- templates
+# never bundle LoRA (CLAUDE.md, "Foundation models") -- and the pin stays on
+# purpose. This file is a MIRROR of the engine's pin, and
+# tools/check_engine_pin_drift.py fails closed on a mirror missing any of the
+# dump-invalidating pins it requires (torch, torchvision, transformers, timm,
+# peft): drop this line and engine-pin-drift-guard goes red. Measured.
+peft==0.19.1
+# scipy: likewise never imported by this repo, and load-bearing all the same.
+# transformers' Mask2FormerLoss and OneFormerLoss call
+# requires_backends(self, ["scipy"]) at CONSTRUCTION, and the instantiation test
+# builds semantic_segmentation/pytorch/mask2former.py and oneformer.py in this
+# job -- without it both raise ImportError (measured under transformers 5.10.1).
+# Deliberately unpinned: the engine never names scipy, it arrives there
+# transitively via scikit-learn, and the drift guard refuses any exact pin the
+# engine does not carry. A grep for `import scipy` finding nothing is not
+# evidence this line is dead.
+scipy
