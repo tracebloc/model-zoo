@@ -547,7 +547,7 @@ jobs:
               # parks the card with no way to self-heal, and a run-log notice is
               # invisible by the time anyone looks at the board. The two real
               # cases needed OPPOSITE answers -- (internal ref) had shipped via
-              # cli#452 and belonged in Prod; data-ingestors#488 was reverted and
+              # cli#452 and belonged in Prod; (internal ref) was reverted and
               # belonged in Done -- so no default is correct and only the person
               # closing it knows which.
                 CLOSE_NOTE="Closed while the board still shows \`$CURRENT_COL\`, which records a deployment."
