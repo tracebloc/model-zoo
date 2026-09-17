@@ -1,7 +1,7 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/bugbot-gate.yml`
-# (blob 3db8e9695a2a0e364ae7fd10c7e001e0b430dbcb) folded with the private source repo's own caller of it,
+# (blob c9f40a9f502404f2130f6198e7aa96a186b6b0fb) folded with the private source repo's own caller of it,
 # `.github/workflows/bugbot-gate-caller.yml` (blob f95fddc037139521b1ce428400044192ad5a3991), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
@@ -203,12 +203,13 @@ jobs:
     # context anywhere -- 0 of 63 live branches (21 inventory repos x
     # develop/staging/main, classic protection AND rulesets) name a bugbot
     # context, measured 2026-09-13 -- so a label that failed to schedule could
-    # not hang a PR, only delay an advisory check. `scripts/runner-tier.py`
-    # derives the same answer from repo-inventory.yml and no longer holds this
-    # file on the full tier. The image carries everything the steps below need
-    # (git, gh, Python 3.12, Node 24); the first slim run after promotion to
-    # `main` is the proof that it schedules, and nothing about this file's
-    # behaviour changes with the label.
+    # not hang a PR, only delay an advisory check. That measurement is why this
+    # file was the first hold lifted; since 2026-09-16 `scripts/runner-tier.py`
+    # holds no file on the full tier for being gating, and expects this one on
+    # slim like every other reusable. The image carries everything the steps
+    # below need (git, gh, Python 3.12, Node 24); the first slim run after
+    # promotion to `main` is the proof that it schedules, and nothing about
+    # this file's behaviour changes with the label.
     runs-on: ubuntu-slim
     # Above the script's own 660 s budget on purpose: the script should be the
     # thing that reports a timeout, with the measured latencies in the message
