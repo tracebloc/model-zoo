@@ -1,7 +1,7 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/desk-dispatch.yml`
-# (blob bc8ae4d7953add4c75ff1b346007b2965c42f75c) folded with the private source repo's own caller of it,
+# (blob 2057a61367f39ca88edd53a112dcf65f1fa8a74d) folded with the private source repo's own caller of it,
 # `.github/workflows/desk-dispatch-caller.yml` (blob 1f852c069a94d928dd7e2c6a3a37bf0500558ea2), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
@@ -127,9 +127,9 @@
 # #67's promotion (2026-09-14 16:51Z) and this fix ended that way ((internal ref) x3,
 # (internal ref) x2, #45 x2, ...), while the runs from the gated callers passed.
 # The degrade path lives in scripts/desk-dispatch.py, which never started. So
-# this file declares NO `permissions:` block (a declared block also turns every
-# scope it omits to `none`, which would strip the two reads from a caller that
-# DID grant them): the job's token carries exactly the caller's grants, the
+# this reusable declares NO `permissions:` block (a declared block also turns
+# every scope it omits to `none`, which would strip the two reads from a caller
+# that DID grant them): the job's token carries exactly the caller's grants, the
 # documented behaviour of a called workflow, and the shortfall reaches the
 # script as the 403 the degrade path was written for. The floor -- `contents:
 # read`, `pull-requests: write`, `issues: write` -- is the caller's to grant
@@ -233,7 +233,10 @@ concurrency:
   group: desk-dispatch-${{ github.workflow }}-${{ github.event.pull_request.number || github.event.workflow_run.pull_requests[0].number || github.event.check_suite.pull_requests[0].number || github.event.workflow_run.head_sha || github.event.check_suite.head_sha }}
   cancel-in-progress: false
 
-# NO `permissions:` BLOCK, DELIBERATELY -- see "THAT SENTENCE WAS FALSE" above.
+# NO `permissions:` BLOCK IN THIS REUSABLE, DELIBERATELY -- see "THAT SENTENCE WAS
+# FALSE" above. (A self-contained render of this file DOES carry one: there the
+# caller and the callee are one file, so the block that lands is the caller's
+# grant, which is the opposite case -- tracebloc/quickstart#16.)
 # The token is the caller's; every caller declares its grants explicitly.
 
 jobs:
