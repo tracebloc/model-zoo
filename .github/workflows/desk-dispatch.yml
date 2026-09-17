@@ -1,0 +1,290 @@
+# GENERATED FILE -- DO NOT EDIT BY HAND.
+#
+# Self-contained copy of the reusable workflow `.github/workflows/desk-dispatch.yml`
+# (blob bc8ae4d7953add4c75ff1b346007b2965c42f75c) folded with the private source repo's own caller of it,
+# `.github/workflows/desk-dispatch-caller.yml` (blob 1f852c069a94d928dd7e2c6a3a37bf0500558ea2), for a PUBLIC repo: GitHub lets a
+# public repo `uses:` a reusable workflow only from a public repo, and the
+# reusables live in the private source repo. So this file carries the
+# reusable's jobs inline -- the triggers are the caller's; every `inputs.*` is
+# resolved to a literal (repo-inventory.yml's `caller_inputs` floor, else the
+# reusable's default -- the caller's own toolchain choices are NOT copied); the
+# App-token secrets are named directly; a job whose condition resolves to a
+# constant false is omitted; and each job's display name keeps the
+# `desk / ` prefix so the check contexts branch protection requires do
+# not change. Scripts are still fetched from the private source repo at run time with a
+# read-only App installation token; on a fork PR that token cannot be minted
+# (no secrets), so the checkout fails closed rather than running untrusted input.
+#
+# PUBLIC SURFACE. This file is delivered to a public repo. Exactly what was
+# scrubbed, and what was not:
+#
+#   * COMMENT TEXT -- a whole-line YAML `#` comment, a `#`-first line of a `run:`
+#     script that is not inside a heredoc, and this header -- was scrubbed: every
+#     private-repo issue reference, org-qualified private repo name, RFC id and
+#     tenant name became `(internal ref)`, and the private repo this file was
+#     generated from became `the private source repo`.
+#   * CODE -- everything else: commands, heredoc bodies, strings a workflow posts,
+#     `repository:` values, URLs, step names -- was NOT edited. An internal
+#     reference there refuses the render (it is a defect in the source), with one
+#     exception: the name of the private repo this file was generated from, which
+#     the code states verbatim because the workflow checks that repo out and
+#     fetches its scripts from it at run time. Its bare, unqualified name is not
+#     scrubbed anywhere.
+#
+# Regenerate:  python3 scripts/render-self-contained.py          (in the private source repo)
+# Verify:      python3 scripts/render-self-contained.py --check  (make selftest-self-contained)
+#
+# The comments below are the reusable's own and describe the reusable; where
+# they mention `inputs.*` or callers, read them as history.
+
+# desk-dispatch: fire ONE fresh code-review-desk session for ONE pull request, only
+# when GitHub says a review is wanted ((internal ref) and (internal ref)).
+#
+# WHY. The desk used to be a five-minute cron inside a long-lived Claude Code
+# session that re-read ~500k tokens of history on every request and woke whether
+# or not anything had changed; measured over 14 days it was the single largest
+# Claude Code cost on the machine running it. This reusable is the cheap shape:
+# no model runs until an event arrives, and then one session handles one PR from
+# a ~30k-token prefix. The workflow itself costs no tokens and a few seconds of
+# `ubuntu-slim`.
+#
+# WHO REVIEWS. `reviewer` is the identity whose review requests count and whose
+# routine fires. It is a dedicated review account, not a person: the routine runs
+# as that account (self-review mode in the skill, `CRC_SELF_REVIEW=1`), so the
+# staffing pass requests it on every PR it may review and the review lands as
+# that account. A person's login here would make their name stand in for a bot
+# on every approval, and could never cover their own PRs.
+#
+# WHAT IT FIRES ON (the decision lives in scripts/desk-dispatch.py, tested offline):
+#   review requested from `reviewer`                   -> a review session, IF the
+#                                                          head is green
+#   push to a PR `reviewer` has reviewed / is on       -> a re-review session, IF green
+#   workflow_run completed (a CI workflow): every CI run and commit status on the
+#     head terminal and green, `reviewer` requested or already on the PR, head
+#     not yet reviewed                                    -> a review session
+#   a run or status still running / any red / mergeable_state dirty
+#                                                       -> skip (the last one to
+#                                                          finish fires; red waits
+#                                                          for the author's fix)
+#   a GitHub Actions check_suite                        -> skip BEFORE any read
+#   PR opened or marked ready, non-draft               -> NO session: this job requests
+#                                                          `reviewer` AS THE APP and
+#                                                          assigns the author; the
+#                                                          review_requested that raises
+#                                                          fires the review
+#   ... with `reviewer` already requested              -> a review session, IF the head
+#                                                          is green (a no-op request
+#                                                          raises nothing; gated like
+#                                                          every other review)
+#
+# WHY THE REVIEWER REQUEST IS MADE WITH AN APP TOKEN. GitHub starts no workflow run
+# for an event raised by GITHUB_TOKEN (the recursion guard -- measured in this repo,
+# post-release-bump.yml: a Release created under GITHUB_TOKEN "NEVER FIRES"). A
+# request made with `github.token` would land and raise a `review_requested` no
+# caller sees: a reviewer and no review. So a second, narrowly scoped installation
+# token (this caller repo only, pull-requests: write) is minted for that ONE call;
+# label writes and every read stay on `github.token`.
+#   drafts, bots, promotion heads, team requests, and the reviewer's own PRs are
+#   skipped with the reason in the job summary.
+#
+# THE GREEN GATE (Lukas, 2026-09-14). The review account is the most expensive
+# check on a PR; firing it before lint, tests and Bugbot have spoken made its first
+# pass find, at review prices, what a runner finds for cents -- on a head the author
+# had to change anyway. Nothing fires until the head is green; Bugbot is part of
+# the rollup (bugbot-gate). Review latency becomes CI latency, by design. What
+# "green" means is `head_state()` in scripts/desk-dispatch.py, shared with
+# ship-dispatch.py: every CI check run and commit status on the head terminal and
+# none red, the dispatchers' own `... / dispatch` runs excluded (this run is
+# in_progress on the head while it decides). `mergeable_state` is read for
+# `dirty` only -- a review is not withheld for a missing review or a stale base.
+#
+# WHY workflow_run AND NEVER check_suite. The caller's own run is a GitHub Actions
+# check suite, and a `check_suite` trigger cannot filter by app, so a caller on
+# `check_suite: [completed]` re-triggers itself on its own completion -- skip or
+# fire -- forever (Bugbot, (internal ref) and #54). `workflow_run` names the CI
+# workflows it follows and cannot name itself, so it cannot loop. Cursor Bugbot
+# needs no suite subscription: the `Bugbot gate` workflow waits for its verdict
+# and turns it into an Actions check run, and that workflow's completion is one
+# of the `workflow_run`s the caller lists. The dispatcher still refuses an Actions
+# check_suite before reading anything, and would accept a non-Actions one, so a
+# caller that subscribes anyway loops at the workflow level, not the script's.
+# Callers MUST send `workflow_run: {workflows: [<every pull-request workflow of
+# that repo>], types: [completed]}` and grant `checks: read` + `statuses: read`
+# for the gate to run. THE GATE DEGRADES PER CALLER: this file runs at `@main`
+# for every caller at once, and a caller from before the gate grants neither
+# read. Rather than a red `desk / dispatch` on every event in ten repos, a 403 on
+# the head read fires the review UNGATED -- exactly the pre-gate behaviour --
+# with the job summary naming the missing grants (the review account,
+# (internal ref)). A caller is therefore never broken by a promotion; it is merely
+# not yet gated until it is updated.
+#
+# THAT SENTENCE WAS FALSE FOR FOURTEEN HOURS. This file used to DECLARE a
+# `permissions:` block naming the two reads. A reusable's declared permissions
+# are not a grant, they are a DEMAND on the caller: GitHub compares them with the
+# caller's grant before a single step runs, and a caller granting less is a
+# `startup_failure` -- no job, no log, no summary, "likely failed because of a
+# workflow file issue". Measured: every desk run from a pre-gate caller between
+# #67's promotion (2026-09-14 16:51Z) and this fix ended that way ((internal ref) x3,
+# (internal ref) x2, #45 x2, ...), while the runs from the gated callers passed.
+# The degrade path lives in scripts/desk-dispatch.py, which never started. So
+# this file declares NO `permissions:` block (a declared block also turns every
+# scope it omits to `none`, which would strip the two reads from a caller that
+# DID grant them): the job's token carries exactly the caller's grants, the
+# documented behaviour of a called workflow, and the shortfall reaches the
+# script as the 403 the degrade path was written for. The floor -- `contents:
+# read`, `pull-requests: write`, `issues: write` -- is the caller's to grant
+# too; a caller without it fails at the label write with the message in the
+# log, not at startup. `test_the_reusables_declare_no_permissions_block` pins
+# this. A pull-request workflow not listed by the caller leaves the review
+# unfired when it finishes last ((internal ref), (internal ref)).
+#
+# THE LOCK. `claude-desk:reviewing` on the PR means a session is on it; a second
+# review event while it is held is skipped (the hourly `--once` sweep catches up).
+# The session removes the label when it finishes (skill `--pr` mode, step 4); a
+# label older than `stale-minutes` is a dead session's and is stolen.
+#
+# FAIL CLOSED. An unreadable event, an unreadable reviews/events read, an empty
+# fire URL or token when there is work to do, or a fire the routine does not
+# answer 2xx are refusals (red job, message names the input), never a silent skip
+# (CLAUDE.md rules 3, 8). This job is NOT a required context anywhere, so a red
+# run blocks nothing; it is the operator's signal that reviews stopped flowing.
+#
+# THE CANONICAL CALLER is `desk-dispatch-caller.yml` beside this file (#38), and
+# the pilot repo `claude-skills` carries the identical file ((internal ref)).
+# It was deliberately NOT shipped with this reusable (#28): a caller calls `@main`,
+# so one landing here before this file reached main would have been a
+# startup_failure on every PR. That clause still holds -- the caller works only
+# because blob 3c732272 reached `main` on 2026-09-13 -- so any edit here that a
+# caller depends on must be promoted before a caller relies on it. The caller
+# passes `with.fire-url: ${{ vars.DESK_ROUTINE_FIRE_URL }}` and the three named
+# secrets below (RELEASE_TRAIN_APP_ID / _PRIVATE_KEY / DESK_ROUTINE_TOKEN), and
+# nothing else: `reviewer` is derived from the default, never restated.
+#
+# THE INVENTORY ROWS for this file still read `exempt` while the callers exist,
+# so caller-drift reports a stale exemption on both repos from the moment each
+# caller merges to `develop` (the audit reads train repos on `develop`, not at
+# promotion). That window is deliberate: caller first, row after, because the
+# audit reads the caller from the live branch and would check a `required` row
+# against a branch the caller is not on yet. The rows flip to `required` on the
+# condition `repo-inventory.yml`'s `desk_dispatch_rollout_pending` anchor states
+# -- the pilot OBSERVED dispatching on real PRs (a `Desk dispatch` run, then a
+# review-account verdict without a hand-fired session) -- and on nothing else.
+#
+# THE CALLER'S OWN TOKEN writes the label, reads reviews/events in its own repo,
+# and reads the head's check runs and commit statuses for the gate
+# (`pull-requests: write`, `issues: write`, `checks: read`, `statuses: read`, on
+# `contents: read`) -- GRANTED BY THE CALLER, never declared here (see the note
+# above `jobs:`); a caller granting only the first two reaches the script and
+# fires UNGATED, with the reason in the job summary. The App token is minted ONLY to read
+# this private repo's checker (`permission-contents: read` on org-config), the
+# same shape as bugbot-gate.yml. The routine token and fire URL come from the
+# caller (`secrets.routine-token`, `inputs.fire-url`); nothing is inherited.
+#
+# NO `paths:` FILTER may ever be added by a caller; NO `cancel-in-progress` here
+# (reusable-no-cancel: a cancelled corpse on an unchanged sha reddens the rollup).
+name: Desk dispatch
+
+on:
+  pull_request:
+    types: [opened, ready_for_review, review_requested, synchronize]
+  # THE GREEN GATE (Lukas, 2026-09-14): a review fires only once the head is green,
+  # and a CI workflow completing is the event that carries that. The list names
+  # EVERY workflow of THIS repo that runs on a pull-request event (a `workflow_run`
+  # trigger can name only sibling workflows, never a pattern). Every one: the
+  # dispatcher acts only when every run on the head is terminal, so a listed
+  # completion has to be the LAST one, and a pull-request workflow left off the
+  # list that finishes last leaves the review UNFIRED -- nothing re-fires
+  # ((internal ref), (internal ref)). The set is DERIVED, not kept by
+  # hand: `test_the_canonical_caller_is_gated_and_subscribes_to_no_check_suite`
+  # reads this repo's workflow files and reddens on a missing or an extra name.
+  # NEVER `check_suite` for the Actions app here: the caller's own run is such a
+  # suite and would re-trigger this workflow forever.
+  workflow_run:
+    # A `workflow_run`'s `branches` filter is on the TRIGGERING run's head branch,
+    # which for a PR run is the PR's feature branch -- so an allow-list of
+    # `develop` would exclude every PR. Ignoring the integration branches instead
+    # drops the `push` and cron completions (Caller inventory drift and
+    # Org-standards sync run on Mondays on `develop`), each of which would start
+    # a dispatch that finds no PR and skips (the review account, (internal ref)).
+    branches-ignore: [develop, staging, main]
+    workflows:
+      - Add to engineer kanban
+      - Bugbot review gate
+      - CI
+      - Code quality
+      - FR gate
+      - Route kanban Status on closure
+      - Set PR card Status on project
+      - Verify dumps against engine pin
+    types: [completed]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+  checks: read
+  statuses: read
+
+# One group per PR for EVERY event kind: a workflow_run / check_suite event carries
+# the PR under `<event>.pull_requests[0].number`. Keying them differently would let
+# a request and a finishing run on one PR execute in parallel and both read the
+# lock label as free (the defect ship-dispatch.yml had, (internal ref)).
+concurrency:
+  group: desk-dispatch-${{ github.workflow }}-${{ github.event.pull_request.number || github.event.workflow_run.pull_requests[0].number || github.event.check_suite.pull_requests[0].number || github.event.workflow_run.head_sha || github.event.check_suite.head_sha }}
+  cancel-in-progress: false
+
+# NO `permissions:` BLOCK, DELIBERATELY -- see "THAT SENTENCE WAS FALSE" above.
+# The token is the caller's; every caller declares its grants explicitly.
+
+jobs:
+  dispatch:
+    name: desk / dispatch
+    runs-on: ubuntu-slim
+    timeout-minutes: 10
+    steps:
+      - name: Mint a read-only token for org-config (private; the caller's own token cannot read it)
+        id: org-config-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.RELEASE_TRAIN_APP_ID }}
+          private-key: ${{ secrets.RELEASE_TRAIN_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: org-config
+          permission-contents: read
+      # SCOPED to the caller repo and to pull-requests: write. Used for exactly one
+      # call, the reviewer request on a staff decision (see the header): an event
+      # raised by this token starts the caller's `review_requested` run, which an
+      # event raised by `github.token` never would.
+      # Only the two event shapes that can produce a `staff` decision mint it: every
+      # other dispatch (review_requested, synchronize, workflow_run) never uses this
+      # token and must not depend on the App holding pull-requests: write for it.
+      - name: Mint a pull-requests token for the reviewer request (an App event fires a run; github.token's does not)
+        id: request-token
+        if: github.event_name == 'pull_request' && (github.event.action == 'opened' || github.event.action == 'ready_for_review')
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.RELEASE_TRAIN_APP_ID }}
+          private-key: ${{ secrets.RELEASE_TRAIN_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-pull-requests: write
+      - name: Check out the dispatcher
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: tracebloc/org-config
+          token: ${{ steps.org-config-token.outputs.token }}
+          ref: ${{ 'main' }}
+          path: .desk-dispatch-tools
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      - name: Decide, lock, fire
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DESK_REQUEST_TOKEN: ${{ steps.request-token.outputs.token }}
+          DESK_REVIEWER: ${{ 'tracebloc-review' }}
+          DESK_FIRE_URL: ${{ (vars.DESK_ROUTINE_FIRE_URL) }}
+          DESK_ROUTINE_TOKEN: ${{ secrets.DESK_ROUTINE_TOKEN }}
+          DESK_STALE_MINUTES: ${{ 45 }}
+        run: python3 .desk-dispatch-tools/scripts/desk-dispatch.py
