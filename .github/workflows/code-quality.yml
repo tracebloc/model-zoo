@@ -1,7 +1,7 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/code-quality.yml`
-# (blob 989a83785c26b32ae6047acb06315a89fc991722) folded with the private source repo's own caller of it,
+# (blob ed44273007b93d08571fa1998b4074dc7bad0f22) folded with the private source repo's own caller of it,
 # `.github/workflows/code-quality-caller.yml` (blob d0d9d4c4ecb1747e9f1b3fadcf516b79fe8c55bb), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
@@ -167,6 +167,35 @@ concurrency:
   group: code-quality-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# THE DIFF BASE, DECLARED ONCE ((internal ref)).
+#
+# Five jobs below scan "the files this change touches", and each used to carry
+# its own `BASE_SHA: ${{ github.event.pull_request.base.sha }}`. On a
+# MERGE_GROUP event there is no pull request in the payload, so all five read
+# EMPTY and every one of them took its documented fail-open branch: a queue
+# entry was scanned WHOLE-TREE. That is not merely slow. These are the five
+# `quality / *` required contexts fleet-wide, so one finding anywhere in a
+# repo's tree would block EVERY entry in that repo's queue -- including pull
+# requests that never touched the offending file -- until somebody fixed an
+# unrelated line. The queue stalls for everyone.
+#
+# ONE DECLARATION, at workflow level, inherited by every step. Five copies is
+# how the events drifted apart in the first place: each copy was correct about
+# `pull_request` and silent about everything else, and nothing compared them.
+# `scripts/tests/code-quality-diff-base-selftest.py` EVALUATES this expression
+# against both payloads and refuses a second declaration anywhere in the file.
+#
+# `||` is GitHub's falsy-coalesce: an absent key is the empty string, so the
+# pull-request key wins where it exists, the merge-group key answers where it
+# does not, and BOTH absent still yields "" -- which is what keeps the
+# all-files fallback working for `workflow_dispatch`, the one event that
+# genuinely has no base.
+#
+# The HEAD side needed no change: `github.sha` is already the merge-group head
+# (the merged result), and that is what the gitleaks step falls back to.
+env:
+  BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
+
 # Only `contents: read`. Requesting more would exceed a minimal caller's grant
 # and fail the run at startup with no jobs.
 permissions:
@@ -176,7 +205,7 @@ jobs:
   # ---------------------------------------------------------------- Python ----
   early-close:
     name: quality / pipefail early-close
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-slim
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -354,8 +383,8 @@ jobs:
   # --------------------------------------------------------------- gitleaks ---
   gitleaks:
     name: quality / gitleaks
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
+    runs-on: ubuntu-slim
+    timeout-minutes: 14  # under ubuntu-slim's hard 15-minute cap, so the timeout speaks before the platform does
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -380,7 +409,6 @@ jobs:
       - name: Scan for leaked credentials
         env:
           ALL_FILES: ${{ (inputs.all-files || false) }}
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
           BASELINE: ${{ '' }}
           SOFT_FAIL: ${{ false }}
@@ -533,7 +561,7 @@ jobs:
   # ------------------------------------------------------------ house rules ---
   house-rules:
     name: quality / house-rules
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-slim
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -565,7 +593,6 @@ jobs:
       - name: Run the house-rules checker
         env:
           ALL_FILES: ${{ (inputs.all-files || false) }}
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
           CONFIG: ${{ '.house-rules.conf' }}
           EXCLUDE: ${{ '' }}
           SOFT_FAIL: ${{ false }}
@@ -664,7 +691,7 @@ jobs:
   #   docker://image@sha256:<digest>    digest-pinned images only
   action-pins:
     name: quality / action-pins
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-slim
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
