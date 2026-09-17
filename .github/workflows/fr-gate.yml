@@ -1,7 +1,7 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/fr-gate.yml`
-# (blob 97fcf6a3fb0bbb3ff46f3a3f2a9be7e471ae89ee) folded with the private source repo's own caller of it,
+# (blob e4e1aa4f8923adc1c9aeb5ff62ac65ca768ac189) folded with the private source repo's own caller of it,
 # `.github/workflows/fr-gate-caller.yml` (blob b2e63da19a0d0369a7d7364b4596f53128f3c8ca), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
@@ -73,7 +73,10 @@ on:
 jobs:
   gate:
     name: gate / gate
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-slim
+    # ubuntu-slim hard-caps a job at 15 minutes; a board read that takes longer
+    # than this is a stuck read, and the cap would kill it without a message.
+    timeout-minutes: 10
     steps:
       - name: Determine required Status from target branch
         id: target
