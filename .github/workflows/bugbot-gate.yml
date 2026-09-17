@@ -1,7 +1,7 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/bugbot-gate.yml`
-# (blob c9f40a9f502404f2130f6198e7aa96a186b6b0fb) folded with the private source repo's own caller of it,
+# (blob 0afeca829467e90d86814c14d62e870b48858f5c) folded with the private source repo's own caller of it,
 # `.github/workflows/bugbot-gate-caller.yml` (blob f95fddc037139521b1ce428400044192ad5a3991), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
@@ -112,8 +112,10 @@ name: Bugbot review gate
 # THIS JOB WAITS, on purpose. Its central claim is that Bugbot reviewed the
 # CURRENT head, which is false for the first minutes after every push -- so it
 # polls. Measured 2026-09-13 over the 160 most recent PR heads of five repos
-# (e2e-test-agent, backend, release-train, org-config, client-runtime), every
-# one of which carried a completed `Cursor Bugbot` run: Bugbot CLAIMS a head
+# (all private; their names are withheld here because this comment is rendered
+# verbatim into PUBLIC repos' self-contained copies, and the scrub rule covers
+# `tracebloc/<repo>` references, not bare names -- tracebloc/quickstart#16),
+# every one of which carried a completed `Cursor Bugbot` run: Bugbot CLAIMS a head
 # (creates its check run) p50 10 s / p90 35 s / p95 65 s after the push, and
 # delivers the VERDICT p50 268 s / p75 381 s / p90 495 s / p95 577 s after it;
 # 3 of 160 took longer than 660 s (one at 846 s, and one head Bugbot was asked
