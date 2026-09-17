@@ -1,7 +1,7 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/fr-pass-comment.yml`
-# (blob 10490450100a90eb95801377246c6eb24843adc4) folded with the private source repo's own caller of it,
+# (blob e8dafeba5cc6a6c9739b3b7292dd483afb160ea8) folded with the private source repo's own caller of it,
 # `.github/workflows/fr-pass-comment-caller.yml` (blob bc01ef34bf604788e80a0b19d31b8fe7edfaae15), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
@@ -161,15 +161,35 @@ jobs:
           #   GET repos/{r}/pulls/{n}                      PRs read
           #   organization().projectV2 + item Status read   projects read
           #   updateProjectV2ItemFieldValue                projects WRITE
-          #   POST issues/comments/{id}/reactions          Issues WRITE  <- only option
+          #   POST issues/comments/{id}/reactions          Issues write AND PRs write
           #   POST issues/{n}/comments                     Issues write (or PRs write)
           #
-          # `issues: write` is what forces a write grant here, and it is not
-          # substitutable: GitHub documents the issue-comment REACTION endpoint as
-          # Issues write ALONE, while the comment endpoint accepts either. Both
-          # endpoints serve PR threads too -- a PR's conversation IS an issue -- so
-          # `pull-requests` stays at read, needed only for the promotion-PR ref
-          # lookup in step 3a.
+          # `pull-requests: write`, AND THE REASON IS MEASURED ((internal ref)).
+          # This block used to read "`pull-requests` stays at read" on the
+          # argument that a PR's conversation IS an issue, so `issues: write`
+          # covers its comments. That is true of the OBJECT and false of the
+          # PERMISSION: when the comment hangs off a pull request, GitHub gates
+          # the reaction on `pull_requests`, not on `issues`.
+          #
+          # What that cost: EVERY real invocation failed. The card advanced and
+          # then the run died posting the thumb --
+          #
+          #   3. Decide the outcome and advance the card -> success
+          #      -> #671: FR on staging -> Ready for prod
+          #   4. Report the outcome -> failure
+          #      gh: Resource not accessible by integration (HTTP 403)
+          #
+          # -- on five runs on 2026-09-16 alone, every one with `IS_PR: true`.
+          # The installation has granted `pull_requests: write` since
+          # 2026-09-15; the mint was narrowing it to `read`, so the ceiling was
+          # this file's, not the org's. Raising it here grants the token
+          # nothing the installation did not already allow.
+          #
+          # It was diagnosed twice as a missing org-level `Issues: write` grant
+          # and filed as one. That grant was present and requested the whole
+          # time -- which is exactly why a wrong reason written down in a
+          # comment is worse than no reason: two sessions read this block and
+          # believed it.
           #
           # `Metadata` is granted implicitly alongside any repository permission,
           # which is why the collaborator-permission read needs no row of its own.
@@ -181,7 +201,7 @@ jobs:
           #
           # Nothing reads or writes repository content, so contents drops.
           permission-issues: write
-          permission-pull-requests: read
+          permission-pull-requests: write
           permission-organization-projects: write
 
       - name: Decide the outcome and advance the card
@@ -607,16 +627,54 @@ jobs:
 
           # Reaction. The old version used GITHUB_TOKEN and hid the outcome behind
           # `|| true`, so every attempt died on HTTP 403 in silence — even the runs
-          # that DID advance the card. PROJECTS_KANBAN_TOKEN is the only token here
-          # that can write at all (see the permissions note at the top of the
-          # file), so there is no second token to fall back to — a failure is
-          # reported and fails the run instead of being swallowed.
+          # that DID advance the card. Reporting it instead of swallowing it was
+          # right; making the REACTION alone decide the run's verdict was not.
+          #
+          # THE REACTION IS NO LONGER ALLOWED TO FAIL THE RUN ON ITS OWN
+          # ((internal ref)). It 403s on every real invocation and has done through
+          # three separate diagnoses, each written into this file as settled:
+          # "the App lacks Issues: write" (filed twice, measured false — the
+          # installation had it), then "the mint narrows pull-requests to read"
+          # (fixed 2026-09-16 in (internal ref) — and `/fr-pass` failed 19 more
+          # times the same afternoon, `attempt=1`, on the fixed reusable). What is
+          # NOT in doubt is what happens on those runs: the card advances, then
+          # the thumb 403s, and a SUCCESSFUL advance reports red.
+          #
+          # That is the inversion worth removing. `FR on staging -> Ready for prod`
+          # is the single human gate in the pipeline ((internal ref) D6), and a
+          # gate that goes red when it worked teaches the operator to distrust it
+          # or to move the card by hand. So the verdict now follows the OUTCOME,
+          # and the reaction degrades to a warning WITH A FALLBACK: if the thumb
+          # cannot be delivered, the outcome is said in words instead (below), and
+          # the run fails only when NEITHER could reach the thread.
+          #
+          # This is deliberately not a fourth guess at the permission. It is
+          # correct whichever guess turns out to be right, and it stops the
+          # damage while that is still unknown.
           REACT_ERR="$RUNNER_TEMP/fr-pass.react.err"
+          REACTED=1
           if ! gh api -X POST "/repos/$REPO_FULL/issues/comments/$COMMENT_ID/reactions" \
             -f content="$REACTION" > /dev/null 2> "$REACT_ERR"; then
-            echo "::error::Could not react on comment $COMMENT_ID."
+            echo "::warning::Could not react on comment $COMMENT_ID — saying the outcome in words instead."
             sed -n '1,6p' "$REACT_ERR"
-            FAILED="reaction"
+            REACTED=0
+          fi
+
+          # THE FALLBACK. A clean advance normally carries no note (see below), so
+          # when the thumb is the only feedback and it did not land, the thread
+          # learns nothing at all. Synthesise a note so the outcome is still
+          # reported; if a note already exists it already says more than this
+          # would, so leave it alone.
+          if [ "$REACTED" -eq 0 ] && [ ! -s "$NOTE_FILE" ]; then
+            if [ "$OUTCOME" = "advanced" ]; then
+              # shellcheck disable=SC2016  # the backticks below are markdown code spans
+              printf '`/fr-pass` — **advanced #%s: %s → %s**.\n\n(The 👍 could not be posted: `%s`. The card moved; this comment is the receipt.)\n' \
+                "$NUMBER" "$FROM" "$TO" "$(sed -n '1p' "$REACT_ERR" | tr -d '\r')" > "$NOTE_FILE"
+            else
+              # shellcheck disable=SC2016  # the backticks below are markdown code spans
+              printf '`/fr-pass` — **no-op on #%s** (`%s`).\n\n(The 👎 could not be posted: `%s`.)\n' \
+                "$NUMBER" "$OUTCOME" "$(sed -n '1p' "$REACT_ERR" | tr -d '\r')" > "$NOTE_FILE"
+            fi
           fi
 
           # Explanation. Only outcomes that are a real problem carry a note; a
@@ -645,14 +703,26 @@ jobs:
             echo "### /fr-pass: $SUMMARY"
             echo ""
             echo "- outcome: \`$OUTCOME\`"
-            echo "- reaction: $REACTION on comment $COMMENT_ID"
+            if [ "$REACTED" -eq 1 ]; then
+              echo "- reaction: $REACTION on comment $COMMENT_ID"
+            else
+              echo "- reaction: REFUSED on comment $COMMENT_ID — outcome reported by comment"
+            fi
           } >> "$GITHUB_STEP_SUMMARY"
 
           # A write that failed must not leave a green run behind it — a red run
           # is the last remaining signal once the thread could not be reached.
+          # `FAILED` now means exactly that: the COMMENT could not be posted. A
+          # failed reaction alone no longer lands here, because the fallback above
+          # turned it into a comment and this check covers that comment.
           if [ -n "$FAILED" ]; then
             echo "::error::/fr-pass could not report its outcome ($FAILED). Outcome was: $OUTCOME"
             exit 1
+          fi
+
+          if [ "$REACTED" -eq 0 ]; then
+            echo "/fr-pass → $OUTCOME (reaction refused; reported by comment instead)"
+            exit 0
           fi
 
           echo "/fr-pass → $OUTCOME (reacted $REACTION)"
