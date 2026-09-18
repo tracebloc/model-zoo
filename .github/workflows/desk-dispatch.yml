@@ -1,7 +1,7 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/desk-dispatch.yml`
-# (blob 2057a61367f39ca88edd53a112dcf65f1fa8a74d) folded with the private source repo's own caller of it,
+# (blob b1be130a46f234416e4dccd3ec97654269ebbc15) folded with the private source repo's own caller of it,
 # `.github/workflows/desk-dispatch-caller.yml` (blob 1f852c069a94d928dd7e2c6a3a37bf0500558ea2), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
@@ -66,6 +66,10 @@
 #                                                       -> skip (the last one to
 #                                                          finish fires; red waits
 #                                                          for the author's fix)
+#   ... the ONLY red is `bugbot / review` and the gate  -> HEAL: re-run THAT gate run
+#       would pass if evaluated now (its threads were      in place, as the App; no
+#       resolved after it ran -- (internal ref))             session; its completion is
+#                                                          the next event
 #   a GitHub Actions check_suite                        -> skip BEFORE any read
 #   PR opened or marked ready, non-draft               -> NO session: this job requests
 #                                                          `reviewer` AS THE APP and
@@ -271,6 +275,39 @@ jobs:
           owner: ${{ github.repository_owner }}
           repositories: ${{ github.event.repository.name }}
           permission-pull-requests: write
+      # SCOPED to the caller repo and to actions: write, for exactly one call: the
+      # in-place re-run of a STALE `bugbot / review` run ((internal ref); the decision
+      # is `heal_stale_gate` in scripts/desk-dispatch.py -- the gate would pass if
+      # evaluated now, so its recorded red is stale). As the App, for the reason the
+      # request token above exists: the re-run's completion must be a `workflow_run`
+      # the caller sees, and an event raised by `github.token` starts no run.
+      # `continue-on-error`, DELIBERATELY: the App holds `actions: read` until its
+      # installation is bumped to write, and a refused mint must not redden every
+      # dispatch in the fleet. The token is then empty, and the script refuses ONLY
+      # when it finds a stale red it could have healed, naming the missing grant.
+      # Minted on EVERY event this dispatcher acts on, and the condition names no
+      # action on purpose. It used to name three (`workflow_run`, `review_requested`,
+      # `synchronize`) on the premise that a staffing event never meets a recorded
+      # verdict; that premise is false. `opened` / `ready_for_review` with `reviewer`
+      # ALREADY requested is a `review` decision in `decide_ungated` -- no
+      # `review_requested` is ever raised for a no-op request -- so it runs the same
+      # green gate and reaches the same `heal_or_skip`, where an empty token makes the
+      # script refuse and name a grant the App may already hold. An action list here
+      # is a second copy of the script's arms with nothing to hold the two together;
+      # the event name is not, so `on.pull_request.types` can grow without this
+      # drifting. A mint on an event that turns out to need no heal costs one scoped,
+      # unused installation token.
+      - name: Mint an actions token for re-running a stale Bugbot gate in place (tolerates a refused mint)
+        id: rerun-token
+        if: github.event_name == 'workflow_run' || github.event_name == 'pull_request'
+        continue-on-error: true
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.RELEASE_TRAIN_APP_ID }}
+          private-key: ${{ secrets.RELEASE_TRAIN_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-actions: write
       - name: Check out the dispatcher
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -286,6 +323,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           DESK_REQUEST_TOKEN: ${{ steps.request-token.outputs.token }}
+          DESK_RERUN_TOKEN: ${{ steps.rerun-token.outputs.token }}
           DESK_REVIEWER: ${{ 'tracebloc-review' }}
           DESK_FIRE_URL: ${{ (vars.DESK_ROUTINE_FIRE_URL) }}
           DESK_ROUTINE_TOKEN: ${{ secrets.DESK_ROUTINE_TOKEN }}
