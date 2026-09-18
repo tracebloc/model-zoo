@@ -1,7 +1,7 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/advance-deploy-env.yml`
-# (blob f8b068ecc1001349728eef16fd1ec1b09ab99fc5) folded with the private source repo's own caller of it,
+# (blob ae15fb619824dc8df2607c44fd8c377ff67d9d72) folded with the private source repo's own caller of it,
 # `.github/workflows/advance-deploy-env-caller.yml` (blob a4796127e8f8ed55464d9bc51b2271a05638712e), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
@@ -91,6 +91,12 @@ jobs:
     # cut for a repo ((internal ref) D8/#1274). Skip create/delete pushes.
     if: github.event.created != true && github.event.deleted != true
     runs-on: ubuntu-slim
+    # Under `ubuntu-slim`'s hard 15-minute cap, so the DECLARED timeout is the
+    # one that runs: with none, the job inherits GitHub's 360-minute default and
+    # the platform kills it at 15 with no timeout report at all ((internal ref)
+    # item 2; scripts/runner-tier.py asserts it for every slim job).
+    # Measured: advance / advance: n=25, 25 s median, 110 s max.
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
