@@ -1,7 +1,7 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/desk-dispatch.yml`
-# (blob b1be130a46f234416e4dccd3ec97654269ebbc15) folded with the private source repo's own caller of it,
+# (blob b85cab55e6096618c267b9b617f150e99a384ec1) folded with the private source repo's own caller of it,
 # `.github/workflows/desk-dispatch-caller.yml` (blob 1f852c069a94d928dd7e2c6a3a37bf0500558ea2), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
@@ -154,7 +154,7 @@
 # run blocks nothing; it is the operator's signal that reviews stopped flowing.
 #
 # THE CANONICAL CALLER is `desk-dispatch-caller.yml` beside this file (#38), and
-# the pilot repo `claude-skills` carries the identical file ((internal ref)).
+# a pilot repo carries the identical file ((internal ref)).
 # It was deliberately NOT shipped with this reusable (#28): a caller calls `@main`,
 # so one landing here before this file reached main would have been a
 # startup_failure on every PR. That clause still holds -- the caller works only
