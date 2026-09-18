@@ -1,7 +1,7 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/set-pr-status.yml`
-# (blob 9b17d4baf12a291c1ab79758017d1520ff801e4f) folded with the private source repo's own caller of it,
+# (blob f984ca6f070b990b6cf2588f386edcbd3c950ef1) folded with the private source repo's own caller of it,
 # `.github/workflows/set-pr-status-caller.yml` (blob cc4bdf86add1f96e79ee3a1b3c7ae426e97b003f), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
@@ -193,6 +193,12 @@ jobs:
     name: set-status / set-status
     if: ${{ github.event.pull_request.state == 'open' }}
     runs-on: ubuntu-slim
+    # Under `ubuntu-slim`'s hard 15-minute cap, so the DECLARED timeout is the
+    # one that runs: with none, the job inherits GitHub's 360-minute default and
+    # the platform kills it at 15 with no timeout report at all ((internal ref)
+    # item 2; scripts/runner-tier.py asserts it for every slim job).
+    # Measured: set-status / set-status: n=25, 20 s median, 71 s max.
+    timeout-minutes: 10
     steps:
       - name: Determine target Status
         id: target

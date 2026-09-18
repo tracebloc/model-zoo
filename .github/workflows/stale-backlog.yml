@@ -1,7 +1,7 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/stale-backlog.yml`
-# (blob eaef87153f13210990023320b7a6a2a4f522e372) folded with the private source repo's own caller of it,
+# (blob 3b9790671ac7c41e4384466a56d4e82128473a84) folded with the private source repo's own caller of it,
 # `.github/workflows/stale-backlog-caller.yml` (blob 7dcfd05395d568f7a1f68de9f339717d325c6349), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
@@ -92,7 +92,12 @@ jobs:
   stale:
     name: stale / stale
     runs-on: ubuntu-slim
-    timeout-minutes: 15
+    # 14, not 15: `ubuntu-slim` hard-caps a job at 15 minutes, so a timeout AT the
+    # cap is the one value that can never speak -- the platform kills the job first,
+    # and a killed run reads as `cancelled`, not as this job's own timeout. 14 keeps
+    # the largest budget that is actually enforced by the declaration. Measured:
+    # stale / stale runs 49 s, so the budget is not what constrains it either way.
+    timeout-minutes: 14
     steps:
       # The board read needs org-project access and the writes need issues:write,
       # both of which the tracebloc-release-train App holds ((internal ref)). This

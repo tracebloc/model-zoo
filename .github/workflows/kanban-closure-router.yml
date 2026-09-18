@@ -1,7 +1,7 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/kanban-closure-router.yml`
-# (blob 71ff0979b11f4fd8eee8fd3a27649bd49dffed3c) folded with the private source repo's own caller of it,
+# (blob a8e10cd34d912697200d34bf277c1dea9a56f8ec) folded with the private source repo's own caller of it,
 # `.github/workflows/kanban-closure-caller.yml` (blob e78122f771274190cbfcc450ccfce7ada2ff077a), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
@@ -67,6 +67,12 @@ jobs:
   route:
     name: route / route
     runs-on: ubuntu-slim
+    # Under `ubuntu-slim`'s hard 15-minute cap, so the DECLARED timeout is the
+    # one that runs: with none, the job inherits GitHub's 360-minute default and
+    # the platform kills it at 15 with no timeout report at all ((internal ref)
+    # item 2; scripts/runner-tier.py asserts it for every slim job).
+    # Measured: route / route: n=25, 16 s median, 45 s max.
+    timeout-minutes: 10
     steps:
       # The mapping comes from .github, not from a copy in this file: one
       # definition of branch -> Status ((internal ref)).
