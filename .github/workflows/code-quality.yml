@@ -1,7 +1,7 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/code-quality.yml`
-# (blob ed44273007b93d08571fa1998b4074dc7bad0f22) folded with the private source repo's own caller of it,
+# (blob 5bbecf4f44552522a977f46f2822c5db92d3d420) folded with the private source repo's own caller of it,
 # `.github/workflows/code-quality-caller.yml` (blob d0d9d4c4ecb1747e9f1b3fadcf516b79fe8c55bb), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
