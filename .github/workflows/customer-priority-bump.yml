@@ -1,7 +1,7 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/customer-priority-bump.yml`
-# (blob d17bc351cbc57ae4f89607be2282ad609f1a7131) folded with the private source repo's own caller of it,
+# (blob 14769d1a63aded09733a6e2433911de9dc7c4618) folded with the private source repo's own caller of it,
 # `.github/workflows/customer-priority-bump-caller.yml` (blob ac9868ebd437e0c4ee636ca9ff1a68b5a2f72fa0), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
@@ -116,6 +116,12 @@ jobs:
     name: bump / bump
     if: github.event.label.name == 'from:customer'
     runs-on: ubuntu-slim
+    # Under `ubuntu-slim`'s hard 15-minute cap, so the DECLARED timeout is the
+    # one that runs: with none, the job inherits GitHub's 360-minute default and
+    # the platform kills it at 15 with no timeout report at all ((internal ref)
+    # item 2; scripts/runner-tier.py asserts it for every slim job).
+    # Measured: no run in the sampled window; its sibling `bug-to-ready` already declares 10.
+    timeout-minutes: 10
     steps:
       # Authenticates as the tracebloc-release-train App ((internal ref)) instead of
       # one human's PAT. This one needs `issues: write` -- it labels an issue in the
