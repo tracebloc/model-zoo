@@ -1,7 +1,7 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/fr-pass-comment.yml`
-# (blob e8dafeba5cc6a6c9739b3b7292dd483afb160ea8) folded with the private source repo's own caller of it,
+# (blob f37c0892462ada2915c33057cae14c279a137715) folded with the private source repo's own caller of it,
 # `.github/workflows/fr-pass-comment-caller.yml` (blob bc01ef34bf604788e80a0b19d31b8fe7edfaae15), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
@@ -50,8 +50,11 @@ name: FR pass comment handler
 #   Every terminating path below leaves a signal on the thread: 👍 when the card
 #   moved, 👎 plus a one-paragraph comment saying why when it did not. The single
 #   deliberate exception is a comment that merely *mentions* the string without
-#   issuing the command ("/fr-passport", "you can /fr-pass it later") — reacting
-#   to prose would turn the bot into noise.
+#   issuing the command ("/fr-passport", "you can /fr-pass it later", or a log
+#   line QUOTED INSIDE A CODE FENCE — (internal ref)) — reacting to prose would
+#   turn the bot into noise, and it reacted 👎 to a status note twice before the
+#   fence rule was added. What counts as issuing it is defined in exactly one
+#   place, the `# selftest:fr-pass-command-*` region below.
 #
 #   The rule that follows from that: no decision may live in the job-level `if`.
 #   A false job `if` skips the job with zero steps, so there is nothing left to
@@ -284,13 +287,89 @@ jobs:
           }
 
           # ------------------------------------------------ 1. is it a command?
-          # /fr-pass must be the first token on some line of the comment. Leading
-          # whitespace and trailing text are fine; a quoted reply ("> /fr-pass")
-          # or an inline mention is not the command and must not re-trigger it.
+          # selftest:fr-pass-command-start
+          # WHAT COUNTS AS ISSUING THE COMMAND — the ONE definition. It is
+          # extracted from this file and executed by
+          # scripts/tests/fr-pass-command-selftest.py, which never re-implements
+          # the rule (CLAUDE.md rules 1 and 9): a change here is judged there.
+          #
+          # /fr-pass must be the first token on some line, AND that line must not
+          # sit inside a fenced code block. Leading whitespace and trailing text
+          # are fine; a quoted reply ("> /fr-pass") and an inline mention
+          # ("you can `/fr-pass` it later") are not the command.
+          #
+          # THE FENCE RULE EXISTS BECAUSE WRITING ABOUT THE FEATURE FIRED IT
+          # ((internal ref)). (internal ref) comment 5711673072 quoted this handler's
+          # own happy-path line inside a ``` fence:
+          #     /fr-pass → advanced (reacted +1)   (run 35200667821, 08:37Z)
+          # A quoted log line starts at column 0 by construction, so the
+          # start-of-line rule alone cannot tell it from a typed command. Runs
+          # 35202152157 and 35202154005 both decided `wrong-column`, put a 👎 on a
+          # human's status note and exited 1. Two of the eight `FR pass comment`
+          # failures anyone would count to judge whether /fr-pass is healthy were
+          # that — a 25% error in the number, caused by prose.
+          #
+          # AN UNCLOSED FENCE SWALLOWS THE REST OF THE BODY, DELIBERATELY. The
+          # two directions are not symmetrical, so "cannot tell whether this line
+          # is code" resolves to NOT a command: a missed command is a silent
+          # no-op the author retries the moment no 👍 appears, while a spurious
+          # one reacts 👎 on someone else's prose, posts a refusal note and
+          # reddens a run that means nothing. Fail toward silence.
+          #
+          # Fence grammar, per CommonMark, because a narrower rule is the bug:
+          #   * three or more backticks OR three or more tildes open a block,
+          #     indented up to three blanks (at four it is an indented code block
+          #     and the marks are literal text, not a fence);
+          #   * the closer uses the SAME character, is at least as long as the
+          #     opener and carries nothing but blanks — which is exactly what
+          #     makes a ``` line inside a ```` block content and not a closer;
+          #   * an opener may carry an info string (```bash), a closer may not.
+          # NOT stripped, on purpose: a four-space indented code block (that is
+          # also how a command gets indented under a list item, so stripping it
+          # would disarm the feature) and HTML <pre>. Neither has been measured
+          # firing this handler; the fence has.
+          strip_fenced_blocks() {
+            local line fence="" marks open_re close_re
+            # Single-quoted, and matched through a variable so the marks are
+            # regex to bash rather than text to quote-escape.
+            open_re='^[[:blank:]]{0,3}(`{3,}|~{3,})'
+            close_re='^[[:blank:]]{0,3}(`{3,}|~{3,})[[:blank:]]*$'
+            while IFS= read -r line || [ -n "$line" ]; do
+              if [ -z "$fence" ]; then
+                if [[ "$line" =~ $open_re ]]; then
+                  fence="${BASH_REMATCH[1]}"
+                  continue
+                fi
+                printf '%s\n' "$line"
+                continue
+              fi
+              # Inside a block: every line is dropped, including the closer.
+              if [[ "$line" =~ $close_re ]]; then
+                marks="${BASH_REMATCH[1]}"
+                if [ "${marks:0:1}" = "${fence:0:1}" ] && [ "${#marks}" -ge "${#fence}" ]; then
+                  fence=""
+                fi
+              fi
+            done
+          }
+
+          # $1 = path to the comment body; exit 0 when that body ISSUES the
+          # command. The stripped body is captured rather than piped into
+          # `grep -q`: under errexit+pipefail a producer whose reader closes
+          # early takes SIGPIPE, the pipeline returns 141, and a body big enough
+          # to fill the pipe buffer would read as "not a command" — the class
+          # scripts/pipefail-early-close.sh exists for.
+          issues_fr_pass_command() {
+            local visible
+            visible=$(strip_fenced_blocks < "$1")
+            grep -qiE '^[[:space:]]*/fr-pass([[:space:]].*)?$' <<< "$visible"
+          }
+          # selftest:fr-pass-command-end
+
           BODY_FILE="$RUNNER_TEMP/fr-pass.body"
           printf '%s' "$COMMENT_BODY" | tr -d '\r' > "$BODY_FILE"
-          if ! grep -qiE '^[[:space:]]*/fr-pass([[:space:]].*)?$' "$BODY_FILE"; then
-            echo "Body mentions /fr-pass but does not issue it as a command — staying silent by design."
+          if ! issues_fr_pass_command "$BODY_FILE"; then
+            echo "Body mentions /fr-pass but does not issue it as a command (an inline mention, a quoted reply, or inside a code fence) — staying silent by design."
             decide not-a-command
             exit 0
           fi

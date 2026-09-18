@@ -1,8 +1,8 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/bugbot-gate.yml`
-# (blob 0afeca829467e90d86814c14d62e870b48858f5c) folded with the private source repo's own caller of it,
-# `.github/workflows/bugbot-gate-caller.yml` (blob f95fddc037139521b1ce428400044192ad5a3991), for a PUBLIC repo: GitHub lets a
+# (blob 6476b906711c023b258eb9c127b77fe1c464c670) folded with the private source repo's own caller of it,
+# `.github/workflows/bugbot-gate-caller.yml` (blob 58f1e94219d9716ed1ad9d277ec2db56faf6386e), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
 # reusable's jobs inline -- the triggers are the caller's; every `inputs.*` is
