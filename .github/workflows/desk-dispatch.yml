@@ -1,7 +1,7 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/desk-dispatch.yml`
-# (blob b85cab55e6096618c267b9b617f150e99a384ec1) folded with the private source repo's own caller of it,
+# (blob 8bb65c91cc59cd369f971da5e4ec66931b113df0) folded with the private source repo's own caller of it,
 # `.github/workflows/desk-dispatch-caller.yml` (blob 1f852c069a94d928dd7e2c6a3a37bf0500558ea2), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
@@ -308,6 +308,71 @@ jobs:
           owner: ${{ github.repository_owner }}
           repositories: ${{ github.event.repository.name }}
           permission-actions: write
+      # A FOURTH scoped mint, for exactly ONE read: the base branch's
+      # required-status-context list, so a red check that is NOT required stops
+      # holding the head while a red required one still does ((internal ref); the
+      # callee is `gate_required` / `required_contexts` in scripts/desk-dispatch.py).
+      # `org-config`'s own fleet audits run on a
+      # `pull_request` and report on the LIVE state of every OTHER repo in the org,
+      # so one repo drifting anywhere turned an inventory PR here red and the desk
+      # stopped reviewing the very PR that fixes the drift -- circular.
+      #
+      # SCOPED TO THE CALLER'S OWN REPO, AND READ-ONLY, and that narrowness is the
+      # whole justification rather than a detail of it. An ORG-WIDE `actions: write`
+      # mint on the 20-minutely sweep was proposed this wave and its PR closed
+      # unmerged, deliberately. This is narrower on BOTH axes -- one repo, not
+      # `owner`; read, not write -- so it is not that decision again. Do not widen
+      # either axis without the measurement that justifies it: `administration:
+      # read` cannot change protection, `administration: write` is the grant that
+      # could, and onboard-repo.yml records that this App deliberately holds only
+      # read (measured 2026-09-10).
+      #
+      # NO NEW ORG GRANT IS NEEDED, and it is measured rather than assumed, twice.
+      # `bricked-prs.yml` mints `permission-administration: read` from the SAME App
+      # this reusable mints from (its `dispatcher-app-id` is `RELEASE_TRAIN_APP_ID`,
+      # which is the app-id bricked-prs.yml names directly), and
+      # `create-github-app-token` cannot mint a permission the installation lacks.
+      # Measured on that workflow's 2026-09-18 run: its "Mint an installation
+      # token" step succeeded. Stronger than the mint, the same run's audit then
+      # printed one train branch's required-context list, byte-identical to an
+      # independent admin read of that branch's protection -- so the token does not
+      # merely mint, it reads, correctly, in production, the exact list this
+      # consumes. (The run id and the branch are named on the PR that wired this,
+      # not here: this file is delivered to PUBLIC repos and they identify a
+      # private one.) Note that workflow's mint is ORG-WIDE (`owner`, no
+      # `repositories`), so this one is strictly narrower than a grant already in
+      # use on this fleet.
+      #
+      # A SEPARATE MINT, not another permission folded onto one of the three above:
+      # a permission the installation ever stops holding would take the WHOLE
+      # dispatcher down instead of degrading this one feature.
+      #
+      # `continue-on-error`, DELIBERATELY -- and NOT in the snippet (internal ref)
+      # wrote out. Without it a refused mint fails the job, which is precisely the
+      # outcome the separate-mint rule above exists to prevent; the separation only
+      # buys tolerance if the step is also allowed to fail. With it, a refusal
+      # leaves the token EMPTY, and `gate_required` returns None on an empty token
+      # WITHOUT making the call -- every red holds the head, byte-for-byte today's
+      # behaviour. That is the fail-CLOSED direction (CLAUDE.md rule 3): a token
+      # that cannot be read never opens the gate, it keeps it shut. Degrading to
+      # the old gate is correct; taking the dispatcher down is not.
+      #
+      # NO `if:` CONDITION, on purpose. This reusable's caller triggers are
+      # `pull_request` and `workflow_run` and nothing else, and BOTH reach a
+      # `gate_required` call -- the suite path and the gated PR path. A condition
+      # here would therefore always be true while reading as though it were a
+      # second copy of the script's arms, which is the drift the `rerun-token`
+      # mint above had to have its own condition widened to fix.
+      - name: Mint a protection-read token for the base branch's required contexts (tolerates a refused mint)
+        id: protection-token
+        continue-on-error: true
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.RELEASE_TRAIN_APP_ID }}
+          private-key: ${{ secrets.RELEASE_TRAIN_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-administration: read
       - name: Check out the dispatcher
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -324,6 +389,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           DESK_REQUEST_TOKEN: ${{ steps.request-token.outputs.token }}
           DESK_RERUN_TOKEN: ${{ steps.rerun-token.outputs.token }}
+          DESK_PROTECTION_TOKEN: ${{ steps.protection-token.outputs.token }}
           DESK_REVIEWER: ${{ 'tracebloc-review' }}
           DESK_FIRE_URL: ${{ (vars.DESK_ROUTINE_FIRE_URL) }}
           DESK_ROUTINE_TOKEN: ${{ secrets.DESK_ROUTINE_TOKEN }}
