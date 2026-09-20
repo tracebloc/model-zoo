@@ -1,7 +1,7 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/set-pr-status.yml`
-# (blob f984ca6f070b990b6cf2588f386edcbd3c950ef1) folded with the private source repo's own caller of it,
+# (blob dc08ba57e396dba0b6920935f5f24b751b1d2940) folded with the private source repo's own caller of it,
 # `.github/workflows/set-pr-status-caller.yml` (blob cc4bdf86add1f96e79ee3a1b3c7ae426e97b003f), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
@@ -159,9 +159,23 @@ on:
 # TRUNCATED a superseded run; queuing guarantees it completes. Both the
 # `if: state == 'open'` condition and the draft read come off the FROZEN event
 # payload, so an `edited` run that lands after the closure router has already
-# moved a merged card can still drag it back to `Code review`. Cancelling
-# narrowed that window by accident, not by design, and it paid for it with a red
-# X on every superseded run. Queuing is the better trade, not a free one.
+# moved a merged card could drag it back to `Code review`. Cancelling narrowed
+# that window by accident, not by design, and it paid for it with a red X on
+# every superseded run. Queuing is the better trade, not a free one.
+#
+# THAT WINDOW IS NOW CLOSED ON PURPOSE ((internal ref)): the write step compares
+# the card's CURRENT column against the shared pipeline order and refuses to
+# write over anything at or beyond the first post-merge column, so a late run's
+# stale payload cannot un-ship a card however the runs are ordered.
+#
+# WHICH LEAVES THIS GROUP DOING ONLY ITS OWN JOB, and that is a fact for
+# (internal ref) to act on, not this change. That ticket measured
+# `set-status / set-status` + `set-status / closing-ref` at 124 cancelled runs
+# across 47 PRs -- the largest single source of false-red rollups in the org --
+# and the reason it could not simply revisit the trade here was that the group
+# was quietly compensating for the demotion above. It no longer is. The group
+# stays exactly as it is in THIS change: one idea per PR, and the concurrency
+# decision is that ticket's to make with its own evidence.
 #
 # RESIDUAL, stated rather than glossed: GitHub cancels a previously PENDING run
 # when a third event supersedes it, so a burst of 3+ rapid edits can still
@@ -178,17 +192,24 @@ jobs:
   # Before `edited`, every trigger this workflow had -- opened, reopened,
   # ready_for_review, converted_to_draft -- was reachable only on an OPEN PR, so
   # an unconditional write to `Code review` was always correct. `edited` is not:
-  # GitHub fires it when a MERGED PR's title or body is edited, and this job
-  # writes Status unconditionally. Editing a typo in a shipped PR's description
-  # would therefore drag its card from `Prod` back to `Code review` -- a
-  # DEMOTION, in the one file in the fleet whose board writes are not already
-  # monotonic (`advance-deploy-env.yml` compares pipeline rank; this job does
-  # not, because until now it could not need to).
+  # GitHub fires it when a MERGED PR's title or body is edited, and this
+  # condition is read off the FROZEN event payload -- so an `edited` run that
+  # lands after the closure router has moved a merged card still passes it.
   #
   # Guarded by state rather than by event name on purpose: `if: github.event.action
   # != 'edited'` would have kept the demotion out but also disabled the board write
   # for a DRAFT toggled by an edit, and it states the exception instead of the rule.
   # The rule is that this job describes an open PR's review state.
+  #
+  # AND THE CONDITION IS NOT THE GUARD ((internal ref)). It narrows WHEN this job
+  # runs; what it cannot do is decide whether the write moves the card BACKWARD,
+  # because the payload it reads is a snapshot of a PR that may since have
+  # merged. Editing a typo in a shipped PR's description therefore dragged its
+  # card from `Prod` back to `Code review` -- a DEMOTION, in the one file in the
+  # fleet whose board writes were not rank-guarded. The write step below now
+  # compares the card's CURRENT column against the shared pipeline order and
+  # refuses to write over anything at or beyond the first post-merge column;
+  # see "Refuse to write over a card that has left review" there.
   set-status:
     name: set-status / set-status
     if: ${{ github.event.pull_request.state == 'open' }}
@@ -208,6 +229,37 @@ jobs:
           else
             echo "status_name=Code review" >> "$GITHUB_OUTPUT"
           fi
+
+      # THE PIPELINE ORDER IS FETCHED, NOT CARRIED ((internal ref)). The write
+      # below has to know whether the card has already left review, and the only
+      # honest answer is the org's ONE declaration of the order --
+      # `scripts/pipeline_rank.sh` in this repo, which `advance-deploy-env.yml`
+      # reads for the same comparison. A `case` of twelve columns pasted into
+      # this file would agree with that one until a column is renamed or
+      # inserted, and then disagree silently, in the direction that un-ships
+      # cards (CLAUDE.md rule 1).
+      #
+      # Same shape, same reasons and the same App as the closing-ref job below:
+      # this repo is PRIVATE, so the caller's own token cannot read it, and the
+      # App id and key arrive because every caller passes `secrets: inherit`.
+      - name: Mint a read-only token for org-config (private; the caller's own token cannot read it)
+        id: rank-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.RELEASE_TRAIN_APP_ID }}
+          private-key: ${{ secrets.RELEASE_TRAIN_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: org-config
+          permission-contents: read
+
+      - name: Check out the shared pipeline order
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: tracebloc/org-config
+          token: ${{ steps.rank-token.outputs.token }}
+          ref: ${{ 'main' }}
+          path: .kanban-rank
+          persist-credentials: false
 
       # Board writes authenticate as the tracebloc-release-train App, not a human's
       # PAT ((internal ref)). The App's installation budget is separate from any
@@ -324,7 +376,15 @@ jobs:
               query($org: String!, $repo: String!, $num: Int!) {
                 repository(owner: $org, name: $repo) {
                   pullRequest(number: $num) {
-                    projectItems(first: 10) { nodes { id project { number } } }
+                    projectItems(first: 10) {
+                      nodes {
+                        id
+                        project { number }
+                        status: fieldValueByName(name: "Status") {
+                          ... on ProjectV2ItemFieldSingleSelectValue { name }
+                        }
+                      }
+                    }
                   }
                 }
               }' -F org="$ORG" -F repo="$REPO_NAME" -F num="$PR_NUMBER") \
@@ -334,6 +394,11 @@ jobs:
             fi
             ITEM_ID=$(jq -r --arg n "$PROJECT_NUMBER" 'first(.data.repository.pullRequest.projectItems.nodes[]?
                   | select(.project.number == ($n | tonumber)) | .id) // ""' <<<"$RESP")
+            # READ FROM THE SAME RESPONSE THE ITEM ID CAME FROM, inside the loop.
+            # A second query would be a second point in time, and the guard below
+            # is about a card that moved between two points in time.
+            CURRENT_STATUS=$(jq -r --arg n "$PROJECT_NUMBER" 'first(.data.repository.pullRequest.projectItems.nodes[]?
+                  | select(.project.number == ($n | tonumber)) | .status.name) // ""' <<<"$RESP")
             if [ -n "$ITEM_ID" ] && [ "$ITEM_ID" != "null" ]; then break; fi
             echo "PR not yet on project, waiting ($i/5)…"
             sleep 5
@@ -392,20 +457,105 @@ jobs:
             # response carrying errors[] has no item id to give, and must fail as
             # a refused write, not fall through to "could not be added" as if the
             # board had simply said no.
+            #
+            # AND THE ADD ANSWERS WITH THE CARD'S COLUMN, not only its id. The
+            # idempotence this block is built on cuts both ways: when the lookup
+            # above did not return the item -- the PR is on more projects than
+            # the `projectItems(first: 10)` page reads, or the board answered
+            # without it -- this mutation returns the EXISTING card rather than
+            # a new one. Taking only `item.id` from that response left
+            # CURRENT_STATUS empty, so the guard below ranked a card that may
+            # sit at `Prod` as 0 and wrote `Code review` over it: the demotion
+            # this change closes, reopened on the one path where the card was
+            # never read. So the Status comes from the SAME response the id
+            # comes from -- one call, one point in time, the rule the lookup
+            # states for itself. A genuinely new card answers `null`, which is
+            # the empty CURRENT_STATUS the guard reads as "place it".
             # shellcheck disable=SC2016  # the $names here are GraphQL variables, not shell - keep literal
             ADD_RESP=$(gh api graphql -f query='
               mutation($p: ID!, $c: ID!) {
-                addProjectV2ItemById(input: {projectId: $p, contentId: $c}) { item { id } }
+                addProjectV2ItemById(input: {projectId: $p, contentId: $c}) {
+                  item {
+                    id
+                    status: fieldValueByName(name: "Status") {
+                      ... on ProjectV2ItemFieldSingleSelectValue { name }
+                    }
+                  }
+                }
               }' -F p="$PROJECT_ID" -F c="$PR_NODE_ID" 2>&1) \
               || { echo "::error::PR #$PR_NUMBER add-to-project write failed: $ADD_RESP" >&2; exit 1; }
             reject_graphql_errors "$ADD_RESP" "PR #$PR_NUMBER add-to-project write" || exit 1
             ITEM_ID=$(jq -r '.data.addProjectV2ItemById.item.id // empty' <<< "$ADD_RESP")
+            CURRENT_STATUS=$(jq -r '.data.addProjectV2ItemById.item.status.name // ""' <<< "$ADD_RESP")
           fi
 
           if [ -z "$ITEM_ID" ] || [ "$ITEM_ID" = "null" ]; then
             echo "::error::PR #$PR_NUMBER is not on project $PROJECT_NUMBER and could not be" \
                  "added to it. The board write cannot proceed; this is not a race."
             exit 1
+          fi
+
+          # ---------------------------------------------------------------
+          # Refuse to write over a card that has left review ((internal ref)).
+          #
+          # THE DEMOTION THIS CLOSES. `edited` is on the callers deliberately
+          # ((internal ref) -- `closing-ref` reads the title and body, so without
+          # it the gate is bypassable), and GitHub fires `edited` when a MERGED
+          # PR's title or body is edited. The job condition that is supposed to
+          # keep merged PRs out reads `pull_request.state` off the FROZEN event
+          # payload, so a run queued behind another one can arrive after the
+          # closure router has already moved the card and still believe the PR
+          # is open. Everything above this point then behaves perfectly and
+          # writes `Code review` over `Prod`.
+          #
+          # RANK, NOT EVENT NAME, for the same reason `advance-deploy-env.yml`
+          # compares rank: the invariant is that automation never moves a card
+          # BACKWARD ((internal ref)), and an event name is a proxy for that
+          # which is wrong in both directions.
+          #
+          # THE LINE IS THE FIRST POST-MERGE COLUMN, not the target's own rank.
+          # This job owns the pre-merge review columns and legitimately moves a
+          # card BACKWARD inside them -- `converted_to_draft` is `Code review`
+          # -> `In progress`, and a monotonic-by-target guard would refuse that
+          # and break the draft toggle this workflow exists for. What it must
+          # never do is write over a column it does not own. `pipeline_rank.sh`
+          # names that anchor beside the table it indexes into, so an INSERTED
+          # column -- which is how `Staging (agent review)` arrived -- needs no
+          # edit here ((internal ref)).
+          #
+          # FAIL CLOSED, THREE WAYS, and none of them defaults to writing:
+          #   unreadable order   the tool is missing or errors -> exit 1
+          #   unplaceable column a Status the order does not declare -> exit 1,
+          #                      because a card in a column nobody has ranked
+          #                      cannot be shown NOT to be shipped work
+          #   at or past the     refuse the write, exit 0 -- this is the
+          #   anchor             ORDINARY outcome (every `edited` on a merged
+          #                      PR takes it), so it must not paint the fleet
+          #                      red; the notice says what was not written
+          # An EMPTY current Status is none of those three: the card has just
+          # been added (possibly by the block above) and giving it a column is
+          # what the "no card sits at No Status" invariant depends on.
+          RANK_TOOL=".kanban-rank/scripts/pipeline_rank.sh"
+          if ! MERGED_FLOOR=$(bash "$RANK_TOOL" --first-post-merge); then
+            echo "::error::PR #$PR_NUMBER: the shared pipeline order could not be read from" \
+                 "$RANK_TOOL, so Status=$STATUS_NAME cannot be shown not to demote this card." \
+                 "NOTHING WAS WRITTEN." >&2
+            exit 1
+          fi
+          CURRENT_RANK=0
+          if [ -n "${CURRENT_STATUS:-}" ] && ! CURRENT_RANK=$(bash "$RANK_TOOL" "$CURRENT_STATUS"); then
+            echo "::error::PR #$PR_NUMBER sits in '$CURRENT_STATUS', which the shared pipeline" \
+                 "order does not declare, so Status=$STATUS_NAME cannot be shown not to demote" \
+                 "it. NOTHING WAS WRITTEN. Add the column to scripts/pipeline_rank.sh in" \
+                 "tracebloc/org-config if the board really has it." >&2
+            exit 1
+          fi
+          if [ "$CURRENT_RANK" -ge "$MERGED_FLOOR" ]; then
+            echo "::notice::PR #$PR_NUMBER is at '$CURRENT_STATUS', at or beyond the first" \
+                 "post-merge column -- NOT writing Status=$STATUS_NAME. This event's payload" \
+                 "says the PR is open; the board says the work has moved on, and the board is" \
+                 "the later fact."
+            exit 0
           fi
 
           # Pass the option ID with -f (raw string), NOT -F: ProjectV2 option IDs can
