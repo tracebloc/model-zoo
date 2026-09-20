@@ -55,7 +55,7 @@ and this repo's default reviewer. Rollout: (internal ref).
 ### Filing issues
 
 - Internal work — planning, epics, security findings, infrastructure, anything mentioning a customer — is filed in `backend` (the private catch-all), never in a public repo. When in doubt: `backend`.
-- Public repos -- every `visibility: public` row in `the private source repo/repo-inventory.yml` -- only get issues a stranger could act on: about the public artifact itself, with no customer names, internal URLs, or internal paths. This bullet used to enumerate them by name and had drifted on four of its seven entries by 2026-09-14 (`docs` private since 2026-08, `model-zoo` and `start-training` archived-and-private, `data-ingestors` private under (internal ref) runbook 2.5b). Restating the authority is the defect; the inventory is the list.
+- Public repos -- every `visibility: public` row in `the private source repo/repo-inventory.yml` -- only get issues a stranger could act on: about the public artifact itself, with no customer names, internal URLs, or internal paths. This bullet used to enumerate them by name and drifted. Restating the authority is the defect; the inventory is the list.
 
 ### AI-assisted sessions (Claude Code, etc.)
 
