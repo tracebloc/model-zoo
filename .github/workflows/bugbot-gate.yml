@@ -20,16 +20,20 @@
 #
 #   * COMMENT TEXT -- a whole-line YAML `#` comment, a `#`-first line of a `run:`
 #     script that is not inside a heredoc, and this header -- was scrubbed: every
-#     private-repo issue reference, org-qualified private repo name, RFC id and
-#     tenant name became `(internal ref)`, and the private repo this file was
-#     generated from became `the private source repo`.
+#     private-repo issue reference, private repo name (org-qualified OR bare),
+#     RFC id and tenant name became `(internal ref)`, and the private repo this
+#     file was generated from became `the private source repo`.
+#     A bare name is left alone where the next character is `/` or `#`: that is a
+#     path or branch prefix, or the issue form, which is matched on its own.
 #   * CODE -- everything else: commands, heredoc bodies, strings a workflow posts,
 #     `repository:` values, URLs, step names -- was NOT edited. An internal
-#     reference there refuses the render (it is a defect in the source), with one
+#     reference there refuses the render (it is a defect in the source). A BARE
+#     private repo name is never judged in code at all: several are also public
+#     product identifiers -- an image a public chart installs, a package name, a
+#     branch prefix -- so only the org-qualified spelling refuses there, with one
 #     exception: the name of the private repo this file was generated from, which
 #     the code states verbatim because the workflow checks that repo out and
-#     fetches its scripts from it at run time. Its bare, unqualified name is not
-#     scrubbed anywhere.
+#     fetches its scripts from it at run time.
 #
 # Regenerate:  python3 scripts/render-self-contained.py          (in the private source repo)
 # Verify:      python3 scripts/render-self-contained.py --check  (make selftest-self-contained)
@@ -233,9 +237,9 @@ jobs:
     steps:
       # Same shape as code-quality.yml and blocked-gate.yml: the checker lives
       # here, not in the calling repo, so the reusable fetches it. This repo is
-      # PRIVATE (org-config replaced the public `.github` as the host on
+      # PRIVATE (the private source repo replaced the public `.github` as the host on
       # 2026-09-10) and the caller's `github.token` reads only the caller's own
-      # repo, so the checkout needs a token that can read org-config: a
+      # repo, so the checkout needs a token that can read the private source repo: a
       # read-only App installation token, minted from the two secrets the
       # caller passes by name (`on.workflow_call.secrets` above, Q5).
       - name: Mint a read-only token for org-config (private; the caller's own token cannot read it)
