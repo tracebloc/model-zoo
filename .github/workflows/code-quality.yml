@@ -1,7 +1,7 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/code-quality.yml`
-# (blob be75cd1787d872d1876b1a293eea96d2b5a9e844) folded with the private source repo's own caller of it,
+# (blob 23c299ec089ba6bbe98ad9e3fa555a73a7d283dc) folded with the private source repo's own caller of it,
 # `.github/workflows/code-quality-caller.yml` (blob d0d9d4c4ecb1747e9f1b3fadcf516b79fe8c55bb), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
@@ -14,6 +14,9 @@
 # not change. Scripts are still fetched from the private source repo at run time with a
 # read-only App installation token; on a fork PR that token cannot be minted
 # (no secrets), so the checkout fails closed rather than running untrusted input.
+# Where the copy checks the private source repo out, its `tools-ref` is the literal `main` --
+# the ref every caller of the reusable pins -- because a public copy has no
+# reusable to take the commit from (the private original defaults to its own).
 #
 # PUBLIC SURFACE. This file is delivered to a public repo. Exactly what was
 # scrubbed, and what was not:
@@ -235,6 +238,32 @@ jobs:
           repositories: org-config
           permission-contents: read
 
+      # THE TOOLS REF ((internal ref) D4). `job.workflow_sha` is the commit of THIS
+      # reusable file -- the one the caller pinned -- so the scripts checked out
+      # below are the ones this workflow was reviewed with; a `@main` caller gets
+      # `main`'s. `tools-ref` overrides it to test a tools change against a pinned
+      # workflow. An EMPTY ref would make actions/checkout take the tools repo's
+      # DEFAULT branch fleet-wide, so it is refused here rather than checked out.
+      # The SHA is read out of `toJSON(job)` in shell because actionlint's schema
+      # of the `job` context (1.7.12) does not know `workflow_sha` yet.
+      - name: Resolve the tools ref, refusing an empty one
+        id: tools-ref
+        if: ${{ steps.gates.outputs.early_close == 'true' }}
+        env:
+          TOOLS_REF: ${{ 'main' }}
+          JOB_CONTEXT: ${{ toJSON(job) }}
+        run: |
+          if [ -z "$TOOLS_REF" ]; then
+            case "$JOB_CONTEXT" in
+              *'"workflow_sha"'*) TOOLS_REF="${JOB_CONTEXT#*\"workflow_sha\": \"}"; TOOLS_REF="${TOOLS_REF%%\"*}" ;;
+            esac
+          fi
+          if ! [[ "$TOOLS_REF" =~ ^[0-9a-f]{40}$ || ( -n "$TOOLS_REF" && "$TOOLS_REF" != *[![:alnum:]._/-]* ) ]]; then
+            echo "::error::the tools ref is empty or not a ref (${TOOLS_REF:-<empty>}); an empty ref would check out the tools repo's default branch instead of the commit this workflow was pinned at. Refusing."
+            exit 1
+          fi
+          echo "ref=$TOOLS_REF" >> "$GITHUB_OUTPUT"
+          echo "tools ref: $TOOLS_REF"
       - name: Check out the shared checker
         if: ${{ steps.gates.outputs.early_close == 'true' }}
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -242,7 +271,7 @@ jobs:
           repository: tracebloc/org-config
           token: ${{ steps.org-config-token.outputs.token }}
           ref: ${{ 'main' }}
-          path: .quality-tools
+          path: .org-config-tools
           persist-credentials: false
 
       # PyYAML IS PROVISIONED, NEVER ASSUMED. The YAML phase imports it, and a
@@ -299,7 +328,7 @@ jobs:
           YAML_SOFT_FAIL: ${{ true }}
         run: |
           set -uo pipefail
-          GATE=".quality-tools/scripts/pipefail-early-close.sh"
+          GATE=".org-config-tools/scripts/pipefail-early-close.sh"
           chmod +x "$GATE"
 
           # TWO SCOPES, ONE RULE ((internal ref)). `shell` is the tree's shell
@@ -327,7 +356,7 @@ jobs:
             OUT="/tmp/early-close-$scope.out"
             ERR="/tmp/early-close-$scope.err"
 
-            # PIPEFAIL_ROOT is the CALLER's checkout. The `.quality-tools` tree
+            # PIPEFAIL_ROOT is the CALLER's checkout. The `.org-config-tools` tree
             # sits inside the workspace but outside the caller's git index, so
             # `git ls-files` cannot reach it and the checker never lints itself.
             RC=0
@@ -402,13 +431,13 @@ jobs:
       # FAILED on a finding, and this half must still report its own.
 
       # THE SHARED WORKSPACE IS NOT SHARED WITH BLACK. The early-close half
-      # above checks the private source repo out at `.quality-tools`, and before this merge
+      # above checks the private source repo out at `.org-config-tools`, and before this merge
       # the format half ran in its own job where that tree did not exist. The
       # early-close gate is unaffected by it either way -- `PIPEFAIL_ROOT` is
       # the caller's checkout and `git ls-files` cannot reach an untracked
       # subtree, as its own comment records -- but black does NOT discover
       # through the git index: `black --check .` walks the directory, and
-      # `.quality-tools` is in neither black's default excludes nor the
+      # `.org-config-tools` is in neither black's default excludes nor the
       # caller's `.gitignore`. So all-files mode (a `workflow_dispatch` sizing
       # run, or the diff-fallback) would have judged the private source repo's Python under
       # the CALLER's `black-version` and the caller's `[tool.black]` -- files
@@ -423,14 +452,14 @@ jobs:
       # caller's would silently un-exclude paths that are. Deleting the tree
       # restores exactly what the format half saw before the merge and leaves
       # black's invocation -- and therefore every caller's verdict -- untouched.
-      # Nothing after this point reads `.quality-tools`; house-rules and
+      # Nothing after this point reads `.org-config-tools`; house-rules and
       # dead-weight check it out into their own jobs. A no-op when the
       # early-close half is off and the tree was never created.
       - name: Drop the shared checker before black walks the tree
         if: ${{ !cancelled() && steps.gates.outputs.format == 'true' }}
         run: |
           set -euo pipefail
-          rm -rf .quality-tools
+          rm -rf .org-config-tools
 
       - name: Resolve the file set
         id: files
@@ -756,15 +785,38 @@ jobs:
           repositories: org-config
           permission-contents: read
 
+      # THE TOOLS REF ((internal ref) D4). `job.workflow_sha` is the commit of THIS
+      # reusable file -- the one the caller pinned -- so the scripts checked out
+      # below are the ones this workflow was reviewed with; a `@main` caller gets
+      # `main`'s. `tools-ref` overrides it to test a tools change against a pinned
+      # workflow. An EMPTY ref would make actions/checkout take the tools repo's
+      # DEFAULT branch fleet-wide, so it is refused here rather than checked out.
+      # The SHA is read out of `toJSON(job)` in shell because actionlint's schema
+      # of the `job` context (1.7.12) does not know `workflow_sha` yet.
+      - name: Resolve the tools ref, refusing an empty one
+        id: tools-ref
+        env:
+          TOOLS_REF: ${{ 'main' }}
+          JOB_CONTEXT: ${{ toJSON(job) }}
+        run: |
+          if [ -z "$TOOLS_REF" ]; then
+            case "$JOB_CONTEXT" in
+              *'"workflow_sha"'*) TOOLS_REF="${JOB_CONTEXT#*\"workflow_sha\": \"}"; TOOLS_REF="${TOOLS_REF%%\"*}" ;;
+            esac
+          fi
+          if ! [[ "$TOOLS_REF" =~ ^[0-9a-f]{40}$ || ( -n "$TOOLS_REF" && "$TOOLS_REF" != *[![:alnum:]._/-]* ) ]]; then
+            echo "::error::the tools ref is empty or not a ref (${TOOLS_REF:-<empty>}); an empty ref would check out the tools repo's default branch instead of the commit this workflow was pinned at. Refusing."
+            exit 1
+          fi
+          echo "ref=$TOOLS_REF" >> "$GITHUB_OUTPUT"
+          echo "tools ref: $TOOLS_REF"
       - name: Check out the shared checker
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: tracebloc/org-config
           token: ${{ steps.org-config-token.outputs.token }}
-          # Same repo this workflow lives in, so `main` is the version that
-          # matches a `@main` caller. `quality-ref` overrides it for testing.
           ref: ${{ 'main' }}
-          path: .quality-tools
+          path: .org-config-tools
           persist-credentials: false
 
       - name: Run the house-rules checker
@@ -775,7 +827,7 @@ jobs:
           SOFT_FAIL: ${{ false }}
         run: |
           set -uo pipefail
-          CHECKER=".quality-tools/scripts/house-rules.sh"
+          CHECKER=".org-config-tools/scripts/house-rules.sh"
           chmod +x "$CHECKER"
 
           set -- --github --summary "$GITHUB_STEP_SUMMARY"
@@ -786,7 +838,7 @@ jobs:
             set -- "$@" --exclude "$EXCLUDE"
           fi
           # The checker's own tree must not be linted as if it were the repo's.
-          set -- "$@" --exclude '.quality-tools/*'
+          set -- "$@" --exclude '.org-config-tools/*'
           if [ "$SOFT_FAIL" = "true" ]; then
             set -- "$@" --soft-fail
           fi
@@ -819,7 +871,7 @@ jobs:
           SOFT_FAIL: ${{ true }}
         run: |
           set -uo pipefail
-          CHECKER=".quality-tools/scripts/dead-weight.py"
+          CHECKER=".org-config-tools/scripts/dead-weight.py"
           python3 -c 'import sys; sys.exit(0 if sys.version_info >= (3, 11) else 1)' || {
             echo "::error::dead-weight needs python3 >= 3.11 (tomllib); the runner has $(python3 --version)"
             exit 1
@@ -832,7 +884,7 @@ jobs:
           if [ -n "${EXCLUDE:-}" ]; then
             set -- "$@" --exclude "$EXCLUDE"
           fi
-          set -- "$@" --exclude '.quality-tools/*'
+          set -- "$@" --exclude '.org-config-tools/*'
           if [ "$SOFT_FAIL" = "true" ]; then
             set -- "$@" --soft-fail
           fi

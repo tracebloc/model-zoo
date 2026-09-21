@@ -1,7 +1,7 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/advance-deploy-env.yml`
-# (blob 2e135086454da3a7aaf799ce08215370a8bedbad) folded with the private source repo's own caller of it,
+# (blob 5c1b3f33a5253ddb23334e531496ab5442ad650a) folded with the private source repo's own caller of it,
 # `.github/workflows/advance-deploy-env-caller.yml` (blob a4796127e8f8ed55464d9bc51b2271a05638712e), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
@@ -14,6 +14,9 @@
 # not change. Scripts are still fetched from the private source repo at run time with a
 # read-only App installation token; on a fork PR that token cannot be minted
 # (no secrets), so the checkout fails closed rather than running untrusted input.
+# Where the copy checks the private source repo out, its `tools-ref` is the literal `main` --
+# the ref every caller of the reusable pins -- because a public copy has no
+# reusable to take the commit from (the private original defaults to its own).
 #
 # PUBLIC SURFACE. This file is delivered to a public repo. Exactly what was
 # scrubbed, and what was not:
@@ -118,12 +121,37 @@ jobs:
           repositories: org-config
           permission-contents: read
 
+      # THE TOOLS REF ((internal ref) D4). `job.workflow_sha` is the commit of THIS
+      # reusable file -- the one the caller pinned -- so the scripts checked out
+      # below are the ones this workflow was reviewed with; a `@main` caller gets
+      # `main`'s. `tools-ref` overrides it to test a tools change against a pinned
+      # workflow. An EMPTY ref would make actions/checkout take the tools repo's
+      # DEFAULT branch fleet-wide, so it is refused here rather than checked out.
+      # The SHA is read out of `toJSON(job)` in shell because actionlint's schema
+      # of the `job` context (1.7.12) does not know `workflow_sha` yet.
+      - name: Resolve the tools ref, refusing an empty one
+        id: tools-ref
+        env:
+          TOOLS_REF: ${{ 'main' }}
+          JOB_CONTEXT: ${{ toJSON(job) }}
+        run: |
+          if [ -z "$TOOLS_REF" ]; then
+            case "$JOB_CONTEXT" in
+              *'"workflow_sha"'*) TOOLS_REF="${JOB_CONTEXT#*\"workflow_sha\": \"}"; TOOLS_REF="${TOOLS_REF%%\"*}" ;;
+            esac
+          fi
+          if ! [[ "$TOOLS_REF" =~ ^[0-9a-f]{40}$ || ( -n "$TOOLS_REF" && "$TOOLS_REF" != *[![:alnum:]._/-]* ) ]]; then
+            echo "::error::the tools ref is empty or not a ref (${TOOLS_REF:-<empty>}); an empty ref would check out the tools repo's default branch instead of the commit this workflow was pinned at. Refusing."
+            exit 1
+          fi
+          echo "ref=$TOOLS_REF" >> "$GITHUB_OUTPUT"
+          echo "tools ref: $TOOLS_REF"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: tracebloc/org-config
           token: ${{ steps.org-config-token.outputs.token }}
-          ref: main
-          path: .kanban-map
+          ref: ${{ 'main' }}
+          path: .org-config-tools
           persist-credentials: false
 
       - name: Resolve deploy env + status (one shared mapping)
@@ -140,7 +168,7 @@ jobs:
         # for the same merge and run ordering decided which stuck.
         # Third argument is the REF to read `.kanban.yml` from, which is the branch
         # being mapped -- not the repo default (Bugbot, .github#295).
-        run: python3 .kanban-map/scripts/branch_status_map.py "$BRANCH" "$GITHUB_REPOSITORY" "$BRANCH"
+        run: python3 .org-config-tools/scripts/branch_status_map.py "$BRANCH" "$GITHUB_REPOSITORY" "$BRANCH"
 
       - name: Skip if branch not tracked
         if: steps.env.outputs.env == ''
@@ -271,9 +299,9 @@ jobs:
         # none (2/48 on the 2026-09-07 staging hop). The script GETs each commit's
         # merged PR and falls back to the subject only when the API is empty, with a
         # `::warning::` so an unattributed commit is visible. It lives in .github
-        # (checked out at .kanban-map above), one definition; `git log` runs against
+        # (checked out at .org-config-tools above), one definition; `git log` runs against
         # the caller's checkout (cwd). Selftest: scripts/tests/extract-advanced-prs-selftest.sh.
-        run: bash .kanban-map/scripts/extract-advanced-prs.sh
+        run: bash .org-config-tools/scripts/extract-advanced-prs.sh
 
       - name: Update project fields for each PR
         if: steps.env.outputs.env != '' && steps.prs.outputs.prs != ''
@@ -396,7 +424,7 @@ jobs:
           # Here an unplaceable Status now skips that ITEM, is recorded, and
           # fails the step at the end -- the shape this loop already uses for a
           # lookup it could not make.
-          RANK_TOOL=".kanban-map/scripts/pipeline_rank.sh"
+          RANK_TOOL=".org-config-tools/scripts/pipeline_rank.sh"
           rank() { bash "$RANK_TOOL" "$1"; }
           if ! TARGET_RANK=$(rank "$STATUS_NAME"); then
             echo "::error::Status '$STATUS_NAME' has no place in the pipeline order," \

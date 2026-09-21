@@ -1,8 +1,8 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/desk-dispatch.yml`
-# (blob 682533abc2baa7f597eb3d67cc91aa69b97245e6) folded with the private source repo's own caller of it,
-# `.github/workflows/desk-dispatch-caller.yml` (blob c8897e878297f63dbfd86649365a33bfdd4751fe), for a PUBLIC repo: GitHub lets a
+# (blob 9d6b4759479547a19b037d5805b2f146e3b49f4e) folded with the private source repo's own caller of it,
+# `.github/workflows/desk-dispatch-caller.yml` (blob 0dcabc0912110a8bf7493885612aa02beed15535), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
 # reusable's jobs inline -- the triggers are the caller's; every `inputs.*` is
@@ -14,6 +14,9 @@
 # not change. Scripts are still fetched from the private source repo at run time with a
 # read-only App installation token; on a fork PR that token cannot be minted
 # (no secrets), so the checkout fails closed rather than running untrusted input.
+# Where the copy checks the private source repo out, its `tools-ref` is the literal `main` --
+# the ref every caller of the reusable pins -- because a public copy has no
+# reusable to take the commit from (the private original defaults to its own).
 #
 # PUBLIC SURFACE. This file is delivered to a public repo. Exactly what was
 # scrubbed, and what was not:
@@ -220,6 +223,15 @@ name: Desk dispatch
 on:
   pull_request:
     types: [opened, ready_for_review, review_requested, synchronize, unlabeled]
+  # NO BASE FILTER HERE, AND NOT FOR WANT OF TRYING ((internal ref)). Dropping
+  # every PR into staging or main at the trigger would have been the stronger
+  # guard -- no run exists, so not even a run cancelled while still pending can
+  # attach a void check-run to a sha that is simultaneously a branch tip. It also
+  # drops an emergency hotfix into `main` ((internal ref)'s `scripts/hotfix-repo.sh`
+  # opens one), leaving it with no reviewer staffed, and `on:` filters a BASE ref
+  # only -- there is no way to spell "from a `release-train/` branch" here. So the
+  # precise predicate can only live in the callee, and the callee's `if:` is the
+  # whole guard -- (internal ref).
   # THE GREEN GATE (Lukas, 2026-09-14): a review fires only once the head is green,
   # and a CI workflow completing is the event that carries that. The list names
   # EVERY workflow of THIS repo that runs on a pull-request event (a `workflow_run`
@@ -277,6 +289,64 @@ jobs:
     name: desk / dispatch
     runs-on: ubuntu-slim
     timeout-minutes: 10
+    # NOT ON A PROMOTION PR ((internal ref)). A promotion PR's head
+    # sha IS a branch tip: `release-train/to-main`'s head is staging's tip, and
+    # `release-train/to-staging`'s is develop's. The callers subscribe to
+    # `pull_request` with no base filter, so every promotion queued a run here,
+    # the concurrency group above kept one and GitHub cancelled the pending rest --
+    # and those `cancelled` check-runs then sat on a sha that hop-verify.sh reads as
+    # a branch tip. It buckets `cancelled` as a VOID (nothing judged this sha) and a
+    # void outranks every green verdict, so the staging hop went from 16 repos
+    # verified on 2026-09-14 to 0 of 18 on 2026-09-21: no mismatch fileable, no
+    # finding closeable, and the scheduled job still exiting 0.
+    #
+    # Skipping is the whole fix, not a workaround for the reporting: the desk strips
+    # reviewers off promotions, so staffing and reviewing one is work it would
+    # undo. There is no promotion case this job was ever meant to serve.
+    # And a job skipped by `if:` concludes `skipped`, which hop-verify.sh
+    # allowlists as green -- where a cancelled one is unreadable by construction.
+    #
+    # BOTH HALVES ARE REQUIRED, AND THE BASE REF ALONE IS NOT THE RULE --
+    # (internal ref). "A PR into staging or main" reads like the durable
+    # predicate -- org-standards say nothing but a promotion may open one -- but
+    # (internal ref)'s `scripts/hotfix-repo.sh` does exactly that for an emergency
+    # prod fix, so dropping the dispatch on a base-ref match alone drops a hotfix
+    # into `main` with no reviewer staffed and no ship session. The narrowest
+    # predicate that still names every promotion is a TRAIN BRANCH going INTO a
+    # promotion branch, so both are required and a hotfix keeps its review.
+    #
+    # `release-train/` rather than `release-train/to-`: the train owns that
+    # namespace, and a promotion branch it adds later is a PR nobody here reviews
+    # for the same reason.
+    #
+    # BOTH HALVES SPELL `is_promo` EXACTLY, and the two clauses below that look
+    # like padding are why. `is_promo` in scripts/desk-dispatch.py reads
+    # `(release-train/* OR hotfix-backmerge/*) AND base in (staging, main,
+    # master)`, so a guard missing `hotfix-backmerge/` staffs a reviewer and a
+    # ship session on a backmerge the train already gates, and a guard missing
+    # `master` does the same on every repo whose production branch is named that
+    # -- in both cases the decider then skips and the run is spent for nothing.
+    # These are two statements of one rule (CLAUDE.md rule 1), and they are held
+    # to the same answers by evaluation rather than by eye:
+    # scripts/tests/callershape.py `assert_promotion_guard` evaluates THIS
+    # expression over every (head, base) of its matrix and compares each answer
+    # with the real `is_promo`.
+    #
+    # An event shape carrying neither ref yields nulls, both halves are false, and
+    # the job RUNS -- this file's usual fail-toward-acting. A dispatch that should
+    # have skipped is a wasted minute; one that wrongly skipped is a PR nobody
+    # reviews.
+    if: >-
+      !((startsWith(github.event.pull_request.head.ref
+      || github.event.workflow_run.head_branch
+      || github.event.check_suite.head_branch, 'release-train/')
+      || startsWith(github.event.pull_request.head.ref
+      || github.event.workflow_run.head_branch
+      || github.event.check_suite.head_branch, 'hotfix-backmerge/'))
+      && contains(fromJSON('["staging", "main", "master"]'),
+      github.event.pull_request.base.ref
+      || github.event.workflow_run.pull_requests[0].base.ref
+      || github.event.check_suite.pull_requests[0].base.ref))
     steps:
       # WHEN THIS JOB STARTED, for the hold the dispatcher takes on a no-op
       # ((internal ref) D6 lever 1). A job bills a rounded-up minute, and a dispatch
@@ -423,13 +493,38 @@ jobs:
           owner: ${{ github.repository_owner }}
           repositories: ${{ github.event.repository.name }}
           permission-administration: read
+      # THE TOOLS REF ((internal ref) D4). `job.workflow_sha` is the commit of THIS
+      # reusable file -- the one the caller pinned -- so the scripts checked out
+      # below are the ones this workflow was reviewed with; a `@main` caller gets
+      # `main`'s. `tools-ref` overrides it to test a tools change against a pinned
+      # workflow. An EMPTY ref would make actions/checkout take the tools repo's
+      # DEFAULT branch fleet-wide, so it is refused here rather than checked out.
+      # The SHA is read out of `toJSON(job)` in shell because actionlint's schema
+      # of the `job` context (1.7.12) does not know `workflow_sha` yet.
+      - name: Resolve the tools ref, refusing an empty one
+        id: tools-ref
+        env:
+          TOOLS_REF: ${{ 'main' }}
+          JOB_CONTEXT: ${{ toJSON(job) }}
+        run: |
+          if [ -z "$TOOLS_REF" ]; then
+            case "$JOB_CONTEXT" in
+              *'"workflow_sha"'*) TOOLS_REF="${JOB_CONTEXT#*\"workflow_sha\": \"}"; TOOLS_REF="${TOOLS_REF%%\"*}" ;;
+            esac
+          fi
+          if ! [[ "$TOOLS_REF" =~ ^[0-9a-f]{40}$ || ( -n "$TOOLS_REF" && "$TOOLS_REF" != *[![:alnum:]._/-]* ) ]]; then
+            echo "::error::the tools ref is empty or not a ref (${TOOLS_REF:-<empty>}); an empty ref would check out the tools repo's default branch instead of the commit this workflow was pinned at. Refusing."
+            exit 1
+          fi
+          echo "ref=$TOOLS_REF" >> "$GITHUB_OUTPUT"
+          echo "tools ref: $TOOLS_REF"
       - name: Check out the dispatcher
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: tracebloc/org-config
           token: ${{ steps.org-config-token.outputs.token }}
           ref: ${{ 'main' }}
-          path: .desk-dispatch-tools
+          path: .org-config-tools
           persist-credentials: false
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
@@ -446,4 +541,4 @@ jobs:
           DESK_ROUTINE_TOKEN: ${{ secrets.DESK_ROUTINE_TOKEN }}
           DESK_STALE_MINUTES: ${{ 45 }}
           SHIP_STALE_MINUTES: ${{ 90 }}
-        run: python3 .desk-dispatch-tools/scripts/desk-dispatch.py
+        run: python3 .org-config-tools/scripts/desk-dispatch.py
