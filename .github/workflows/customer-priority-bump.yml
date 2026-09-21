@@ -14,6 +14,9 @@
 # not change. Scripts are still fetched from the private source repo at run time with a
 # read-only App installation token; on a fork PR that token cannot be minted
 # (no secrets), so the checkout fails closed rather than running untrusted input.
+# Where the copy checks the private source repo out, its `tools-ref` is the literal `main` --
+# the ref every caller of the reusable pins -- because a public copy has no
+# reusable to take the commit from (the private original defaults to its own).
 #
 # PUBLIC SURFACE. This file is delivered to a public repo. Exactly what was
 # scrubbed, and what was not:

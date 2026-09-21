@@ -1,7 +1,7 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/fr-gate.yml`
-# (blob e4e1aa4f8923adc1c9aeb5ff62ac65ca768ac189) folded with the private source repo's own caller of it,
+# (blob 6eb00fff3c00e1580b15b1783219d4537614cb58) folded with the private source repo's own caller of it,
 # `.github/workflows/fr-gate-caller.yml` (blob b2e63da19a0d0369a7d7364b4596f53128f3c8ca), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
@@ -14,6 +14,9 @@
 # not change. Scripts are still fetched from the private source repo at run time with a
 # read-only App installation token; on a fork PR that token cannot be minted
 # (no secrets), so the checkout fails closed rather than running untrusted input.
+# Where the copy checks the private source repo out, its `tools-ref` is the literal `main` --
+# the ref every caller of the reusable pins -- because a public copy has no
+# reusable to take the commit from (the private original defaults to its own).
 #
 # PUBLIC SURFACE. This file is delivered to a public repo. Exactly what was
 # scrubbed, and what was not:
@@ -73,7 +76,6 @@ name: FR gate
 on:
   pull_request:
     types: [opened, reopened, synchronize, ready_for_review, labeled, unlabeled, edited]
-
 jobs:
   gate:
     name: gate / gate
@@ -163,6 +165,32 @@ jobs:
           repositories: org-config
           permission-contents: read
 
+      # THE TOOLS REF ((internal ref) D4). `job.workflow_sha` is the commit of THIS
+      # reusable file -- the one the caller pinned -- so the scripts checked out
+      # below are the ones this workflow was reviewed with; a `@main` caller gets
+      # `main`'s. `tools-ref` overrides it to test a tools change against a pinned
+      # workflow. An EMPTY ref would make actions/checkout take the tools repo's
+      # DEFAULT branch fleet-wide, so it is refused here rather than checked out.
+      # The SHA is read out of `toJSON(job)` in shell because actionlint's schema
+      # of the `job` context (1.7.12) does not know `workflow_sha` yet.
+      - name: Resolve the tools ref, refusing an empty one
+        id: tools-ref
+        if: steps.target.outputs.required != '' && steps.skip.outputs.skip != 'true'
+        env:
+          TOOLS_REF: ${{ 'main' }}
+          JOB_CONTEXT: ${{ toJSON(job) }}
+        run: |
+          if [ -z "$TOOLS_REF" ]; then
+            case "$JOB_CONTEXT" in
+              *'"workflow_sha"'*) TOOLS_REF="${JOB_CONTEXT#*\"workflow_sha\": \"}"; TOOLS_REF="${TOOLS_REF%%\"*}" ;;
+            esac
+          fi
+          if ! [[ "$TOOLS_REF" =~ ^[0-9a-f]{40}$ || ( -n "$TOOLS_REF" && "$TOOLS_REF" != *[![:alnum:]._/-]* ) ]]; then
+            echo "::error::the tools ref is empty or not a ref (${TOOLS_REF:-<empty>}); an empty ref would check out the tools repo's default branch instead of the commit this workflow was pinned at. Refusing."
+            exit 1
+          fi
+          echo "ref=$TOOLS_REF" >> "$GITHUB_OUTPUT"
+          echo "tools ref: $TOOLS_REF"
       - name: Check out the shared walk script
         if: steps.target.outputs.required != '' && steps.skip.outputs.skip != 'true'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -170,7 +198,7 @@ jobs:
           repository: tracebloc/org-config
           token: ${{ steps.org-config-token.outputs.token }}
           ref: ${{ 'main' }}
-          path: .fr-gate-tools
+          path: .org-config-tools
           persist-credentials: false
 
       # Authenticates as the tracebloc-release-train App ((internal ref)) instead of a
@@ -240,7 +268,7 @@ jobs:
           # in the script's header and body -- one implementation, shared with the
           # train's frontier resolver. It writes prs= / unattributed= /
           # changed_files= to $GITHUB_OUTPUT exactly as this step always did.
-          bash .fr-gate-tools/scripts/fr-gate-walk.sh discover
+          bash .org-config-tools/scripts/fr-gate-walk.sh discover
 
       - name: Verify each item is in required Status
         if: steps.target.outputs.required != '' && steps.skip.outputs.skip != 'true'
@@ -258,4 +286,4 @@ jobs:
           # The rank() ordering, resolve_status's race-aware retries and the
           # fail-closed verdict (blocked / missing / unreadable / unattributable
           # all block) are the script's `verify` mode. Same text, same exit code.
-          bash .fr-gate-tools/scripts/fr-gate-walk.sh verify
+          bash .org-config-tools/scripts/fr-gate-walk.sh verify
