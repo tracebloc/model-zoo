@@ -1,8 +1,8 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/bugbot-gate.yml`
-# (blob 6476b906711c023b258eb9c127b77fe1c464c670) folded with the private source repo's own caller of it,
-# `.github/workflows/bugbot-gate-caller.yml` (blob 58f1e94219d9716ed1ad9d277ec2db56faf6386e), for a PUBLIC repo: GitHub lets a
+# (blob bf0c7bd86038edda9480884c5469fe633ede0f3d) folded with the private source repo's own caller of it,
+# `.github/workflows/bugbot-gate-caller.yml` (blob 031f0fc71ae158f81cdb814c1f9fe21ff6b929b1), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
 # reusable's jobs inline -- the triggers are the caller's; every `inputs.*` is
@@ -20,16 +20,20 @@
 #
 #   * COMMENT TEXT -- a whole-line YAML `#` comment, a `#`-first line of a `run:`
 #     script that is not inside a heredoc, and this header -- was scrubbed: every
-#     private-repo issue reference, org-qualified private repo name, RFC id and
-#     tenant name became `(internal ref)`, and the private repo this file was
-#     generated from became `the private source repo`.
+#     private-repo issue reference, private repo name (org-qualified OR bare),
+#     RFC id and tenant name became `(internal ref)`, and the private repo this
+#     file was generated from became `the private source repo`.
+#     A bare name is left alone where the next character is `/` or `#`: that is a
+#     path or branch prefix, or the issue form, which is matched on its own.
 #   * CODE -- everything else: commands, heredoc bodies, strings a workflow posts,
 #     `repository:` values, URLs, step names -- was NOT edited. An internal
-#     reference there refuses the render (it is a defect in the source), with one
+#     reference there refuses the render (it is a defect in the source). A BARE
+#     private repo name is never judged in code at all: several are also public
+#     product identifiers -- an image a public chart installs, a package name, a
+#     branch prefix -- so only the org-qualified spelling refuses there, with one
 #     exception: the name of the private repo this file was generated from, which
 #     the code states verbatim because the workflow checks that repo out and
-#     fetches its scripts from it at run time. Its bare, unqualified name is not
-#     scrubbed anywhere.
+#     fetches its scripts from it at run time.
 #
 # Regenerate:  python3 scripts/render-self-contained.py          (in the private source repo)
 # Verify:      python3 scripts/render-self-contained.py --check  (make selftest-self-contained)
@@ -53,7 +57,7 @@ name: Bugbot review gate
 #   * if it does NOT, requiring it permanently bricks every PR that ever received
 #     a finding, because Bugbot re-runs only on a push or an explicit
 #     `bugbot run`, so resolving a finding can never turn the check green again
-#     -- and a promotion PR may not be pushed to at all. client#786 and
+#     -- and a promotion PR may not be pushed to at all. (internal ref) and
 #     (internal ref) both merged to `main` on 2026-08-21 carrying exactly that
 #     state (`neutral` on the merged head, one resolved Medium beneath).
 #
@@ -75,7 +79,7 @@ name: Bugbot review gate
 #
 # Never the reverse. (internal ref)'s lesson is that a contract claiming a context
 # reality lacks is itself a finding; and a required context no workflow reports
-# leaves every PR waiting forever (client#665, pii-gate/pii-check). Arm while
+# leaves every PR waiting forever ((internal ref), pii-gate/pii-check). Arm while
 # green, then let the contract claim it.
 #
 # The TEST tier needs none of that and is armed from the start:
@@ -86,7 +90,7 @@ name: Bugbot review gate
 # NO `paths:` FILTER, and the caller must not add one. A required check that is
 # path-filtered never reports on a PR the filter skips, so the PR waits at
 # "Expected -- waiting for status" forever. This org has hit that twice
-# (client#665, pii-gate/pii-check); code-quality.yml's and selftests.yml's
+# ((internal ref), pii-gate/pii-check); code-quality.yml's and selftests.yml's
 # headers both warn about it.
 #
 # WHAT A CALLER MUST TRIGGER ON: `pull_request` with at least
@@ -233,9 +237,9 @@ jobs:
     steps:
       # Same shape as code-quality.yml and blocked-gate.yml: the checker lives
       # here, not in the calling repo, so the reusable fetches it. This repo is
-      # PRIVATE (org-config replaced the public `.github` as the host on
+      # PRIVATE (the private source repo replaced the public `.github` as the host on
       # 2026-09-10) and the caller's `github.token` reads only the caller's own
-      # repo, so the checkout needs a token that can read org-config: a
+      # repo, so the checkout needs a token that can read the private source repo: a
       # read-only App installation token, minted from the two secrets the
       # caller passes by name (`on.workflow_call.secrets` above, Q5).
       - name: Mint a read-only token for org-config (private; the caller's own token cannot read it)
