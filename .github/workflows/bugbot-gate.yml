@@ -1,8 +1,8 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/bugbot-gate.yml`
-# (blob 6476b906711c023b258eb9c127b77fe1c464c670) folded with the private source repo's own caller of it,
-# `.github/workflows/bugbot-gate-caller.yml` (blob 58f1e94219d9716ed1ad9d277ec2db56faf6386e), for a PUBLIC repo: GitHub lets a
+# (blob bf0c7bd86038edda9480884c5469fe633ede0f3d) folded with the private source repo's own caller of it,
+# `.github/workflows/bugbot-gate-caller.yml` (blob 031f0fc71ae158f81cdb814c1f9fe21ff6b929b1), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
 # reusable's jobs inline -- the triggers are the caller's; every `inputs.*` is
@@ -57,7 +57,7 @@ name: Bugbot review gate
 #   * if it does NOT, requiring it permanently bricks every PR that ever received
 #     a finding, because Bugbot re-runs only on a push or an explicit
 #     `bugbot run`, so resolving a finding can never turn the check green again
-#     -- and a promotion PR may not be pushed to at all. client#786 and
+#     -- and a promotion PR may not be pushed to at all. (internal ref) and
 #     (internal ref) both merged to `main` on 2026-08-21 carrying exactly that
 #     state (`neutral` on the merged head, one resolved Medium beneath).
 #
@@ -79,7 +79,7 @@ name: Bugbot review gate
 #
 # Never the reverse. (internal ref)'s lesson is that a contract claiming a context
 # reality lacks is itself a finding; and a required context no workflow reports
-# leaves every PR waiting forever (client#665, pii-gate/pii-check). Arm while
+# leaves every PR waiting forever ((internal ref), pii-gate/pii-check). Arm while
 # green, then let the contract claim it.
 #
 # The TEST tier needs none of that and is armed from the start:
@@ -90,7 +90,7 @@ name: Bugbot review gate
 # NO `paths:` FILTER, and the caller must not add one. A required check that is
 # path-filtered never reports on a PR the filter skips, so the PR waits at
 # "Expected -- waiting for status" forever. This org has hit that twice
-# (client#665, pii-gate/pii-check); code-quality.yml's and selftests.yml's
+# ((internal ref), pii-gate/pii-check); code-quality.yml's and selftests.yml's
 # headers both warn about it.
 #
 # WHAT A CALLER MUST TRIGGER ON: `pull_request` with at least
