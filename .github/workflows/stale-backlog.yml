@@ -1,8 +1,8 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/stale-backlog.yml`
-# (blob 3b9790671ac7c41e4384466a56d4e82128473a84) folded with the private source repo's own caller of it,
-# `.github/workflows/stale-backlog-caller.yml` (blob 7dcfd05395d568f7a1f68de9f339717d325c6349), for a PUBLIC repo: GitHub lets a
+# (blob f05adba5a2c25344faa067ceb27a5ee1eaee98e4) folded with the private source repo's own caller of it,
+# `.github/workflows/stale-backlog-caller.yml` (blob 2e125070f6578f50bd0aa234ab1e74d92f5b983d), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
 # reusable's jobs inline -- the triggers are the caller's; every `inputs.*` is
@@ -14,6 +14,9 @@
 # not change. Scripts are still fetched from the private source repo at run time with a
 # read-only App installation token; on a fork PR that token cannot be minted
 # (no secrets), so the checkout fails closed rather than running untrusted input.
+# Where the copy checks the private source repo out, its `tools-ref` is the literal `main` --
+# the ref every caller of the reusable pins -- because a public copy has no
+# reusable to take the commit from (the private original defaults to its own).
 #
 # PUBLIC SURFACE. This file is delivered to a public repo. Exactly what was
 # scrubbed, and what was not:
@@ -84,7 +87,6 @@ on:
   schedule:
     - cron: '0 0 * * 1'  # Mondays 00:00 UTC
   workflow_dispatch: {}
-
 # Only `contents: read`: the sweep's writes go through the App token minted below,
 # not through GITHUB_TOKEN. Asking for `issues: write` here would exceed a minimal
 # caller's grant and fail the run at startup with no jobs — the same constraint
@@ -153,12 +155,37 @@ jobs:
           repositories: org-config
           permission-contents: read
 
+      # THE TOOLS REF ((internal ref) D4). `job.workflow_sha` is the commit of THIS
+      # reusable file -- the one the caller pinned -- so the scripts checked out
+      # below are the ones this workflow was reviewed with; a `@main` caller gets
+      # `main`'s. `tools-ref` overrides it to test a tools change against a pinned
+      # workflow. An EMPTY ref would make actions/checkout take the tools repo's
+      # DEFAULT branch fleet-wide, so it is refused here rather than checked out.
+      # The SHA is read out of `toJSON(job)` in shell because actionlint's schema
+      # of the `job` context (1.7.12) does not know `workflow_sha` yet.
+      - name: Resolve the tools ref, refusing an empty one
+        id: tools-ref
+        env:
+          TOOLS_REF: ${{ 'main' }}
+          JOB_CONTEXT: ${{ toJSON(job) }}
+        run: |
+          if [ -z "$TOOLS_REF" ]; then
+            case "$JOB_CONTEXT" in
+              *'"workflow_sha"'*) TOOLS_REF="${JOB_CONTEXT#*\"workflow_sha\": \"}"; TOOLS_REF="${TOOLS_REF%%\"*}" ;;
+            esac
+          fi
+          if ! [[ "$TOOLS_REF" =~ ^[0-9a-f]{40}$ || ( -n "$TOOLS_REF" && "$TOOLS_REF" != *[![:alnum:]._/-]* ) ]]; then
+            echo "::error::the tools ref is empty or not a ref (${TOOLS_REF:-<empty>}); an empty ref would check out the tools repo's default branch instead of the commit this workflow was pinned at. Refusing."
+            exit 1
+          fi
+          echo "ref=$TOOLS_REF" >> "$GITHUB_OUTPUT"
+          echo "tools ref: $TOOLS_REF"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: tracebloc/org-config
           token: ${{ steps.org-config-token.outputs.token }}
           ref: ${{ 'main' }}
-          path: .stale-tools
+          path: .org-config-tools
           persist-credentials: false
 
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
@@ -169,13 +196,13 @@ jobs:
       # whose eligibility rule has regressed must not run at all: the failure is
       # destructive and unattended, so the tests are a gate rather than a report.
       - name: Selftest the eligibility rule
-        run: python3 .stale-tools/scripts/tests/stale-backlog-selftest.py
+        run: python3 .org-config-tools/scripts/tests/stale-backlog-selftest.py
 
       - name: Sweep
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
-          python3 .stale-tools/scripts/stale-backlog.py \
+          python3 .org-config-tools/scripts/stale-backlog.py \
             --repo "${{ github.repository }}" \
             --project "${{ 2 }}" \
             ${{ false && '--dry-run' || '' }} \
