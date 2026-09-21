@@ -1,7 +1,7 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/set-pr-status.yml`
-# (blob dc08ba57e396dba0b6920935f5f24b751b1d2940) folded with the private source repo's own caller of it,
+# (blob ee2e926e1e76a8781e93a32d70ca44a7a88f45b7) folded with the private source repo's own caller of it,
 # `.github/workflows/set-pr-status-caller.yml` (blob cc4bdf86add1f96e79ee3a1b3c7ae426e97b003f), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
@@ -151,7 +151,7 @@ on:
 # are not required contexts -- and wrong about what a human sees. A red X that
 # is not a real failure is not cosmetic: on 2026-08-28 two reviewers withheld
 # approval over exactly this shape of stale red (@saqlainsyed007 on .github#369,
-# @aptracebloc on client#890), and both were reading the evidence correctly.
+# @aptracebloc on (internal ref)), and both were reading the evidence correctly.
 #
 # Keeping the GROUP still solves what the group was for. With
 # `cancel-in-progress: false` a second run goes PENDING until the first
@@ -366,6 +366,19 @@ jobs:
           STATUS_OPT=$(echo "$PROJ" | jq -r --arg s "$STATUS_NAME" '.data.organization.projectV2.fields.nodes[]
             | select(.name=="Status") | .options[] | select(.name==$s) | .id')
 
+          # THE PIPELINE ORDER IS READ BEFORE ANYTHING IS WRITTEN. The block below
+          # ADDS the card to the board when the lookup finds none, so a read
+          # placed after it can only refuse under a "NOTHING WAS WRITTEN" that is
+          # false for a brand-new PR -- the card is on the board at No Status by
+          # then. Read first, and every exit below the read is honest.
+          RANK_TOOL=".kanban-rank/scripts/pipeline_rank.sh"
+          if ! MERGED_FLOOR=$(bash "$RANK_TOOL" --first-post-merge); then
+            echo "::error::PR #$PR_NUMBER: the shared pipeline order could not be read from" \
+                 "$RANK_TOOL, so Status=$STATUS_NAME cannot be shown not to demote this card." \
+                 "NOTHING WAS WRITTEN." >&2
+            exit 1
+          fi
+
           # Wait briefly for the kanban auto-add workflow to register the PR on the project
           for i in 1 2 3 4 5; do
             # THE BODY DECIDES, WHATEVER THE EXIT CODE ((internal ref)). This used to
@@ -539,19 +552,12 @@ jobs:
           # An EMPTY current Status is none of those three: the card has just
           # been added (possibly by the block above) and giving it a column is
           # what the "no card sits at No Status" invariant depends on.
-          RANK_TOOL=".kanban-rank/scripts/pipeline_rank.sh"
-          if ! MERGED_FLOOR=$(bash "$RANK_TOOL" --first-post-merge); then
-            echo "::error::PR #$PR_NUMBER: the shared pipeline order could not be read from" \
-                 "$RANK_TOOL, so Status=$STATUS_NAME cannot be shown not to demote this card." \
-                 "NOTHING WAS WRITTEN." >&2
-            exit 1
-          fi
           CURRENT_RANK=0
           if [ -n "${CURRENT_STATUS:-}" ] && ! CURRENT_RANK=$(bash "$RANK_TOOL" "$CURRENT_STATUS"); then
             echo "::error::PR #$PR_NUMBER sits in '$CURRENT_STATUS', which the shared pipeline" \
                  "order does not declare, so Status=$STATUS_NAME cannot be shown not to demote" \
                  "it. NOTHING WAS WRITTEN. Add the column to scripts/pipeline_rank.sh in" \
-                 "tracebloc/org-config if the board really has it." >&2
+                 "the shared config repository if the board really has it." >&2
             exit 1
           fi
           if [ "$CURRENT_RANK" -ge "$MERGED_FLOOR" ]; then
