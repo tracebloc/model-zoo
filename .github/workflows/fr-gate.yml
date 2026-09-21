@@ -20,16 +20,20 @@
 #
 #   * COMMENT TEXT -- a whole-line YAML `#` comment, a `#`-first line of a `run:`
 #     script that is not inside a heredoc, and this header -- was scrubbed: every
-#     private-repo issue reference, org-qualified private repo name, RFC id and
-#     tenant name became `(internal ref)`, and the private repo this file was
-#     generated from became `the private source repo`.
+#     private-repo issue reference, private repo name (org-qualified OR bare),
+#     RFC id and tenant name became `(internal ref)`, and the private repo this
+#     file was generated from became `the private source repo`.
+#     A bare name is left alone where the next character is `/` or `#`: that is a
+#     path or branch prefix, or the issue form, which is matched on its own.
 #   * CODE -- everything else: commands, heredoc bodies, strings a workflow posts,
 #     `repository:` values, URLs, step names -- was NOT edited. An internal
-#     reference there refuses the render (it is a defect in the source), with one
+#     reference there refuses the render (it is a defect in the source). A BARE
+#     private repo name is never judged in code at all: several are also public
+#     product identifiers -- an image a public chart installs, a package name, a
+#     branch prefix -- so only the org-qualified spelling refuses there, with one
 #     exception: the name of the private repo this file was generated from, which
 #     the code states verbatim because the workflow checks that repo out and
-#     fetches its scripts from it at run time. Its bare, unqualified name is not
-#     scrubbed anywhere.
+#     fetches its scripts from it at run time.
 #
 # Regenerate:  python3 scripts/render-self-contained.py          (in the private source repo)
 # Verify:      python3 scripts/render-self-contained.py --check  (make selftest-self-contained)
@@ -60,7 +64,7 @@ name: FR gate
 #
 # Item discovery: authoritative commit->PR attribution via the
 # commits/{sha}/pulls API between base and head (see the discovery step).
-# Release-train promotion PRs (head release-train/*) are transparent
+# (internal ref) promotion PRs (head release-train/*) are transparent
 # plumbing: they never appear as gated items and never vouch for their
 # range -- attribution passes through to the cargo PRs they carry. If
 # discovery yields no PRs at all, falls back to checking the promotion
@@ -115,7 +119,7 @@ jobs:
         run: |
           # Manual promotion PRs bypass the release train's Bugbot soft-gate,
           # its tagging, and its run records — and indirect-merge the train's
-          # own PRs ((internal ref) / averaging-service, 2026-07-29). Promotions
+          # own PRs ((internal ref) / (internal ref), 2026-07-29). Promotions
           # into staging/main/master are the train's job. Sanctioned lanes:
           #   release-train/*       the train's own mirror PRs
           #   hotfix-backmerge/*    hotfix.yml's automated back-merges
@@ -139,9 +143,9 @@ jobs:
       # THE WALK LIVES HERE, NOT IN THE CALLING REPO ((internal ref), (internal ref) D6).
       # The two steps below used to carry it inline; the release train needs the
       # same walk to cut the prod hop at the FR frontier, and a second copy in
-      # release-train is the drift rule 9 forbids. So the script is checked out
+      # (internal ref) is the drift rule 9 forbids. So the script is checked out
       # of the private source repo -- same shape as bugbot-gate.yml and
-      # code-quality.yml -- into a path beside the caller's checkout. org-config
+      # code-quality.yml -- into a path beside the caller's checkout. the private source repo
       # is PRIVATE (it replaced the public `.github` as the host on 2026-09-10),
       # so the checkout carries a read-only App installation token minted just
       # for it; the App id and key arrive because every fr-gate caller passes
