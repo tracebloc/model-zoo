@@ -1,7 +1,7 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/code-quality.yml`
-# (blob 5bbecf4f44552522a977f46f2822c5db92d3d420) folded with the private source repo's own caller of it,
+# (blob 16946d423ccd83f39cee1605b690d224908a7512) folded with the private source repo's own caller of it,
 # `.github/workflows/code-quality-caller.yml` (blob d0d9d4c4ecb1747e9f1b3fadcf516b79fe8c55bb), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
@@ -20,16 +20,20 @@
 #
 #   * COMMENT TEXT -- a whole-line YAML `#` comment, a `#`-first line of a `run:`
 #     script that is not inside a heredoc, and this header -- was scrubbed: every
-#     private-repo issue reference, org-qualified private repo name, RFC id and
-#     tenant name became `(internal ref)`, and the private repo this file was
-#     generated from became `the private source repo`.
+#     private-repo issue reference, private repo name (org-qualified OR bare),
+#     RFC id and tenant name became `(internal ref)`, and the private repo this
+#     file was generated from became `the private source repo`.
+#     A bare name is left alone where the next character is `/` or `#`: that is a
+#     path or branch prefix, or the issue form, which is matched on its own.
 #   * CODE -- everything else: commands, heredoc bodies, strings a workflow posts,
 #     `repository:` values, URLs, step names -- was NOT edited. An internal
-#     reference there refuses the render (it is a defect in the source), with one
+#     reference there refuses the render (it is a defect in the source). A BARE
+#     private repo name is never judged in code at all: several are also public
+#     product identifiers -- an image a public chart installs, a package name, a
+#     branch prefix -- so only the org-qualified spelling refuses there, with one
 #     exception: the name of the private repo this file was generated from, which
 #     the code states verbatim because the workflow checks that repo out and
-#     fetches its scripts from it at run time. Its bare, unqualified name is not
-#     scrubbed anywhere.
+#     fetches its scripts from it at run time.
 #
 # Regenerate:  python3 scripts/render-self-contained.py          (in the private source repo)
 # Verify:      python3 scripts/render-self-contained.py --check  (make selftest-self-contained)
@@ -51,14 +55,24 @@ name: Code quality
 #   time by a reviewer instead of once by CI. This workflow moves that share to
 #   the left, where it costs seconds instead of a review round-trip.
 #
-# JOBS — each is a SEPARATE job on purpose
+# JOBS — each is a SEPARATE job on purpose, with one measured exception
 #   ruff         Python lint (opt in with `python: true`)
 #   shellcheck   shell lint (opt in with `shell: true`)
 #   gitleaks     credential scanning (on by default)
 #   house-rules  the org's own grep-level rules (on by default)
-#   early-close  the pipefail SIGPIPE gate (on by default, whole-tree)
+#   action-pins  every `uses:` pinned to a commit SHA (on by default)
+#   format + pipefail early-close
+#                black --check (opt in with `format: true`) and the pipefail
+#                SIGPIPE gate (on by default, whole-tree) in ONE job: a job
+#                bills a rounded-up minute, and these two are required status
+#                contexts on no branch in the org ((internal ref) D6 lever 2, OQ9).
+#                Each half's steps are gated on its own input, so a caller's
+#                verdict per half is unchanged; the second half runs even after
+#                the first fails. The five names branch protection requires
+#                are each still one job and are never renamed.
 #   Separate jobs run independently, so a ruff failure never hides what
-#   shellcheck found. Steps inside one job would short-circuit; jobs do not.
+#   shellcheck found. Steps inside one job would short-circuit; jobs do not --
+#   which is why the merged job carries `!cancelled()` on its second half.
 #
 # BLOCKING BEHAVIOUR — read this before adopting
 #   `soft-fail` defaults to TRUE: every finding is annotated on the diff and
@@ -85,51 +99,23 @@ name: Code quality
 #   verdict has not passed; recording it as clean is how a gate turns into
 #   decoration (Bugbot on (internal ref), (internal ref); (internal ref) rule 3).
 #
-# ADOPTION — drop this in as `.github/workflows/code-quality-caller.yml`
-#
-#     name: Code quality
-#
-#     on:
-#       pull_request:
-#         types: [opened, reopened, synchronize, ready_for_review]
-#
-#     # Supersede the previous run when a branch is pushed again. Measured:
-#     # workflows missing this stack ~10-minute duplicate runs per push.
-#     concurrency:
-#       group: code-quality-${{ github.workflow }}-${{ github.ref }}
-#       cancel-in-progress: true
-#
-#     permissions:
-#       contents: read
-#
-#     jobs:
-#       quality:
-#         uses: the private source repo/.github/workflows/code-quality.yml@main
-#         with:
-#           python: true          # repos with Python
-#           shell: true           # repos with shell scripts
-#           # soft-fail: false    # flip once the backlog is clear
-#         secrets:
-#           app-id: ${{ secrets.RELEASE_TRAIN_APP_ID }}
-#           app-private-key: ${{ secrets.RELEASE_TRAIN_APP_PRIVATE_KEY }}
-#
-#   This workflow asks only for `contents: read`, so it runs under a minimal
-#   caller and the org default workflow-token permission of "read". It needs
-#   EXACTLY TWO secrets, declared REQUIRED under `on.workflow_call.secrets`:
-#   the App id and key that mint a read-only token for the private source repo,
-#   the PRIVATE repo the house-rules and pipefail scripts are checked out of.
-#   Callers pass those two BY NAME and nothing else -- decided under
-#   (internal ref) Q5 ((internal ref), unwound in (internal ref); the carve-out
-#   for these two on (internal ref)). `inherit` was briefly the convention
-#   ("harmless no-op, nothing is referenced"), but callers pin `@main`: the day
-#   a reusable gains a `${{ secrets.X }}` step, every inheriting caller hands it
-#   that repo's ENTIRE secret set (`toJSON(secrets)` dumps it). Explicit
-#   per-secret passing keeps the need visible in every caller diff, and the
-#   REQUIRED declaration makes a caller that forgets fail at startup rather than
-#   at run time with an empty app-id. Cursor Bugbot's recurring nag about the
-#   "missing" `inherit` line is suppressed per-repo in `.cursor/BUGBOT.md` (the
-#   (internal ref) flywheel); the inverse -- a caller that ADDS `secrets: inherit`
-#   -- is what deserves a finding.
+# ADOPTION -- not by copying a snippet from here. `scripts/onboard_repo.py`
+#   renders a repo's caller from this repo's own `code-quality-caller.yml`
+#   (found by its `uses:`, never by filename) with repo-inventory.yml's
+#   `caller_inputs` floor applied, so the live caller is the template and a
+#   copy here could only drift from it. Two rules that caller carries, and why:
+#   it asks only for `contents: read`; and it passes EXACTLY TWO secrets BY
+#   NAME -- `app-id` and `app-private-key`, declared REQUIRED under
+#   `on.workflow_call.secrets`, which mint a read-only token for the PRIVATE
+#   repo the house-rules and pipefail scripts are checked out of. Never
+#   `secrets: inherit` ((internal ref) Q5; (internal ref), unwound in
+#   (internal ref); the carve-out for these two on (internal ref)): callers pin
+#   `@main`, so the day a reusable gains a `${{ secrets.X }}` step, every
+#   inheriting caller hands it that repo's ENTIRE secret set (`toJSON(secrets)`
+#   dumps it). Explicit per-secret passing keeps the need visible in every
+#   caller diff, and the REQUIRED declaration makes a caller that forgets fail
+#   at startup rather than at run time with an empty app-id. A caller that ADDS
+#   `secrets: inherit` is what deserves a finding.
 #
 # SUPPLY CHAIN
 #   gitleaks is installed from its release tarball pinned by version AND
@@ -148,7 +134,10 @@ name: Code quality
 #     disable: curl-timeout
 #     rule: no-print | *.py | ^[[:space:]]*print\( | use client_logger, not print()
 #
-#   Run it locally exactly as CI does:  ./house-rules.sh --all
+#   Run it locally as the required job runs it on a PR -- over the files the PR
+#   changed, not the whole tree:  ./house-rules.sh --base origin/develop
+#   `--all` scans every tracked file; CI passes it only on `workflow_dispatch`
+#   (no base sha) or when a caller sets `all-files: true`.
 #   (`--help` documents every rule, every exclusion, and the ignore pragma.)
 
 on:
@@ -203,17 +192,41 @@ permissions:
 
 jobs:
   # ---------------------------------------------------------------- Python ----
-  early-close:
-    name: quality / pipefail early-close
+  format-early-close:
+    name: quality / format + pipefail early-close
+    # `ubuntu-slim`: both halves ran there before the merge (format lifted
+    # 2026-09-17 with setup-python + pip measured on slim; early-close always
+    # ran there). 10 minutes covers black over a whole tree (n=8 measured
+    # 4-13 s) plus the awk pass, well under slim's 15-minute cap.
     runs-on: ubuntu-slim
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          # Full history for the format half's three-dot diff; the early-close
+          # half needs only the tree. house-rules fetches the same on every run.
+          fetch-depth: 0
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
+      - name: Which halves this caller armed
+        id: gates
+        env:
+          FORMAT: ${{ false }}
+          EARLY_CLOSE: ${{ true }}
+          YAML_RUN_BLOCKS: ${{ true }}
+        run: |
+          set -euo pipefail
+          {
+            echo "format=${FORMAT}"
+            echo "early_close=${EARLY_CLOSE}"
+            echo "yaml_run_blocks=${YAML_RUN_BLOCKS}"
+          } >> "$GITHUB_OUTPUT"
+          echo "format=${FORMAT} early-close=${EARLY_CLOSE} yaml-run-blocks=${YAML_RUN_BLOCKS}"
+
+      # ---- the pipefail early-close half (on by default) ----
       - name: Mint a read-only token for org-config (private; the caller's own token cannot read it)
         id: org-config-token
+        if: ${{ steps.gates.outputs.early_close == 'true' }}
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
           app-id: ${{ secrets.RELEASE_TRAIN_APP_ID }}
@@ -223,6 +236,7 @@ jobs:
           permission-contents: read
 
       - name: Check out the shared checker
+        if: ${{ steps.gates.outputs.early_close == 'true' }}
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: tracebloc/org-config
@@ -238,9 +252,11 @@ jobs:
       # this coverage into a red gate across the fleet. Same pin and same
       # invocation as selftests.yml and caller-drift.yml.
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        if: ${{ steps.gates.outputs.early_close == 'true' && steps.gates.outputs.yaml_run_blocks == 'true' }}
         with:
           python-version: '3.12'
       - name: Install PyYAML for the YAML run-block phase
+        if: ${{ steps.gates.outputs.early_close == 'true' && steps.gates.outputs.yaml_run_blocks == 'true' }}
         # RETRIED, BECAUSE THIS SITS ON A GATE IN 18 REPOS (@saadqbal). A single
         # PyPI hiccup reddened `code-quality` fleet-wide with a message about pip
         # rather than about the code -- and a gate that fails for an unrelated
@@ -276,6 +292,7 @@ jobs:
           exit 1
 
       - name: pipefail early-close
+        if: ${{ steps.gates.outputs.early_close == 'true' }}
         env:
           SOFT_FAIL: ${{ false }}
           YAML_RUN_BLOCKS: ${{ true }}
@@ -290,7 +307,7 @@ jobs:
           # `soft-fail` the caller chose. `yaml` is the `run:` blocks of
           # workflows and composite actions, which were never in scope at all:
           # the classifier is extension-else-shebang and YAML is neither, so
-          # the gate reported SUCCESS on `e2e-test-agent@f4d6fec`'s live
+          # the gate reported SUCCESS on `(internal ref)@f4d6fec`'s live
           # `printf | head -1`. Both halves are judged by the SAME awk; only
           # the file list differs.
           #
@@ -379,6 +396,166 @@ jobs:
             fi
           done
           exit "$OVERALL"
+
+      # ---- the format half (opt in with `format: true`) ----
+      # `!cancelled()` on every step here: the early-close half above may have
+      # FAILED on a finding, and this half must still report its own.
+
+      # THE SHARED WORKSPACE IS NOT SHARED WITH BLACK. The early-close half
+      # above checks the private source repo out at `.quality-tools`, and before this merge
+      # the format half ran in its own job where that tree did not exist. The
+      # early-close gate is unaffected by it either way -- `PIPEFAIL_ROOT` is
+      # the caller's checkout and `git ls-files` cannot reach an untracked
+      # subtree, as its own comment records -- but black does NOT discover
+      # through the git index: `black --check .` walks the directory, and
+      # `.quality-tools` is in neither black's default excludes nor the
+      # caller's `.gitignore`. So all-files mode (a `workflow_dispatch` sizing
+      # run, or the diff-fallback) would have judged the private source repo's Python under
+      # the CALLER's `black-version` and the caller's `[tool.black]` -- files
+      # the caller cannot fix, reported as its own, and a version skew there
+      # is an `error:` (a hard failure even under soft-fail) rather than a
+      # formatting verdict. Diff mode never saw it, for the `git ls-files`
+      # reason above. Reported by Bugbot on (internal ref).
+      #
+      # Removed rather than excluded, deliberately: `--exclude` /
+      # `--extend-exclude` on the command line OVERRIDE the same key in the
+      # caller's `pyproject.toml`, so the fix for a path that is not the
+      # caller's would silently un-exclude paths that are. Deleting the tree
+      # restores exactly what the format half saw before the merge and leaves
+      # black's invocation -- and therefore every caller's verdict -- untouched.
+      # Nothing after this point reads `.quality-tools`; house-rules and
+      # dead-weight check it out into their own jobs. A no-op when the
+      # early-close half is off and the tree was never created.
+      - name: Drop the shared checker before black walks the tree
+        if: ${{ !cancelled() && steps.gates.outputs.format == 'true' }}
+        run: |
+          set -euo pipefail
+          rm -rf .quality-tools
+
+      - name: Resolve the file set
+        id: files
+        if: ${{ !cancelled() && steps.gates.outputs.format == 'true' }}
+        env:
+          ALL_FILES: ${{ (inputs.all-files || false) }}
+        run: |
+          set -euo pipefail
+          if [ "$ALL_FILES" = "true" ] || [ -z "${BASE_SHA:-}" ]; then
+            echo "mode=all" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # Same three-dot diff + fail-open-to-all-files contract as the ruff
+          # job: never silently check nothing.
+          if ! git diff --name-only --diff-filter=ACMR "$BASE_SHA...HEAD" > /tmp/fmt-diff.txt 2>/dev/null; then
+            echo "mode=all" >> "$GITHUB_OUTPUT"
+            echo "::warning::git diff against $BASE_SHA failed - checking all files instead of skipping."
+            exit 0
+          fi
+          grep -E '\.pyi?$' /tmp/fmt-diff.txt > /tmp/fmt-files.txt || true
+          COUNT=$(wc -l < /tmp/fmt-files.txt | tr -d ' ')
+          echo "mode=diff" >> "$GITHUB_OUTPUT"
+          echo "count=$COUNT" >> "$GITHUB_OUTPUT"
+          echo "Changed Python files: $COUNT"
+
+      # setup-python rather than `pipx`, for the reason #ruff records above.
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        if: ${{ !cancelled() && steps.gates.outputs.format == 'true' && (steps.files.outputs.mode == 'all' || steps.files.outputs.count != '0') }}
+        with:
+          python-version: '3.12'
+
+      - name: Install black
+        if: ${{ !cancelled() && steps.gates.outputs.format == 'true' && (steps.files.outputs.mode == 'all' || steps.files.outputs.count != '0') }}
+        env:
+          BLACK_VERSION: ${{ '26.3.1' }}
+        run: |
+          set -euo pipefail
+          # `black-version` still decides the style, so the runner move changes
+          # no caller's verdict -- which matters more here than for ruff, since
+          # a black version that does not match the tree reports every file as
+          # unformatted (see the input's own description).
+          python -m pip install --disable-pip-version-check "black==$BLACK_VERSION"
+          black --version
+
+      - name: black --check
+        if: ${{ !cancelled() && steps.gates.outputs.format == 'true' && (steps.files.outputs.mode == 'all' || steps.files.outputs.count != '0') }}
+        env:
+          MODE: ${{ steps.files.outputs.mode }}
+          # Additive soft-fail, per this input's contract ("exit 0 even when
+          # soft-fail is false"): format is advisory when EITHER the global
+          # soft-fail OR the format-specific override is set. Unlike action-pins
+          # below, format-soft-fail defaults to false and no caller arms it, and
+          # there's no need to force format HARD during a soft migration -- so it
+          # stays an OR, not an authoritative override. Dropping the OR flipped
+          # every `soft-fail: true` caller to a hard format gate (Bugbot, #1681).
+          SOFT_FAIL: ${{ (false || false) && 'true' || 'false' }}
+        run: |
+          set -uo pipefail
+          # No --isolated: black must read the repo's own [tool.black]
+          # (line-length, target-version, exclude) or its verdict would differ
+          # from what contributors run locally.
+          RC=0
+          if [ "$MODE" = "all" ]; then
+            black --check . > /tmp/black.out 2>&1 || RC=$?
+          else
+            # NUL-delimited: paths with spaces must survive.
+            tr '\n' '\0' < /tmp/fmt-files.txt | xargs -0 --no-run-if-empty \
+              black --check > /tmp/black.out 2>&1 || RC=$?
+          fi
+
+          COUNT=$(grep -c '^would reformat' /tmp/black.out || true)
+          # An ERROR is a different thing from a formatting verdict and must
+          # never be reported as one: a black that cannot parse the tree prints
+          # these while the reformat count stays 0. (This exact conflation
+          # produced a false "0 files need formatting" during the #1303
+          # sizing -- black 23.1.0 cannot run on Python 3.12+.)
+          ERRS=$(grep -cE '^error:|would fail to reformat' /tmp/black.out || true)
+
+          {
+            echo "### format (black ${{ '26.3.1' }})"
+            echo ""
+            if [ "${ERRS:-0}" -gt 0 ]; then
+              echo "black could not process ${ERRS} file(s) -- this is an error, not a formatting verdict."
+            elif [ "${COUNT:-0}" -gt 0 ]; then
+              echo "${COUNT} file(s) need reformatting. Run \`black <file>\` (or \`pre-commit run black\`)."
+            else
+              echo "No formatting changes needed."
+            fi
+            if [ "$RC" != "0" ]; then
+              echo ""
+              echo '```'
+              head -50 /tmp/black.out
+              echo '```'
+            fi
+            echo ""
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          # Decide from black's OUTPUT, not from its exit code. In diff mode
+          # black runs under xargs, and GNU xargs remaps ANY child status in
+          # 1-125 to its own 123 -- so a plain "would reformat" (black's 1)
+          # arrives as 123 and is indistinguishable from a real internal error.
+          # BSD xargs propagates 1 instead, which is why local validation on
+          # macOS passed while ubuntu CI would have hard-failed every advisory
+          # adopter. Reported by Bugbot + @aptracebloc on tracebloc/.github#115.
+          #
+          # Checked errors-first so a genuine internal error is never masked by
+          # a reformat finding in the same run.
+          if [ "${ERRS:-0}" -gt 0 ]; then
+            echo "::error::black could not process ${ERRS} file(s) - failing closed (not a formatting verdict)."
+            cat /tmp/black.out
+            exit 1
+          fi
+          if [ "${COUNT:-0}" -gt 0 ]; then
+            if [ "$SOFT_FAIL" = "true" ]; then
+              echo "soft-fail is on - reporting ${COUNT} unformatted file(s), not failing this job."
+              exit 0
+            fi
+            exit 1
+          fi
+          if [ "$RC" != "0" ]; then
+            echo "::error::black exited $RC but reported no findings - failing closed."
+            cat /tmp/black.out
+            exit 1
+          fi
+          exit 0
 
   # --------------------------------------------------------------- gitleaks ---
   gitleaks:
@@ -670,7 +847,7 @@ jobs:
   #
   # WHOLE-TREE, NEVER DIFF-SCOPED — deliberately. A guard that inspects only
   # what a PR adds reports clean forever over the existing backlog (the exact
-  # failure mode of PR-mode gitleaks on frontend-app). Every run scans every
+  # failure mode of PR-mode gitleaks on (internal ref)). Every run scans every
   # workflow file in the checkout.
   #
   # THE GRAMMAR, and why not a YAML parse: pin-checking needs the `uses:` REF
