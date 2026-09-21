@@ -1,8 +1,8 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/bugbot-gate.yml`
-# (blob bf0c7bd86038edda9480884c5469fe633ede0f3d) folded with the private source repo's own caller of it,
-# `.github/workflows/bugbot-gate-caller.yml` (blob 031f0fc71ae158f81cdb814c1f9fe21ff6b929b1), for a PUBLIC repo: GitHub lets a
+# (blob 9d662bae8589074f65077e4ba5c4b9f5ac84b5be) folded with the private source repo's own caller of it,
+# `.github/workflows/bugbot-gate-caller.yml` (blob ae81d9c06f27cd0bb29dc753491e7c685bc180ce), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
 # reusable's jobs inline -- the triggers are the caller's; every `inputs.*` is
@@ -235,7 +235,7 @@ jobs:
     # rarer kill. The budget stays at 660 and this comment states the trade.
     timeout-minutes: 14
     steps:
-      # Same shape as code-quality.yml and blocked-gate.yml: the checker lives
+      # Same shape as code-quality.yml: the checker lives
       # here, not in the calling repo, so the reusable fetches it. This repo is
       # PRIVATE (the private source repo replaced the public `.github` as the host on
       # 2026-09-10) and the caller's `github.token` reads only the caller's own
