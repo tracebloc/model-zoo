@@ -1,8 +1,8 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/desk-dispatch.yml`
-# (blob 8bb65c91cc59cd369f971da5e4ec66931b113df0) folded with the private source repo's own caller of it,
-# `.github/workflows/desk-dispatch-caller.yml` (blob 1f852c069a94d928dd7e2c6a3a37bf0500558ea2), for a PUBLIC repo: GitHub lets a
+# (blob 1630fdd240068d40a111f414490ef941537198d5) folded with the private source repo's own caller of it,
+# `.github/workflows/desk-dispatch-caller.yml` (blob 79d93d8d59cc9841cbe021a4246b76908d5871a5), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
 # reusable's jobs inline -- the triggers are the caller's; every `inputs.*` is
@@ -20,16 +20,20 @@
 #
 #   * COMMENT TEXT -- a whole-line YAML `#` comment, a `#`-first line of a `run:`
 #     script that is not inside a heredoc, and this header -- was scrubbed: every
-#     private-repo issue reference, org-qualified private repo name, RFC id and
-#     tenant name became `(internal ref)`, and the private repo this file was
-#     generated from became `the private source repo`.
+#     private-repo issue reference, private repo name (org-qualified OR bare),
+#     RFC id and tenant name became `(internal ref)`, and the private repo this
+#     file was generated from became `the private source repo`.
+#     A bare name is left alone where the next character is `/` or `#`: that is a
+#     path or branch prefix, or the issue form, which is matched on its own.
 #   * CODE -- everything else: commands, heredoc bodies, strings a workflow posts,
 #     `repository:` values, URLs, step names -- was NOT edited. An internal
-#     reference there refuses the render (it is a defect in the source), with one
+#     reference there refuses the render (it is a defect in the source). A BARE
+#     private repo name is never judged in code at all: several are also public
+#     product identifiers -- an image a public chart installs, a package name, a
+#     branch prefix -- so only the org-qualified spelling refuses there, with one
 #     exception: the name of the private repo this file was generated from, which
 #     the code states verbatim because the workflow checks that repo out and
-#     fetches its scripts from it at run time. Its bare, unqualified name is not
-#     scrubbed anywhere.
+#     fetches its scripts from it at run time.
 #
 # Regenerate:  python3 scripts/render-self-contained.py          (in the private source repo)
 # Verify:      python3 scripts/render-self-contained.py --check  (make selftest-self-contained)
@@ -46,7 +50,10 @@
 # Claude Code cost on the machine running it. This reusable is the cheap shape:
 # no model runs until an event arrives, and then one session handles one PR from
 # a ~30k-token prefix. The workflow itself costs no tokens and a few seconds of
-# `ubuntu-slim`.
+# `ubuntu-slim` -- billed as a whole minute, which is why a no-op run holds its
+# concurrency slot to the end of that minute when a check is still running: the
+# sibling completions on the same head collapse into one pending successor
+# instead of each booting a runner ((internal ref) D6 lever 1; the stamp step below).
 #
 # WHO REVIEWS. `reviewer` is the identity whose review requests count and whose
 # routine fires. It is a dedicated review account, not a person: the routine runs
@@ -148,10 +155,16 @@
 # label older than `stale-minutes` is a dead session's and is stolen.
 #
 # FAIL CLOSED. An unreadable event, an unreadable reviews/events read, an empty
-# fire URL or token when there is work to do, or a fire the routine does not
-# answer 2xx are refusals (red job, message names the input), never a silent skip
-# (CLAUDE.md rules 3, 8). This job is NOT a required context anywhere, so a red
-# run blocks nothing; it is the operator's signal that reviews stopped flowing.
+# fire URL or token when there is work to do, or a fire the routine refuses are
+# refusals (red job, message names the input), never a silent skip (CLAUDE.md
+# rules 3, 8). This job is NOT a required context anywhere, so a red run blocks
+# nothing; it is the operator's signal that reviews stopped flowing.
+#
+# THE ONE NON-2xx THAT IS NOT A REFUSAL is the routine's own rate limit
+# ((internal ref)): the job waits the interval the routine names when that fits
+# its wait budget, and otherwise DEFERS -- lock released, `::warning::` on the
+# run, run green -- because the 20-minute sweep re-fires it, and a red run for a
+# normal condition was the noise that hid the real refusals.
 #
 # THE CANONICAL CALLER is `desk-dispatch-caller.yml` beside this file (#38), and
 # a pilot repo carries the identical file ((internal ref)).
@@ -180,7 +193,7 @@
 # `contents: read`) -- GRANTED BY THE CALLER, never declared here (see the note
 # above `jobs:`); a caller granting only the first two reaches the script and
 # fires UNGATED, with the reason in the job summary. The App token is minted ONLY to read
-# this private repo's checker (`permission-contents: read` on org-config), the
+# this private repo's checker (`permission-contents: read` on the private source repo), the
 # same shape as bugbot-gate.yml. The routine token and fire URL come from the
 # caller (`secrets.routine-token`, `inputs.fire-url`); nothing is inherited.
 #
@@ -249,6 +262,21 @@ jobs:
     runs-on: ubuntu-slim
     timeout-minutes: 10
     steps:
+      # WHEN THIS JOB STARTED, for the hold the dispatcher takes on a no-op
+      # ((internal ref) D6 lever 1). A job bills a rounded-up minute, and a dispatch
+      # whose verdict is "still in progress" exits at ~20 s while every sibling
+      # completion on the head starts another run; the concurrency group above
+      # keeps one pending and cancels the rest unstarted. The script therefore
+      # holds its slot until ~45 s after this stamp (ABSORB_UNTIL_SECONDS in
+      # scripts/desk-dispatch.py, DISPATCH_ABSORB_UNTIL to override), so a burst
+      # of N completions costs two billed runs instead of about N/2 -- and drops
+      # nothing: the one pending successor starts after the hold and reads the
+      # head as it then is. First, before the mints, so the hold measures from
+      # as near the job's start as a step can see; a caller without this step
+      # gets no hold and behaves exactly as before.
+      - name: Note when this job started
+        id: started
+        run: echo "at=$(date +%s)" >> "$GITHUB_OUTPUT"
       - name: Mint a read-only token for org-config (private; the caller's own token cannot read it)
         id: org-config-token
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
@@ -312,7 +340,7 @@ jobs:
       # required-status-context list, so a red check that is NOT required stops
       # holding the head while a red required one still does ((internal ref); the
       # callee is `gate_required` / `required_contexts` in scripts/desk-dispatch.py).
-      # `org-config`'s own fleet audits run on a
+      # `the private source repo`'s own fleet audits run on a
       # `pull_request` and report on the LIVE state of every OTHER repo in the org,
       # so one repo drifting anywhere turned an inventory PR here red and the desk
       # stopped reviewing the very PR that fixes the drift -- circular.
@@ -387,6 +415,7 @@ jobs:
       - name: Decide, lock, fire
         env:
           GH_TOKEN: ${{ github.token }}
+          DISPATCH_T0: ${{ steps.started.outputs.at }}
           DESK_REQUEST_TOKEN: ${{ steps.request-token.outputs.token }}
           DESK_RERUN_TOKEN: ${{ steps.rerun-token.outputs.token }}
           DESK_PROTECTION_TOKEN: ${{ steps.protection-token.outputs.token }}
