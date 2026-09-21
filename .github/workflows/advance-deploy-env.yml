@@ -20,16 +20,20 @@
 #
 #   * COMMENT TEXT -- a whole-line YAML `#` comment, a `#`-first line of a `run:`
 #     script that is not inside a heredoc, and this header -- was scrubbed: every
-#     private-repo issue reference, org-qualified private repo name, RFC id and
-#     tenant name became `(internal ref)`, and the private repo this file was
-#     generated from became `the private source repo`.
+#     private-repo issue reference, private repo name (org-qualified OR bare),
+#     RFC id and tenant name became `(internal ref)`, and the private repo this
+#     file was generated from became `the private source repo`.
+#     A bare name is left alone where the next character is `/` or `#`: that is a
+#     path or branch prefix, or the issue form, which is matched on its own.
 #   * CODE -- everything else: commands, heredoc bodies, strings a workflow posts,
 #     `repository:` values, URLs, step names -- was NOT edited. An internal
-#     reference there refuses the render (it is a defect in the source), with one
+#     reference there refuses the render (it is a defect in the source). A BARE
+#     private repo name is never judged in code at all: several are also public
+#     product identifiers -- an image a public chart installs, a package name, a
+#     branch prefix -- so only the org-qualified spelling refuses there, with one
 #     exception: the name of the private repo this file was generated from, which
 #     the code states verbatim because the workflow checks that repo out and
-#     fetches its scripts from it at run time. Its bare, unqualified name is not
-#     scrubbed anywhere.
+#     fetches its scripts from it at run time.
 #
 # Regenerate:  python3 scripts/render-self-contained.py          (in the private source repo)
 # Verify:      python3 scripts/render-self-contained.py --check  (make selftest-self-contained)
@@ -56,7 +60,7 @@ name: Advance deploy environment
 # declares the validation passed but the deploy hasn't happened yet.
 #
 # -- Per-repo override via `.kanban.yml` --
-# For repos where the default branch isn't the prod-truth (e.g. averaging-service
+# For repos where the default branch isn't the prod-truth (e.g. (internal ref)
 # deploys a Docker image from staging without ever touching main), drop a
 # `.kanban.yml` at the repo root:
 #
@@ -146,7 +150,7 @@ jobs:
           echo "Branch '$BRANCH' is not develop/staging/master/main (and no .kanban.yml override) - nothing to do."
 
       # THIS is the workflow (internal ref) was filed about. On 2026-08-14 at 06:22
-      # UTC, run 31776053792 on client-runtime died with
+      # UTC, run 31776053792 on (internal ref) died with
       #     gh: API rate limit already exceeded for user ID 54042461
       # exit 1 -- because every board caller in the fleet, both crons, the
       # conformance gate and that person's own `gh` shared ONE user PAT's 5,000/hr.
