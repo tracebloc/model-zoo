@@ -1,7 +1,7 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/fr-pass-comment.yml`
-# (blob f37c0892462ada2915c33057cae14c279a137715) folded with the private source repo's own caller of it,
+# (blob bb58b336924e67550e8389478a28ecaac83cda42) folded with the private source repo's own caller of it,
 # `.github/workflows/fr-pass-comment-caller.yml` (blob bc01ef34bf604788e80a0b19d31b8fe7edfaae15), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
@@ -20,16 +20,20 @@
 #
 #   * COMMENT TEXT -- a whole-line YAML `#` comment, a `#`-first line of a `run:`
 #     script that is not inside a heredoc, and this header -- was scrubbed: every
-#     private-repo issue reference, org-qualified private repo name, RFC id and
-#     tenant name became `(internal ref)`, and the private repo this file was
-#     generated from became `the private source repo`.
+#     private-repo issue reference, private repo name (org-qualified OR bare),
+#     RFC id and tenant name became `(internal ref)`, and the private repo this
+#     file was generated from became `the private source repo`.
+#     A bare name is left alone where the next character is `/` or `#`: that is a
+#     path or branch prefix, or the issue form, which is matched on its own.
 #   * CODE -- everything else: commands, heredoc bodies, strings a workflow posts,
 #     `repository:` values, URLs, step names -- was NOT edited. An internal
-#     reference there refuses the render (it is a defect in the source), with one
+#     reference there refuses the render (it is a defect in the source). A BARE
+#     private repo name is never judged in code at all: several are also public
+#     product identifiers -- an image a public chart installs, a package name, a
+#     branch prefix -- so only the org-qualified spelling refuses there, with one
 #     exception: the name of the private repo this file was generated from, which
 #     the code states verbatim because the workflow checks that repo out and
-#     fetches its scripts from it at run time. Its bare, unqualified name is not
-#     scrubbed anywhere.
+#     fetches its scripts from it at run time.
 #
 # Regenerate:  python3 scripts/render-self-contained.py          (in the private source repo)
 # Verify:      python3 scripts/render-self-contained.py --check  (make selftest-self-contained)
@@ -93,10 +97,11 @@ on:
 # ineffective while looking like it worked. That is exactly how the 👍/👎 reaction
 # came to fail with "Resource not accessible by integration (HTTP 403)" on every
 # run, including the ones that advanced their card successfully. All writes
-# therefore go through PROJECTS_KANBAN_TOKEN, which already has cross-repo write
-# (wip-limit-check.yml posts PR comments with it). The block below pins GITHUB_TOKEN
-# to contents:read and nothing else, which is also why there is no GITHUB_TOKEN
-# fallback on the writes: it would be dead code that logs a misleading retry.
+# therefore go through the token the first step mints as the tracebloc-release-train
+# App ((internal ref)), org-scoped with exactly the grants that step lists. The block
+# below pins GITHUB_TOKEN to contents:read and nothing else, which is also why there
+# is no GITHUB_TOKEN fallback on the writes: it would be dead code that logs a
+# misleading retry.
 permissions:
   contents: read
 
@@ -121,13 +126,13 @@ jobs:
     # note so `/fr-pass` lands first on its line and it loops until the concurrency
     # limits bite.
     #
-    #   * Not a bot account. This is the guard the loop *should* have needed, and
-    #     today it catches nothing — the writes use PROJECTS_KANBAN_TOKEN, a PAT
-    #     belonging to a human, so the handler's own comments arrive under that
-    #     person's login, indistinguishable from their real reviews. Keyed on the
-    #     account type rather than a login for exactly that reason: hard-coding
-    #     the login would lock out the busiest reviewer, and moving the token to a
-    #     GitHub App later makes this clause the whole fix on its own.
+    #   * Not a bot account. Since the writes moved to the tracebloc-release-train
+    #     App ((internal ref)), the handler's own notes arrive under the App's `[bot]`
+    #     login and this clause catches them too. It caught nothing while the writes
+    #     used a human's PAT — those notes arrived under that person's login,
+    #     indistinguishable from their real reviews — which is why it is keyed on
+    #     the account type rather than a login: hard-coding the login would lock
+    #     out the busiest reviewer.
     #   * Not one of our own notes. This is what actually breaks the loop, against
     #     a marker the reporting step prepends to every note it posts, so it holds
     #     however the wording is later reflowed. startsWith, not contains, and the
@@ -406,7 +411,7 @@ jobs:
             exit 1
           fi
 
-          # -------------------------- 3a. is this a release-train promotion?
+          # -------------------------- 3a. is this a (internal ref) promotion?
           # Promotion PRs (`release-train/*`, and hotfix back-merges) are
           # plumbing: the FR gate on them evaluates the CONTAINED items, so the
           # promotion PR itself has nothing for a second reviewer to assess and
@@ -501,7 +506,7 @@ jobs:
               "$GQL_HEAD" \
               "$FENCE" \
               "" \
-              "Usually an expired \`PROJECTS_KANBAN_TOKEN\` or a transient GitHub error. Re-comment \`/fr-pass\` to retry. Run log: $RUN_URL"
+              "Usually a transient GitHub error, or the App installation has lost its organization-projects grant. Re-comment \`/fr-pass\` to retry. Run log: $RUN_URL"
             exit 1
           fi
 
@@ -561,11 +566,9 @@ jobs:
           # renamed before ((internal ref) collapsed the dev-side FR columns).
           # Check they still exist, so the next rename fails loudly here instead
           # of reporting "wrong column" for every card on the board.
-          # Rename window ((internal ref)): the staging-review column is "Staging
-          # (human review)" after the UI rename and "FR on staging" before it, and
-          # the rename is a single instant with no overlap. So resolve it to
-          # whichever exists and keep the loud failure for the case where NEITHER
-          # does -- which is the check this block was written for.
+          # (internal ref) rename shim, inert today: "Staging (human review)" is not a
+          # board column, so STAGING_REVIEW resolves to "FR on staging"; the loud
+          # failure below still fires if NEITHER exists.
           if printf '%s' "$PROJ" | jq -e '.data.organization.projectV2.field.options[]
                 | select(.name == "Staging (human review)")' > /dev/null; then
             STAGING_REVIEW="Staging (human review)"
