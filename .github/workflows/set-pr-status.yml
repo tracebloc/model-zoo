@@ -1,7 +1,7 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/set-pr-status.yml`
-# (blob ee2e926e1e76a8781e93a32d70ca44a7a88f45b7) folded with the private source repo's own caller of it,
+# (blob 1061eb78a848429845f3ce0713ee6b0288bac801) folded with the private source repo's own caller of it,
 # `.github/workflows/set-pr-status-caller.yml` (blob cc4bdf86add1f96e79ee3a1b3c7ae426e97b003f), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
@@ -316,6 +316,10 @@ jobs:
           STATUS_NAME: ${{ steps.target.outputs.status_name }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           REPO_FULL: ${{ github.repository }}
+          # Read by the guard below, for ONE arm: `reopened` is the event that
+          # revokes a `Cancelled` card, and the guard may not tell it apart from an
+          # `edited` on a merged PR by anything else ((internal ref)).
+          EVENT_ACTION: ${{ github.event.action }}
         run: |
           set -euo pipefail
           REPO_NAME="${REPO_FULL#*/}"
@@ -370,12 +374,17 @@ jobs:
           # ADDS the card to the board when the lookup finds none, so a read
           # placed after it can only refuse under a "NOTHING WAS WRITTEN" that is
           # false for a brand-new PR -- the card is on the board at No Status by
-          # then. Read first, and every exit below the read is honest.
+          # then. Read first, and every exit below the read is honest. BOTH
+          # questions the guard asks of the order are read here, in one block --
+          # the first post-merge column and the abandonment column
+          # ((internal ref)) -- so an order that cannot answer either
+          # refuses before the card exists.
           RANK_TOOL=".kanban-rank/scripts/pipeline_rank.sh"
-          if ! MERGED_FLOOR=$(bash "$RANK_TOOL" --first-post-merge); then
+          if ! MERGED_FLOOR=$(bash "$RANK_TOOL" --first-post-merge) \
+             || ! ABANDONED=$(bash "$RANK_TOOL" --abandoned); then
             echo "::error::PR #$PR_NUMBER: the shared pipeline order could not be read from" \
-                 "$RANK_TOOL, so Status=$STATUS_NAME cannot be shown not to demote this card." \
-                 "NOTHING WAS WRITTEN." >&2
+                 "$RANK_TOOL (its first post-merge column, or its abandonment column), so" \
+                 "Status=$STATUS_NAME cannot be shown not to demote this card. NOTHING WAS WRITTEN." >&2
             exit 1
           fi
 
@@ -393,6 +402,7 @@ jobs:
               query($org: String!, $repo: String!, $num: Int!) {
                 repository(owner: $org, name: $repo) {
                   pullRequest(number: $num) {
+                    state
                     projectItems(first: 10) {
                       nodes {
                         id
@@ -416,6 +426,13 @@ jobs:
             # is about a card that moved between two points in time.
             CURRENT_STATUS=$(jq -r --arg n "$PROJECT_NUMBER" 'first(.data.repository.pullRequest.projectItems.nodes[]?
                   | select(.project.number == ($n | tonumber)) | .status.name) // ""' <<<"$RESP")
+            # THE PR'S LIVE STATE, from that same response and for the same reason.
+            # `github.event.action` is frozen at the moment the webhook fired; this
+            # is what the PR is NOW. The reopen arm below needs both, and needs them
+            # to be one point in time: a `reopened` run that was queued while the PR
+            # was closed AGAIN is a stale payload about a PR that is CLOSED, and the
+            # only thing that can say so is a live read ((internal ref)).
+            PR_STATE=$(jq -r '.data.repository.pullRequest.state // ""' <<<"$RESP")
             if [ -n "$ITEM_ID" ] && [ "$ITEM_ID" != "null" ]; then break; fi
             echo "PR not yet on project, waiting ($i/5)…"
             sleep 5
@@ -540,8 +557,40 @@ jobs:
           # column -- which is how `Staging (agent review)` arrived -- needs no
           # edit here ((internal ref)).
           #
+          # THE ONE COLUMN AT OR PAST THE ANCHOR THIS JOB MAY WRITE OVER, and only
+          # on one event ((internal ref)). `Cancelled` ranks terminal, and
+          # it should: the closure router writes it when a PR is closed WITHOUT
+          # merging, and nothing may demote out of it by mistake. But it records
+          # an ABANDONMENT, not shipped work, and `reopened` is exactly the event
+          # that revokes an abandonment -- so on that event, out of that column,
+          # the write goes ahead. THREE things keep this from reopening the
+          # demotion above:
+          #   * GitHub cannot fire `reopened` on a MERGED PR, so the arm is
+          #     unreachable from the stale-merged-payload path the guard exists
+          #     for;
+          #   * it is scoped to the single column the order names as the
+          #     abandonment (`--abandoned`, asked of the same tool in the read
+          #     above, never spelled here), so `On dev` .. `Prod` and `Done` stay
+          #     protected on every event, `reopened` included;
+          #   * and the PR must still be OPEN on the board read above. This one is
+          #     about a RACE, not a column: `EVENT_ACTION` is frozen at the moment
+          #     the webhook fired, while the card it writes over is live. Reopen a
+          #     PR and close it again and the sequence is
+          #     `Cancelled` -> reopen queues this run -> close, router writes
+          #     `Cancelled` again -> this run writes `Code review` over it.
+          #     Closing does not retrigger this workflow and `cancel-in-progress`
+          #     is false, so nothing else stops that write. `PR_STATE` comes from
+          #     the same response as `CURRENT_STATUS`, so a stale reopen sees
+          #     `CLOSED` and falls through to the rank guard, which refuses. An
+          #     unreadable or empty state falls through the same way: this arm
+          #     fails CLOSED like every other test in this block.
+          # Every OTHER event on a `Cancelled` card -- `edited`,
+          # `ready_for_review`, `converted_to_draft` -- still refuses: only the
+          # reopen says the closure was a mistake.
+          #
           # FAIL CLOSED, THREE WAYS, and none of them defaults to writing:
-          #   unreadable order   the tool is missing or errors -> exit 1
+          #   unreadable order   the tool is missing or errors, on either question
+          #                      asked of it above (the anchor, the abandonment) -> exit 1
           #   unplaceable column a Status the order does not declare -> exit 1,
           #                      because a card in a column nobody has ranked
           #                      cannot be shown NOT to be shipped work
@@ -560,7 +609,12 @@ jobs:
                  "the shared config repository if the board really has it." >&2
             exit 1
           fi
-          if [ "$CURRENT_RANK" -ge "$MERGED_FLOOR" ]; then
+          if [ "${EVENT_ACTION:-}" = "reopened" ] && [ "${PR_STATE:-}" = "OPEN" ] \
+             && [ -n "${CURRENT_STATUS:-}" ] && [ "$CURRENT_STATUS" = "$ABANDONED" ]; then
+            echo "::notice::PR #$PR_NUMBER was reopened out of '$CURRENT_STATUS' -- that column" \
+                 "records a closure THIS event revokes, not shipped work, so Status=$STATUS_NAME" \
+                 "is written."
+          elif [ "$CURRENT_RANK" -ge "$MERGED_FLOOR" ]; then
             echo "::notice::PR #$PR_NUMBER is at '$CURRENT_STATUS', at or beyond the first" \
                  "post-merge column -- NOT writing Status=$STATUS_NAME. This event's payload" \
                  "says the PR is open; the board says the work has moved on, and the board is" \
@@ -620,8 +674,8 @@ jobs:
     timeout-minutes: 5
     steps:
       # The checker lives here, not in the calling repo, so the reusable fetches
-      # it -- same shape as code-quality.yml, blocked-gate.yml and
-      # bugbot-gate.yml. This repo is PRIVATE (the private source repo replaced the public
+      # it -- same shape as code-quality.yml and bugbot-gate.yml. This repo
+      # is PRIVATE (the private source repo replaced the public
       # `.github` as the host on 2026-09-10), so the checkout needs a read-only
       # App installation token; the App id and key arrive because every caller
       # of this reusable passes `secrets: inherit` (header, point 1).
