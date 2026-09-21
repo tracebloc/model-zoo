@@ -1,8 +1,8 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/bugbot-gate.yml`
-# (blob 9d662bae8589074f65077e4ba5c4b9f5ac84b5be) folded with the private source repo's own caller of it,
-# `.github/workflows/bugbot-gate-caller.yml` (blob ae81d9c06f27cd0bb29dc753491e7c685bc180ce), for a PUBLIC repo: GitHub lets a
+# (blob 6cb768e7de2514666fadef05c47e947d3206bf17) folded with the private source repo's own caller of it,
+# `.github/workflows/bugbot-gate-caller.yml` (blob 5a12b5bf6c0dbaa0c137ef8a4a3047e3ce735b7a), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
 # reusable's jobs inline -- the triggers are the caller's; every `inputs.*` is
@@ -14,6 +14,9 @@
 # not change. Scripts are still fetched from the private source repo at run time with a
 # read-only App installation token; on a fork PR that token cannot be minted
 # (no secrets), so the checkout fails closed rather than running untrusted input.
+# Where the copy checks the private source repo out, its `tools-ref` is the literal `main` --
+# the ref every caller of the reusable pins -- because a public copy has no
+# reusable to take the commit from (the private original defaults to its own).
 #
 # PUBLIC SURFACE. This file is delivered to a public repo. Exactly what was
 # scrubbed, and what was not:
@@ -252,13 +255,38 @@ jobs:
           repositories: org-config
           permission-contents: read
 
+      # THE TOOLS REF ((internal ref) D4). `job.workflow_sha` is the commit of THIS
+      # reusable file -- the one the caller pinned -- so the scripts checked out
+      # below are the ones this workflow was reviewed with; a `@main` caller gets
+      # `main`'s. `tools-ref` overrides it to test a tools change against a pinned
+      # workflow. An EMPTY ref would make actions/checkout take the tools repo's
+      # DEFAULT branch fleet-wide, so it is refused here rather than checked out.
+      # The SHA is read out of `toJSON(job)` in shell because actionlint's schema
+      # of the `job` context (1.7.12) does not know `workflow_sha` yet.
+      - name: Resolve the tools ref, refusing an empty one
+        id: tools-ref
+        env:
+          TOOLS_REF: ${{ 'main' }}
+          JOB_CONTEXT: ${{ toJSON(job) }}
+        run: |
+          if [ -z "$TOOLS_REF" ]; then
+            case "$JOB_CONTEXT" in
+              *'"workflow_sha"'*) TOOLS_REF="${JOB_CONTEXT#*\"workflow_sha\": \"}"; TOOLS_REF="${TOOLS_REF%%\"*}" ;;
+            esac
+          fi
+          if ! [[ "$TOOLS_REF" =~ ^[0-9a-f]{40}$ || ( -n "$TOOLS_REF" && "$TOOLS_REF" != *[![:alnum:]._/-]* ) ]]; then
+            echo "::error::the tools ref is empty or not a ref (${TOOLS_REF:-<empty>}); an empty ref would check out the tools repo's default branch instead of the commit this workflow was pinned at. Refusing."
+            exit 1
+          fi
+          echo "ref=$TOOLS_REF" >> "$GITHUB_OUTPUT"
+          echo "tools ref: $TOOLS_REF"
       - name: Check out the shared checker
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: tracebloc/org-config
           token: ${{ steps.org-config-token.outputs.token }}
           ref: ${{ 'main' }}
-          path: .bugbot-gate-tools
+          path: .org-config-tools
           persist-credentials: false
 
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
@@ -283,4 +311,4 @@ jobs:
         # No interpolation of any PR-controlled string into this shell: the
         # checker reads everything it needs from the API itself, so a finding
         # title or a branch name never transits a command line.
-        run: python3 .bugbot-gate-tools/scripts/bugbot-gate.py
+        run: python3 .org-config-tools/scripts/bugbot-gate.py
