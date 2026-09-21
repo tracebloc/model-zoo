@@ -1,8 +1,8 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/desk-dispatch.yml`
-# (blob 1630fdd240068d40a111f414490ef941537198d5) folded with the private source repo's own caller of it,
-# `.github/workflows/desk-dispatch-caller.yml` (blob 79d93d8d59cc9841cbe021a4246b76908d5871a5), for a PUBLIC repo: GitHub lets a
+# (blob 682533abc2baa7f597eb3d67cc91aa69b97245e6) folded with the private source repo's own caller of it,
+# `.github/workflows/desk-dispatch-caller.yml` (blob c8897e878297f63dbfd86649365a33bfdd4751fe), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
 # reusable's jobs inline -- the triggers are the caller's; every `inputs.*` is
@@ -154,6 +154,19 @@
 # The session removes the label when it finishes (skill `--pr` mode, step 4); a
 # label older than `stale-minutes` is a dead session's and is stolen.
 #
+# THE OTHER LOCK. `claude-ship:driving` is the AUTHOR's, and a review fired while
+# it is held reviews a head the author is in the middle of replacing: measured over
+# 109 desk lock windows, 45% overlapped a live ship lock and 12 of the 13 windows
+# that filed no review at all sat inside that overlap, at 19.6 min and $3.47 each
+# ((internal ref)). The dispatcher defers on it -- held only, never mere presence,
+# capped at `ship-stale-minutes` wherever the label's age is readable; on a PR past
+# the 300-event window a leaked ship label reads `held` for ever and only the label
+# coming off or a new head clears it ((internal ref)) -- and takes NO lock while
+# deferring. The wait is
+# one-directional: ship never reads the desk's lock, so nothing deadlocks. The
+# caller's `unlabeled` type is what re-enters the deferred review when the author's
+# session releases; see the caller's header for why that event exists at all.
+#
 # FAIL CLOSED. An unreadable event, an unreadable reviews/events read, an empty
 # fire URL or token when there is work to do, or a fire the routine refuses are
 # refusals (red job, message names the input), never a silent skip (CLAUDE.md
@@ -167,7 +180,10 @@
 # normal condition was the noise that hid the real refusals.
 #
 # THE CANONICAL CALLER is `desk-dispatch-caller.yml` beside this file (#38), and
-# a pilot repo carries the identical file ((internal ref)).
+# a pilot repo ((internal ref)) carried the identical file until (internal ref)
+# added the `unlabeled` type to the canonical one and not to the pilot's. Adding
+# it there is the REQUIRED FOLLOW-UP; the canonical caller's header records the
+# window, and why neither caller-drift nor the caller-shape test can close it.
 # It was deliberately NOT shipped with this reusable (#28): a caller calls `@main`,
 # so one landing here before this file reached main would have been a
 # startup_failure on every PR. That clause still holds -- the caller works only
@@ -203,7 +219,7 @@ name: Desk dispatch
 
 on:
   pull_request:
-    types: [opened, ready_for_review, review_requested, synchronize]
+    types: [opened, ready_for_review, review_requested, synchronize, unlabeled]
   # THE GREEN GATE (Lukas, 2026-09-14): a review fires only once the head is green,
   # and a CI workflow completing is the event that carries that. The list names
   # EVERY workflow of THIS repo that runs on a pull-request event (a `workflow_run`
@@ -271,7 +287,13 @@ jobs:
       # scripts/desk-dispatch.py, DISPATCH_ABSORB_UNTIL to override), so a burst
       # of N completions costs two billed runs instead of about N/2 -- and drops
       # nothing: the one pending successor starts after the hold and reads the
-      # head as it then is. First, before the mints, so the hold measures from
+      # head as it then is. That holds while every run a caller can queue
+      # re-reads the head; a caller subscribing to `unlabeled` also queues runs
+      # that skip on the label name before any read, and GitHub cancels a PENDING
+      # run whenever a new one queues -- so such a run CAN supersede a pending
+      # meaningful one ((internal ref); the concurrency paragraph in
+      # desk-dispatch-caller.yml's header has the sequence and the price of
+      # closing it). First, before the mints, so the hold measures from
       # as near the job's start as a step can see; a caller without this step
       # gets no hold and behaves exactly as before.
       - name: Note when this job started
@@ -423,4 +445,5 @@ jobs:
           DESK_FIRE_URL: ${{ (vars.DESK_ROUTINE_FIRE_URL) }}
           DESK_ROUTINE_TOKEN: ${{ secrets.DESK_ROUTINE_TOKEN }}
           DESK_STALE_MINUTES: ${{ 45 }}
+          SHIP_STALE_MINUTES: ${{ 90 }}
         run: python3 .desk-dispatch-tools/scripts/desk-dispatch.py
