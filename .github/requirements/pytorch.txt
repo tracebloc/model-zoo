@@ -22,6 +22,12 @@
 # tools/check_engine_pin_drift.py against this file as well, so a bump ahead of
 # the engine goes red here instead of reaching the edge.
 pytest
+# CPU wheels for torch/torchvision, matching how the engine installs them
+# (tracebloc-engine Dockerfile.base.*.cpu use `--index-url .../whl/cpu`). Without
+# this, CI on a CPU runner pulls the ~2 GB CUDA wheel from PyPI. Versions stay
+# engine-pinned at 2.13.0 / 0.28.0; the engine-pin drift guard reads only the
+# `pkg==ver` lines, not this option, so the mirror stays in agreement.
+--extra-index-url https://download.pytorch.org/whl/cpu
 torch==2.13.0
 torchvision==0.28.0
 transformers==5.10.1

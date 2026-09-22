@@ -868,7 +868,11 @@ jobs:
         env:
           CONFIG: ${{ '.house-rules.conf' }}
           EXCLUDE: ${{ '' }}
-          SOFT_FAIL: ${{ true }}
+          # Armed hard: scipy is justified in .house-rules.conf and torch now
+          # installs from the CPU wheel index, so the checker reports zero
+          # findings; a new unimported pin, a full base image, or a CUDA-on-CPU
+          # torch install reddens the required house-rules job. Was true (advisory).
+          SOFT_FAIL: ${{ false }}
         run: |
           set -uo pipefail
           CHECKER=".org-config-tools/scripts/dead-weight.py"

@@ -32,6 +32,11 @@
 
 # CPU wheels — CI runs on CPU runners; the engine's edge torch pin is the same
 # version (use_cases/requirements_cuda.txt), only the build variant differs.
+# The index makes the CPU build variant explicit and matches how the engine
+# installs it (Dockerfile.base.*.cpu use `--index-url .../whl/cpu`); without it
+# a CPU runner pulls the ~2 GB CUDA wheel from PyPI. Versions are unchanged, so
+# the engine-pin drift guard (which reads only `pkg==ver` lines) still agrees.
+--extra-index-url https://download.pytorch.org/whl/cpu
 torch==2.13.0
 torchvision==0.28.0
 numpy==2.1.3
