@@ -32,6 +32,20 @@
 
 # CPU wheels — CI runs on CPU runners; the engine's edge torch pin is the same
 # version (use_cases/requirements_cuda.txt), only the build variant differs.
+# The index offers the CPU build variant, so a CPU runner need not pull the
+# ~2 GB CUDA wheel. Versions are unchanged, so the engine-pin drift guard (which
+# reads only `pkg==ver` lines) still agrees.
+#
+# `--extra-index-url` (ADDS an index) and not the `--index-url` (REPLACES PyPI)
+# the engine's Dockerfile.base.*.cpu uses, for the same reason as in
+# .github/requirements/pytorch.txt: pip applies the option to the whole
+# invocation, and this file also installs numpy, torchmetrics, timm,
+# transformers, safetensors, peft and scikit-learn — `--index-url` would make
+# PyPI unreachable for all of them. Which wheel wins is then decided by the
+# `+cpu` local label sorting above the plain PyPI version, not by this line
+# existing — assert
+# `torch.__version__` ends in `+cpu` if that has to be guaranteed.
+--extra-index-url https://download.pytorch.org/whl/cpu
 torch==2.13.0
 torchvision==0.28.0
 numpy==2.1.3
