@@ -22,11 +22,28 @@
 # tools/check_engine_pin_drift.py against this file as well, so a bump ahead of
 # the engine goes red here instead of reaching the edge.
 pytest
-# CPU wheels for torch/torchvision, matching how the engine installs them
-# (tracebloc-engine Dockerfile.base.*.cpu use `--index-url .../whl/cpu`). Without
-# this, CI on a CPU runner pulls the ~2 GB CUDA wheel from PyPI. Versions stay
-# engine-pinned at 2.13.0 / 0.28.0; the engine-pin drift guard reads only the
-# `pkg==ver` lines, not this option, so the mirror stays in agreement.
+# CPU wheel index for torch/torchvision, so CI on a CPU runner does not pull the
+# ~2 GB CUDA wheel. Versions stay engine-pinned at 2.13.0 / 0.28.0; the
+# engine-pin drift guard reads only the `pkg==ver` lines, not this option, so
+# the mirror stays in agreement.
+#
+# `--extra-index-url`, NOT the `--index-url` the engine's Dockerfile.base.*.cpu
+# uses, and the difference is deliberate rather than an approximation of it.
+# `--index-url` REPLACES PyPI; `--extra-index-url` ADDS an index alongside it.
+# The engine can replace PyPI because it installs torch in a pip invocation of
+# its own. This file does not: pip reads the option as global to the whole
+# invocation, so `--index-url` here would make PyPI unreachable for pytest,
+# transformers, timm, peft and scipy too, and leave every one of them resolvable
+# only if download.pytorch.org happens to carry it. That is a strictly larger
+# change than the CUDA-wheel problem this line exists to solve.
+#
+# What this line therefore does NOT guarantee: which wheel wins. Both indexes
+# offer `torch==2.13.0`, and the CPU build carries the `+cpu` PEP 440 local
+# label, which sorts ABOVE the plain PyPI version for the same release — that
+# ordering is what selects it, not the presence of the option. Confirm it the
+# only way that settles it: assert `torch.__version__` ends in `+cpu` in CI, or
+# `pip download torch==2.13.0` and read the filename. A green `dead-weight`
+# `cuda-torch-on-cpu` check proves only that the CHECKER greps for this option.
 --extra-index-url https://download.pytorch.org/whl/cpu
 torch==2.13.0
 torchvision==0.28.0
