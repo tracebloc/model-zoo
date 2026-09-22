@@ -1,7 +1,7 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/set-pr-status.yml`
-# (blob fafadd62040ffebf5d8ba87b5d19b3981f1ffc5f) folded with the private source repo's own caller of it,
+# (blob 297f1aad61a76ff2c69bcbec2f39c0becdbdffba) folded with the private source repo's own caller of it,
 # `.github/workflows/set-pr-status-caller.yml` (blob cc4bdf86add1f96e79ee3a1b3c7ae426e97b003f), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
@@ -47,45 +47,23 @@
 name: Set PR card Status on project
 
 # Reusable workflow. Called from each active repo on PR open / reopen /
-# draft-toggle / title-or-body edit (`edited`, added under (internal ref)
-# so the `closing-ref` job re-runs when the fields it reads change).
-# Moves the PR's card to the right Status:
+# draft-toggle / title-or-body edit (`edited`, (internal ref): so the
+# `closing-ref` job re-runs when the fields it reads change). Moves the PR's
+# card to the right Status:
 #   - draft PR  → In progress
 #   - non-draft → Code review
 #
-# TWO JOBS, and the second one is here on purpose ((internal ref)).
+# TWO JOBS, and the second one is here on purpose ((internal ref)):
 #
 #   set-status    writes the card's Status (below)
 #   closing-ref   checks that a PR whose TITLE names a ticket actually LINKS it
 #
-# WHY closing-ref LIVES HERE rather than in a new reusable or in code-quality.yml.
-# Three constraints, and this file is the only host that satisfies all three:
-#
-#   1. It needs a token that can read the PR *and* an issue in ANOTHER repo --
-#      almost every house ticket is in `(internal ref)`, and nearly every repo
-#      is private. This file already mints an ORG-SCOPED installation token for
-#      the `tracebloc-release-train` App (measured 2026-08-23: `issues: write`,
-#      `pull_requests: write`, `repository_selection: all`), and every one of its
-#      19 callers already passes `secrets: inherit`. `code-quality.yml` cannot:
-#      it is deliberately secretless and declares `contents: read` only, and a
-#      called workflow may not hold more than its caller grants -- adding
-#      `pull-requests: read` there would fail all 16 callers at startup with no
-#      jobs, before any of them could be updated.
-#   2. It must run on the SAME event that puts a card in `Code review`, because
-#      the convention it enforces is what makes that card move again later. That
-#      event is this file's trigger set by construction.
-#   3. A NEW reusable would need a `repo-inventory.yml` row for all 19 repos, and
-#      that file is guarded by `conformance-gate.yml` -- a required check that
-#      every other merge invalidates. A job in an existing reusable needs no
-#      inventory row at all: the inventory tracks CALLERS, one row per reusable.
-#
-# NOT A REQUIRED STATUS CHECK ANYWHERE, measured before landing: no repo's
-# protection or rulesets name `set-status`, and `closing-ref` is new. So a
-# finding here is loud and blocks nothing -- which is the point while the fleet
-# is still non-compliant (measured 2026-08-23: of the last 25 merged PRs in each
-# of 19 repos, 44 pass, 192 would report a finding, 239 name no ticket at all).
-# Arming it as a required context is a separate, later decision that belongs
-# after that backlog, not in the change that introduces the check.
+# closing-ref LIVES HERE because this is the only host that (1) mints an
+# ORG-SCOPED App token able to read an issue in another repo -- code-quality.yml
+# is deliberately secretless and cannot widen its callers' grant --, (2) runs on
+# the SAME event that puts a card in `Code review`, and (3) needs no new
+# `repo-inventory.yml` row (the inventory tracks callers, one row per reusable).
+# It is a required status check nowhere, and advisory by default ((internal ref)).
 
 on:
   pull_request:
@@ -108,123 +86,46 @@ on:
     # gate whose verdict depends on a mutable field must re-run when that field
     # mutates.
     types: [opened, reopened, ready_for_review, converted_to_draft, edited]
-# ONE RUN PER PR WINS, AND IT IS THE NEWEST ((internal ref)).
+# ONE RUN PER PR WINS, AND IT IS THE NEWEST ((internal ref)). Every trigger here
+# can fire twice in quick succession -- `edited` made that ordinary fleet-wide
+# ((internal ref)) -- and without a group the LOSER writes last: the card or the
+# closing-ref verdict settles on stale input with nothing erroring. `github.ref`
+# is `refs/pull/<n>/merge` on these events, so the group is per-PR;
+# `github.workflow` keeps two callers in one repo apart (the `(internal ref)`
+# code-quality-caller.yml shape, one house pattern).
 #
-# Every trigger this file answers can fire twice in quick succession -- a
-# title fixed straight after a body edit, a ready_for_review immediately
-# after an edit -- and `edited` made that ordinary rather than rare: the
-# 19-PR sweep for (internal ref) armed `edited` on all 20 callers, so what
-# was latent on one repo is now live fleet-wide.
-#
-# Without a group the runs race and the LOSER writes last: an older
-# evaluation of the title/body overwrites a newer one, and the card (or the
-# closing-ref verdict) settles on stale input. Nothing errors; the board is
-# simply wrong, which is the failure mode this whole workflow exists to
-# prevent one level down.
-#
-# `github.ref` is `refs/pull/<n>/merge` on these events, so the group is
-# already per-PR; `github.workflow` is the CALLER's workflow name, which
-# keeps two different callers in one repo apart. Same shape as
-# `(internal ref)`'s code-quality-caller.yml, deliberately -- one house pattern.
-#
-# QUEUE, DO NOT CANCEL. The previous revision said "CANCELLING IS SAFE HERE,
-# and that is measured rather than assumed ... GitHub surfaces the newest per
-# context ... so a cancelled older run blocks nothing." Half of that holds and
-# the half that does not is the half that matters.
-#
-# `gh pr checks` does dedupe to the newest per context, which is where the
-# claim came from. `statusCheckRollup.state` does NOT: it aggregates
-# WORST-OF across every check run on the commit, so one CANCELLED run sits
-# beside three SUCCESS runs of the same name and the rollup reports FAILURE.
-# That is what the PR's red X renders from, and what every tool reading the
-# rollup sees -- including our own `ship.py` scan.
-#
-# Measured on `.github#387` (2026-08-30, four runs at 07:39 -- the train
-# creates the PR, then edits the body, and `edited` cancelled the in-flight
-# `opened` run):
-#
-#   mergeStateStatus=BLOCKED  rollup=FAILURE
-#   EVERY non-SUCCESS context:
-#      set-status / set-status  = CANCELLED
-#      set-status / closing-ref = CANCELLED
-#      quality / format         = SKIPPED
-#
-# Nothing else was non-green. "Blocks nothing" was right about MERGING -- these
-# are not required contexts -- and wrong about what a human sees. A red X that
-# is not a real failure is not cosmetic: on 2026-08-28 two reviewers withheld
-# approval over exactly this shape of stale red (@saqlainsyed007 on .github#369,
-# @aptracebloc on (internal ref)), and both were reading the evidence correctly.
-#
-# Keeping the GROUP still solves what the group was for. With
-# `cancel-in-progress: false` a second run goes PENDING until the first
-# finishes rather than running beside it, so the newer evaluation still writes
-# last and the card cannot settle on stale input.
-#
-# THAT IS ORDERING WITHIN THE GROUP, AND ONLY THAT (@saadqbal on #388). An
-# earlier draft said "nothing is lost", which is too strong. Cancelling also
-# TRUNCATED a superseded run; queuing guarantees it completes. Both the
-# `if: state == 'open'` condition and the draft read come off the FROZEN event
-# payload, so an `edited` run that lands after the closure router has already
-# moved a merged card could drag it back to `Code review`. Cancelling narrowed
-# that window by accident, not by design, and it paid for it with a red X on
-# every superseded run. Queuing is the better trade, not a free one.
-#
-# THAT WINDOW IS NOW CLOSED ON PURPOSE ((internal ref)): the write step compares
-# the card's CURRENT column against the shared pipeline order and refuses to
-# write over anything at or beyond the first post-merge column, so a late run's
-# stale payload cannot un-ship a card however the runs are ordered.
-#
-# WHICH LEAVES THIS GROUP DOING ONLY ITS OWN JOB, and that is a fact for
-# (internal ref) to act on, not this change. That ticket measured
-# `set-status / set-status` + `set-status / closing-ref` at 124 cancelled runs
-# across 47 PRs -- the largest single source of false-red rollups in the org --
-# and the reason it could not simply revisit the trade here was that the group
-# was quietly compensating for the demotion above. It no longer is. The group
-# stays exactly as it is in THIS change: one idea per PR, and the concurrency
-# decision is that ticket's to make with its own evidence.
-#
-# RESIDUAL, stated rather than glossed: GitHub cancels a previously PENDING run
-# when a third event supersedes it, so a burst of 3+ rapid edits can still
-# leave one CANCELLED entry. The create-then-edit the train actually does is
-# two events, which this removes entirely.
+# QUEUE, DO NOT CANCEL. `statusCheckRollup.state` aggregates WORST-OF across
+# every check run on the commit, so one CANCELLED superseded run reports the PR
+# as FAILURE and reviewers withhold approval over a red that is not one --
+# measured on (internal ref), (internal ref); scripts/reusable-no-cancel.py
+# holds the measurement and refuses a cancelling reusable. With
+# `cancel-in-progress: false` the newer run goes PENDING and still writes last.
+# The window that cancelling narrowed by accident -- a stale `edited` payload
+# dragging a merged card back -- is closed by the rank guard below ((internal ref)).
+# RESIDUAL: a burst of 3+ rapid edits can still leave one CANCELLED entry, since
+# GitHub cancels a PENDING run a third event supersedes.
 concurrency:
   group: set-pr-status-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
-  # ONLY WHILE THE PR IS OPEN ((internal ref)). This condition is a
-  # DIRECT CONSEQUENCE of adding `edited` to the callers, and it is not optional.
-  #
-  # Before `edited`, every trigger this workflow had -- opened, reopened,
-  # ready_for_review, converted_to_draft -- was reachable only on an OPEN PR, so
-  # an unconditional write to `Code review` was always correct. `edited` is not:
-  # GitHub fires it when a MERGED PR's title or body is edited, and this
-  # condition is read off the FROZEN event payload -- so an `edited` run that
-  # lands after the closure router has moved a merged card still passes it.
-  #
-  # Guarded by state rather than by event name on purpose: `if: github.event.action
-  # != 'edited'` would have kept the demotion out but also disabled the board write
-  # for a DRAFT toggled by an edit, and it states the exception instead of the rule.
-  # The rule is that this job describes an open PR's review state.
-  #
-  # AND THE CONDITION IS NOT THE GUARD ((internal ref)). It narrows WHEN this job
-  # runs; what it cannot do is decide whether the write moves the card BACKWARD,
-  # because the payload it reads is a snapshot of a PR that may since have
-  # merged. Editing a typo in a shipped PR's description therefore dragged its
-  # card from `Prod` back to `Code review` -- a DEMOTION, in the one file in the
-  # fleet whose board writes were not rank-guarded. The write step below now
-  # compares the card's CURRENT column against the shared pipeline order and
-  # refuses to write over anything at or beyond the first post-merge column;
-  # see "Refuse to write over a card that has left review" there.
+  # ONLY WHILE THE PR IS OPEN ((internal ref)): `edited` fires on a
+  # MERGED PR's title or body too, and every other trigger here is reachable
+  # only on an open PR. Guarded by state rather than by event name, so a DRAFT
+  # toggled by an edit still gets its board write. THE CONDITION IS NOT THE
+  # GUARD ((internal ref)): it reads `pull_request.state` off the FROZEN payload,
+  # so a queued run can arrive after the closure router moved a merged card and
+  # still believe the PR is open -- editing a typo in a shipped PR dragged its
+  # card from `Prod` back to `Code review`. The write step below compares the
+  # card's CURRENT column against the shared pipeline order and refuses to write
+  # over anything at or beyond the first post-merge column.
   set-status:
     name: set-status / set-status
     if: ${{ github.event.pull_request.state == 'open' }}
     runs-on: ubuntu-slim
-    # Under `ubuntu-slim`'s hard 15-minute cap, so the DECLARED timeout is the
-    # one that runs: with none, the job inherits GitHub's 360-minute default and
-    # the platform kills it at 15 with no timeout report at all ((internal ref)
-    # item 2; scripts/runner-tier.py asserts it for every slim job).
-    # Measured: set-status / set-status: n=25, 20 s median, 71 s max.
+    # Declared because `ubuntu-slim` kills at its 15-minute cap with no timeout
+    # report ((internal ref) item 2; scripts/runner-tier.py asserts it for every
+    # slim job). Measured: set-status / set-status: n=25, 20 s median, 71 s max.
     timeout-minutes: 10
     steps:
       - name: Determine target Status
@@ -236,18 +137,12 @@ jobs:
             echo "status_name=Code review" >> "$GITHUB_OUTPUT"
           fi
 
-      # THE PIPELINE ORDER IS FETCHED, NOT CARRIED ((internal ref)). The write
-      # below has to know whether the card has already left review, and the only
-      # honest answer is the org's ONE declaration of the order --
-      # `scripts/pipeline_rank.sh` in this repo, which `advance-deploy-env.yml`
-      # reads for the same comparison. A `case` of twelve columns pasted into
-      # this file would agree with that one until a column is renamed or
-      # inserted, and then disagree silently, in the direction that un-ships
-      # cards (CLAUDE.md rule 1).
-      #
-      # Same shape, same reasons and the same App as the closing-ref job below:
-      # this repo is PRIVATE, so the caller's own token cannot read it, and the
-      # App id and key arrive because every caller passes `secrets: inherit`.
+      # THE PIPELINE ORDER IS FETCHED, NOT CARRIED ((internal ref)): the write below
+      # has to know whether the card has already left review, and the org's ONE
+      # declaration of the order is `scripts/pipeline_rank.sh` in this repo, which
+      # advance-deploy-env.yml reads for the same comparison (CLAUDE.md rule 1).
+      # Same shape and App as the closing-ref job: this repo is PRIVATE, so the
+      # caller's own token cannot read it; the App key arrives via `secrets: inherit`.
       - name: Mint a read-only token for org-config (private; the caller's own token cannot read it)
         id: rank-token
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
@@ -258,14 +153,11 @@ jobs:
           repositories: org-config
           permission-contents: read
 
-      # THE TOOLS REF ((internal ref) D4). `job.workflow_sha` is the commit of THIS
-      # reusable file -- the one the caller pinned -- so the scripts checked out
-      # below are the ones this workflow was reviewed with; a `@main` caller gets
-      # `main`'s. `tools-ref` overrides it to test a tools change against a pinned
-      # workflow. An EMPTY ref would make actions/checkout take the tools repo's
-      # DEFAULT branch fleet-wide, so it is refused here rather than checked out.
-      # The SHA is read out of `toJSON(job)` in shell because actionlint's schema
-      # of the `job` context (1.7.12) does not know `workflow_sha` yet.
+      # THE TOOLS REF ((internal ref) D4, (internal ref)): `job.workflow_sha` is the commit
+      # of THIS reusable file, so the scripts below are the ones it was reviewed
+      # with; `tools-ref` overrides it for a test. An EMPTY ref would check out the
+      # tools repo's DEFAULT branch fleet-wide, so it is refused. `toJSON(job)` because
+      # actionlint's `job` schema (1.7.12) does not know `workflow_sha`.
       - name: Resolve the tools ref, refusing an empty one
         id: tools-ref
         env:
@@ -293,18 +185,10 @@ jobs:
           persist-credentials: false
 
       # Board writes authenticate as the tracebloc-release-train App, not a human's
-      # PAT ((internal ref)). The App's installation budget is separate from any
-      # person's interactive `gh` usage and does not vanish when someone is
-      # offboarded -- `PROJECTS_KANBAN_TOKEN` was ONE user PAT shared by every
-      # caller in the fleet, both crons, and that person's own shell, and it was
-      # measured exhausted in practice ((internal ref) run 31776053792, exit 1).
-      #
-      # `owner:` makes this an ORG-scoped installation token. Without it the token
-      # is scoped to the calling repository, which cannot write an org ProjectV2.
-      #
-      # NO FALLBACK TO THE PAT, deliberately. A fallback would make a broken App
-      # path look like a working migration, which is the exact failure class this
-      # work exists to remove. If the mint fails, this job fails.
+      # PAT ((internal ref): one shared user PAT was measured exhausted), ORG-scoped
+      # by `owner:` (a repo-scoped token cannot write an org ProjectV2), with NO
+      # FALLBACK TO A PAT -- a fallback would make a broken App path look like a
+      # working migration. If the mint fails, this job fails.
       - name: Mint an installation token
         id: app-token
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
@@ -312,26 +196,16 @@ jobs:
           app-id: ${{ secrets.RELEASE_TRAIN_APP_ID }}
           private-key: ${{ secrets.RELEASE_TRAIN_APP_PRIVATE_KEY }}
           owner: ${{ github.repository_owner }}
-          # SCOPED TO WHAT THIS JOB ACTUALLY DOES ((internal ref)). Without these
-          # it minted the App's ENTIRE permission set -- contents:write,
-          # issues:write, administration:read and the rest -- across every repo
-          # the installation covers, on every PR event in the fleet. Of the four
-          # mints (internal ref) left, this one has the largest exposure purely
-          # because of how often it runs.
-          #
-          # DERIVED FROM THE CALLS BELOW rather than copied from a template:
+          # SCOPED TO WHAT THIS JOB ACTUALLY DOES ((internal ref)), and of the mints
+          # that ticket left this one has the largest exposure because of how
+          # often it runs. DERIVED FROM THE CALLS BELOW:
           #   organization.projectV2 { fields }     -> projects, read
           #   repository.pullRequest.projectItems   -> pull-requests, read
           #   updateProjectV2ItemFieldValue         -> projects, WRITE
-          #
-          # NO `issues` SCOPE: this job is PR-only (`github.event.pull_request`).
-          # The second mint in this file already carries `permission-issues:
-          # read` because the closing-ref job reads the linked ISSUE -- the two
-          # differ because their calls differ, not by oversight.
-          #
-          # A PASSING MINT IS NOT THE PROOF. `release-train/add-to-kanban.yml`
-          # records why: "a mint can succeed with a scope the board write then
-          # needs and lacks". The evidence is a card that actually moves.
+          # NO `issues` SCOPE: this job is PR-only; the closing-ref mint below
+          # carries `issues: read` because it reads the linked ISSUE -- the two
+          # differ because their calls differ. A passing mint is not the proof;
+          # the evidence is a card that actually moves.
           permission-pull-requests: read
           permission-organization-projects: write
 
@@ -351,28 +225,8 @@ jobs:
           set -euo pipefail
           REPO_NAME="${REPO_FULL#*/}"
 
-          # selftest:graphql-read-start  (byte-identical in every workflow that carries it)
-          # THE BODY DECIDES WHETHER A GraphQL READ SUCCEEDED, never the exit code
-          # alone. An HTTP 200 whose body carries `errors[]` (rate limit, partial
-          # payload, a NOT_FOUND on a sub-field) fed straight into `.data...nodes[]?`
-          # produces NOTHING, and nothing read as "not on the project" -- so the
-          # Item-closed automation could write Cancelled over shipped work
-          # (Bugbot on quickstart#5, (internal ref)). Empty and non-object bodies are
-          # refused for the same reason: a search over nothing finds nothing, and
-          # "found nothing" must never mean "absent". This function never
-          # whitelists an error type; the one benign NOT_FOUND is the caller's call.
-          #   $1  the raw payload   $2  what was being read (prefixes the message)
-          reject_graphql_errors() {
-            if ! jq -e 'type == "object"' >/dev/null 2>&1 <<< "$1"; then
-              echo "::error::$2: the response was not readable JSON (empty, truncated or not an object), so it cannot be shown to be error-free -- UNREADABLE, not absent" >&2
-              return 1
-            fi
-            if jq -e 'has("errors")' <<< "$1" >/dev/null 2>&1; then
-              echo "::error::$2: the response carries GraphQL errors[] ($(jq -r '[.errors[]? | ((.type // "?") + ": " + (.message // "?"))] | join("; ")' <<< "$1")) -- UNREADABLE, not absent" >&2
-              return 1
-            fi
-            return 0
-          }
+          # selftest:graphql-read-start  (the ONE line every GraphQL step carries; the function is scripts/lib/graphql-read.sh)
+          . .org-config-tools/scripts/lib/graphql-read.sh
           # selftest:graphql-read-end
 
           # shellcheck disable=SC2016  # the $names here are GraphQL variables, not shell - keep literal
@@ -397,15 +251,11 @@ jobs:
           STATUS_OPT=$(echo "$PROJ" | jq -r --arg s "$STATUS_NAME" '.data.organization.projectV2.fields.nodes[]
             | select(.name=="Status") | .options[] | select(.name==$s) | .id')
 
-          # THE PIPELINE ORDER IS READ BEFORE ANYTHING IS WRITTEN. The block below
-          # ADDS the card to the board when the lookup finds none, so a read
-          # placed after it can only refuse under a "NOTHING WAS WRITTEN" that is
-          # false for a brand-new PR -- the card is on the board at No Status by
-          # then. Read first, and every exit below the read is honest. BOTH
-          # questions the guard asks of the order are read here, in one block --
-          # the first post-merge column and the abandonment column
-          # ((internal ref)) -- so an order that cannot answer either
-          # refuses before the card exists.
+          # THE PIPELINE ORDER IS READ BEFORE ANYTHING IS WRITTEN: the block below
+          # ADDS a missing card, so a refusal after it could not honestly say
+          # "NOTHING WAS WRITTEN". Both questions the guard asks -- the first
+          # post-merge column and the abandonment column ((internal ref))
+          # -- are read here, so an order that cannot answer refuses before the card exists.
           RANK_TOOL=".org-config-tools/scripts/pipeline_rank.sh"
           if ! MERGED_FLOOR=$(bash "$RANK_TOOL" --first-post-merge) \
              || ! ABANDONED=$(bash "$RANK_TOOL" --abandoned); then
@@ -417,13 +267,9 @@ jobs:
 
           # Wait briefly for the kanban auto-add workflow to register the PR on the project
           for i in 1 2 3 4 5; do
-            # THE BODY DECIDES, WHATEVER THE EXIT CODE ((internal ref)). This used to
-            # pipe the response straight into jq, so an exit-0 body carrying
-            # `errors[]` (rate limit, partial payload) read as "not yet on
-            # project" and, after five such reads, as a card to ADD -- a write
-            # decided on a board nobody had read. An unreadable response aborts
-            # instead, as a non-zero exit always did here; the next PR event
-            # re-runs this step.
+            # THE BODY DECIDES, WHATEVER THE EXIT CODE ((internal ref)): an exit-0
+            # `errors[]` body used to read as "not yet on project" and, five reads
+            # later, as a card to ADD. An unreadable response aborts instead.
             # shellcheck disable=SC2016  # the $names here are GraphQL variables, not shell - keep literal
             if ! RESP=$(gh api graphql -f query='
               query($org: String!, $repo: String!, $num: Int!) {
@@ -453,54 +299,30 @@ jobs:
             # is about a card that moved between two points in time.
             CURRENT_STATUS=$(jq -r --arg n "$PROJECT_NUMBER" 'first(.data.repository.pullRequest.projectItems.nodes[]?
                   | select(.project.number == ($n | tonumber)) | .status.name) // ""' <<<"$RESP")
-            # THE PR'S LIVE STATE, from that same response and for the same reason.
-            # `github.event.action` is frozen at the moment the webhook fired; this
-            # is what the PR is NOW. The reopen arm below needs both, and needs them
-            # to be one point in time: a `reopened` run that was queued while the PR
-            # was closed AGAIN is a stale payload about a PR that is CLOSED, and the
-            # only thing that can say so is a live read ((internal ref)).
+            # THE PR'S LIVE STATE, from that same response: `github.event.action`
+            # is frozen at webhook time, and a `reopened` run queued while the PR
+            # was closed AGAIN is a stale payload only a live read can expose
+            # ((internal ref)).
             PR_STATE=$(jq -r '.data.repository.pullRequest.state // ""' <<<"$RESP")
             if [ -n "$ITEM_ID" ] && [ "$ITEM_ID" != "null" ]; then break; fi
             echo "PR not yet on project, waiting ($i/5)…"
             sleep 5
           done
 
-          # FAIL CLOSED ((internal ref)). This used to log the miss and `exit 0`, so a
-          # PR that lost the add-to-kanban race stayed at No Status behind a GREEN
-          # check -- nothing surfaced it, and the board's "no card sits at No Status"
-          # invariant was broken by the workflow that reports it upheld. (internal ref)
-          # lost that race by four seconds and sat unnoticed.
-          #
-          # THE MEASUREMENT THAT BUDGET WAS HELD OPEN FOR HAS ARRIVED ((internal ref)).
-          # The previous note kept the retry budget at 5 x 5s on purpose -- "widening
-          # it would hide how often the race is actually lost, and the point of
-          # failing closed is to find that out." The answer came back on 2026-08-27:
-          # `.github#361` and `#362` both lost it within seconds, and on `#362` the
-          # board ended in the exact state this job would have written. So the job's
-          # PURPOSE was achieved and only its VERDICT was wrong -- the worst shape a
-          # check can fail in, because nothing is broken and the habit it teaches is
-          # to merge past red.
-          #
-          # So END the race rather than widen the window. A bigger number would still
-          # be a guess, and a longer wait is still a wait on a sibling workflow that
-          # may simply never have run. This job already holds a token with
-          # `organization-projects: write`, and `addProjectV2ItemById` is IDEMPOTENT
-          # -- adding an item already on the board returns the existing item id -- so
-          # there is nothing here that add-to-kanban would duplicate. That workflow
-          # does exactly one thing (an `actions/add-to-project` step and nothing
-          # else), which is what makes taking it over in the missing case safe.
-          #
-          # STILL FAIL-CLOSED. "The card is missing" stays a real finding when it is
-          # real: if the PR cannot be resolved to a node, or the add does not come
-          # back with an item id, this goes RED exactly as before. What changed is
-          # only that "not yet" no longer reports as "missing".
+          # FAIL CLOSED ((internal ref)): logging the miss and exiting 0 left a PR
+          # that lost the add-to-kanban race at No Status behind a GREEN check.
+          # AND END THE RACE RATHER THAN WIDEN THE WINDOW ((internal ref)): the
+          # measurement the 5 x 5s budget was held open for came back -- runs that
+          # lost the race by seconds, on boards already in the state this job would
+          # have written, so the job's purpose was met and only its verdict was
+          # wrong. `addProjectV2ItemById` is IDEMPOTENT and this token already holds
+          # `organization-projects: write`, so the card is added here; add-to-kanban
+          # does exactly one thing, which is what makes taking it over safe. STILL
+          # FAIL-CLOSED: an unresolvable node or an add with no item id goes RED.
           if [ -z "$ITEM_ID" ] || [ "$ITEM_ID" = "null" ]; then
             echo "card absent after 5 retries - adding it here rather than waiting on add-to-kanban"
-            # The node-id read's BODY is inspected before jq reduces it. Piped
-            # straight into `jq -r '... // empty'`, an exit-0 errors[] payload
-            # became an empty id and the refusal below named the wrong cause
-            # ("could not be resolved" for a rate limit). Same function as the
-            # reads above, then the reduction.
+            # The node-id read's BODY is inspected before jq reduces it: an exit-0
+            # errors[] payload must not become "could not be resolved" ((internal ref)).
             # shellcheck disable=SC2016  # the $names here are GraphQL variables, not shell - keep literal
             NODE_RESP=$(gh api graphql -f query='
               query($org: String!, $repo: String!, $num: Int!) {
@@ -514,24 +336,14 @@ jobs:
                    "cannot be added. Refusing to report a status nobody wrote."
               exit 1
             fi
-            # The add's BODY is read before the item id is taken from it: an exit-0
-            # response carrying errors[] has no item id to give, and must fail as
-            # a refused write, not fall through to "could not be added" as if the
-            # board had simply said no.
-            #
-            # AND THE ADD ANSWERS WITH THE CARD'S COLUMN, not only its id. The
-            # idempotence this block is built on cuts both ways: when the lookup
-            # above did not return the item -- the PR is on more projects than
-            # the `projectItems(first: 10)` page reads, or the board answered
-            # without it -- this mutation returns the EXISTING card rather than
-            # a new one. Taking only `item.id` from that response left
-            # CURRENT_STATUS empty, so the guard below ranked a card that may
-            # sit at `Prod` as 0 and wrote `Code review` over it: the demotion
-            # this change closes, reopened on the one path where the card was
-            # never read. So the Status comes from the SAME response the id
-            # comes from -- one call, one point in time, the rule the lookup
-            # states for itself. A genuinely new card answers `null`, which is
-            # the empty CURRENT_STATUS the guard reads as "place it".
+            # The add's BODY is read before the item id is taken from it (a refused
+            # write, not "could not be added"). AND THE ADD ANSWERS WITH THE CARD'S
+            # COLUMN: idempotence cuts both ways -- when the lookup above missed an
+            # existing card (more projects than the page reads) this mutation
+            # returns the EXISTING card, and taking only `item.id` left
+            # CURRENT_STATUS empty, so the guard ranked a `Prod` card as 0 and wrote
+            # `Code review` over it. One call, one point in time; a genuinely new
+            # card answers `null`, which the guard reads as "place it" (pipeline-rank-selftest.py).
             # shellcheck disable=SC2016  # the $names here are GraphQL variables, not shell - keep literal
             ADD_RESP=$(gh api graphql -f query='
               mutation($p: ID!, $c: ID!) {
@@ -559,61 +371,27 @@ jobs:
           # ---------------------------------------------------------------
           # Refuse to write over a card that has left review ((internal ref)).
           #
-          # THE DEMOTION THIS CLOSES. `edited` is on the callers deliberately
-          # ((internal ref) -- `closing-ref` reads the title and body, so without
-          # it the gate is bypassable), and GitHub fires `edited` when a MERGED
-          # PR's title or body is edited. The job condition that is supposed to
-          # keep merged PRs out reads `pull_request.state` off the FROZEN event
-          # payload, so a run queued behind another one can arrive after the
-          # closure router has already moved the card and still believe the PR
-          # is open. Everything above this point then behaves perfectly and
-          # writes `Code review` over `Prod`.
+          # THE DEMOTION THIS CLOSES: `edited` is on the callers deliberately
+          # ((internal ref)) and fires on a MERGED PR too; the job condition reads
+          # the FROZEN payload, so a queued run can write `Code review` over
+          # `Prod`. RANK, NOT EVENT NAME: automation never moves a card BACKWARD
+          # ((internal ref)), and an event name is a proxy wrong in both
+          # directions. THE LINE IS THE FIRST POST-MERGE COLUMN, not the target's
+          # rank: this job owns the pre-merge columns and legitimately moves
+          # `Code review` -> `In progress` on `converted_to_draft`; it must never
+          # write over a column it does not own. `pipeline_rank.sh` names that
+          # anchor beside the table, so an INSERTED column needs no edit here
+          # ((internal ref)).
           #
-          # RANK, NOT EVENT NAME, for the same reason `advance-deploy-env.yml`
-          # compares rank: the invariant is that automation never moves a card
-          # BACKWARD ((internal ref)), and an event name is a proxy for that
-          # which is wrong in both directions.
-          #
-          # THE LINE IS THE FIRST POST-MERGE COLUMN, not the target's own rank.
-          # This job owns the pre-merge review columns and legitimately moves a
-          # card BACKWARD inside them -- `converted_to_draft` is `Code review`
-          # -> `In progress`, and a monotonic-by-target guard would refuse that
-          # and break the draft toggle this workflow exists for. What it must
-          # never do is write over a column it does not own. `pipeline_rank.sh`
-          # names that anchor beside the table it indexes into, so an INSERTED
-          # column -- which is how `Staging (agent review)` arrived -- needs no
-          # edit here ((internal ref)).
-          #
-          # THE ONE COLUMN AT OR PAST THE ANCHOR THIS JOB MAY WRITE OVER, and only
-          # on one event ((internal ref)). `Cancelled` ranks terminal, and
-          # it should: the closure router writes it when a PR is closed WITHOUT
-          # merging, and nothing may demote out of it by mistake. But it records
-          # an ABANDONMENT, not shipped work, and `reopened` is exactly the event
-          # that revokes an abandonment -- so on that event, out of that column,
-          # the write goes ahead. THREE things keep this from reopening the
-          # demotion above:
-          #   * GitHub cannot fire `reopened` on a MERGED PR, so the arm is
-          #     unreachable from the stale-merged-payload path the guard exists
-          #     for;
-          #   * it is scoped to the single column the order names as the
-          #     abandonment (`--abandoned`, asked of the same tool in the read
-          #     above, never spelled here), so `On dev` .. `Prod` and `Done` stay
-          #     protected on every event, `reopened` included;
-          #   * and the PR must still be OPEN on the board read above. This one is
-          #     about a RACE, not a column: `EVENT_ACTION` is frozen at the moment
-          #     the webhook fired, while the card it writes over is live. Reopen a
-          #     PR and close it again and the sequence is
-          #     `Cancelled` -> reopen queues this run -> close, router writes
-          #     `Cancelled` again -> this run writes `Code review` over it.
-          #     Closing does not retrigger this workflow and `cancel-in-progress`
-          #     is false, so nothing else stops that write. `PR_STATE` comes from
-          #     the same response as `CURRENT_STATUS`, so a stale reopen sees
-          #     `CLOSED` and falls through to the rank guard, which refuses. An
-          #     unreadable or empty state falls through the same way: this arm
-          #     fails CLOSED like every other test in this block.
-          # Every OTHER event on a `Cancelled` card -- `edited`,
-          # `ready_for_review`, `converted_to_draft` -- still refuses: only the
-          # reopen says the closure was a mistake.
+          # THE ONE COLUMN AT OR PAST THE ANCHOR THIS JOB MAY WRITE OVER, on one
+          # event ((internal ref)): `Cancelled` records an ABANDONMENT, not
+          # shipped work, and `reopened` revokes exactly that -- so on that event,
+          # out of that column, the write goes ahead. Three things keep the
+          # demotion closed: GitHub cannot fire `reopened` on a MERGED PR; the arm
+          # is scoped to the single column `--abandoned` names (never spelled
+          # here); and the PR must still be OPEN on the live read above, so a
+          # reopen queued behind a second close sees `CLOSED` and falls through to
+          # the rank guard. Every OTHER event on a `Cancelled` card still refuses.
           #
           # FAIL CLOSED, THREE WAYS, and none of them defaults to writing:
           #   unreadable order   the tool is missing or errors, on either question
@@ -626,8 +404,8 @@ jobs:
           #                      PR takes it), so it must not paint the fleet
           #                      red; the notice says what was not written
           # An EMPTY current Status is none of those three: the card has just
-          # been added (possibly by the block above) and giving it a column is
-          # what the "no card sits at No Status" invariant depends on.
+          # been added and giving it a column is what the "no card sits at No
+          # Status" invariant depends on. pipeline-rank-selftest.py drives every arm.
           CURRENT_RANK=0
           if [ -n "${CURRENT_STATUS:-}" ] && ! CURRENT_RANK=$(bash "$RANK_TOOL" "$CURRENT_STATUS"); then
             echo "::error::PR #$PR_NUMBER sits in '$CURRENT_STATUS', which the shared pipeline" \
@@ -669,43 +447,27 @@ jobs:
           echo "→ PR #$PR_NUMBER → Status=$STATUS_NAME"
 
   # ------------------------------------------------------------------------
-  # A PR whose TITLE names a ticket must LINK it ((internal ref)).
-  #
-  # Measured 2026-08-23: `closingIssuesReferences` was 0 on 7 of 7 epic-relevant
-  # merged PRs. The house convention puts the ticket in the TITLE; GitHub creates
-  # a closing link ONLY from a keyword in the BODY. So the title reference is
-  # inert, `kanban-closure-router.yml` finds no linked issue, and correctly does
-  # nothing -- every kanban workflow green, every card unmoved. The board has
-  # been wrong for weeks behind a green pipeline.
-  #
-  # This job is a SEPARATE job from `set-status` deliberately, the same reason
-  # code-quality.yml keeps six: a finding here must not stop the card being
-  # written, and a failed board write must not hide the finding. Steps inside one
-  # job short-circuit; jobs do not.
-  #
-  # NOTHING FROM THE PR IS INTERPOLATED INTO A `run:` BLOCK. The title is read
-  # from the API by the checker itself, so a title containing shell or an
-  # expression is data, never code. The only expressions below are the repo name
-  # and the PR number.
+  # A PR whose TITLE names a ticket must LINK it ((internal ref)): the
+  # house convention puts the ticket in the TITLE, GitHub creates a closing link
+  # only from a keyword in the BODY, so the closure router finds no linked issue
+  # and every card stays unmoved behind a green pipeline. A SEPARATE job from
+  # `set-status`, like code-quality.yml's six: a finding must not stop the card
+  # write, and a failed write must not hide the finding. NOTHING FROM THE PR IS
+  # INTERPOLATED INTO A `run:` BLOCK -- the checker reads the title from the API,
+  # so a title containing shell is data, never code.
   # ------------------------------------------------------------------------
   closing-ref:
     name: set-status / closing-ref
-    # Open PRs only, for the same reason as `set-status` above but a smaller
-    # consequence: on a merged PR this would be advice about a merge that already
-    # happened, and a red X arriving on a shipped PR hours later is noise that
-    # teaches people to ignore the check (rule 4). The case `edited` exists to
-    # catch -- a retitle -- happens while the PR is open, which is exactly when
-    # this still runs.
+    # Open PRs only: on a merged PR this would be advice about a merge that
+    # already happened, and a late red X on a shipped PR teaches people to ignore
+    # the check (rule 4). A retitle happens while the PR is open, when this runs.
     if: ${{ true && github.event.pull_request.state == 'open' }}
     runs-on: ubuntu-slim
     timeout-minutes: 5
     steps:
       # The checker lives here, not in the calling repo, so the reusable fetches
-      # it -- same shape as code-quality.yml and bugbot-gate.yml. This repo
-      # is PRIVATE (the private source repo replaced the public
-      # `.github` as the host on 2026-09-10), so the checkout needs a read-only
-      # App installation token; the App id and key arrive because every caller
-      # of this reusable passes `secrets: inherit` (header, point 1).
+      # it (the code-quality.yml / bugbot-gate.yml shape). This repo is PRIVATE, so
+      # the checkout needs a read-only App token, which `secrets: inherit` supplies.
       - name: Mint a read-only token for org-config (private; the caller's own token cannot read it)
         id: org-config-token
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
@@ -716,14 +478,11 @@ jobs:
           repositories: org-config
           permission-contents: read
 
-      # THE TOOLS REF ((internal ref) D4). `job.workflow_sha` is the commit of THIS
-      # reusable file -- the one the caller pinned -- so the scripts checked out
-      # below are the ones this workflow was reviewed with; a `@main` caller gets
-      # `main`'s. `tools-ref` overrides it to test a tools change against a pinned
-      # workflow. An EMPTY ref would make actions/checkout take the tools repo's
-      # DEFAULT branch fleet-wide, so it is refused here rather than checked out.
-      # The SHA is read out of `toJSON(job)` in shell because actionlint's schema
-      # of the `job` context (1.7.12) does not know `workflow_sha` yet.
+      # THE TOOLS REF ((internal ref) D4, (internal ref)): `job.workflow_sha` is the commit
+      # of THIS reusable file, so the scripts below are the ones it was reviewed
+      # with; `tools-ref` overrides it for a test. An EMPTY ref would check out the
+      # tools repo's DEFAULT branch fleet-wide, so it is refused. `toJSON(job)` because
+      # actionlint's `job` schema (1.7.12) does not know `workflow_sha`.
       - name: Resolve the tools ref, refusing an empty one
         id: tools-ref
         env:
@@ -750,18 +509,11 @@ jobs:
           path: .org-config-tools
           persist-credentials: false
 
-      # WHY AN APP TOKEN AND NOT `github.token`. The link this reads points at an
-      # issue in ANOTHER repo -- `(internal ref)` for most of the fleet -- and
-      # a repo-scoped GITHUB_TOKEN cannot see it. A node the token cannot read
-      # comes back missing from `nodes` while `totalCount` still counts it, which
-      # the checker reports as "cannot tell" rather than "not linked". That is the
-      # right refusal, but it would be EVERY cross-repo PR's verdict, so the
-      # token has to be the org-scoped one.
-      #
-      # SCOPED, unlike the mint in `set-status` above ((internal ref)): this job
-      # reads two things and needs nothing else. `set-pr-status.yml` keeps its
-      # `mint-scope` exemption for the unscoped board-write mint above; this mint
-      # does not use it.
+      # WHY AN APP TOKEN AND NOT `github.token`: the link this reads points at an
+      # issue in ANOTHER repo, and a node a repo-scoped token cannot read comes
+      # back missing from `nodes` while `totalCount` still counts it -- "cannot
+      # tell", the right refusal, but it would be EVERY cross-repo PR's verdict.
+      # SCOPED ((internal ref)): this job reads two things and needs nothing else.
       - name: Mint an installation token
         id: app-token
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
@@ -771,16 +523,11 @@ jobs:
           owner: ${{ github.repository_owner }}
           permission-pull-requests: read
           permission-issues: read
-          # NO `contents` scope, on purpose ((internal ref)). The gate used to read
-          # `baseRepository { defaultBranchRef { name } }` over GraphQL; a Ref is
-          # a contents object, world-readable on a public repo and gated on a
-          # private one, and from 2026-09-06 06:29Z that single field made every
-          # private-repo run fail with "Resource not accessible by integration"
-          # while public repos passed in the same minute. This token is
-          # org-scoped (`owner:` + an all-repositories installation), so adding
-          # contents:read here would have widened it on every repo for a value
-          # the event payload already carries: it is passed in below as
-          # PR_BASE_DEFAULT_BRANCH instead, and the query no longer asks.
+          # NO `contents` scope, on purpose ((internal ref)): reading
+          # `defaultBranchRef` over GraphQL needs contents on a private repo, and
+          # that one field failed every private-repo run from 2026-09-06 while
+          # public repos passed. The default branch arrives from the event payload
+          # as PR_BASE_DEFAULT_BRANCH instead, and the query no longer asks.
 
       - name: The title names a ticket, so the PR must link it
         env:

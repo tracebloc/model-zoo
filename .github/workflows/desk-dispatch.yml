@@ -1,8 +1,8 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/desk-dispatch.yml`
-# (blob 9d6b4759479547a19b037d5805b2f146e3b49f4e) folded with the private source repo's own caller of it,
-# `.github/workflows/desk-dispatch-caller.yml` (blob 0dcabc0912110a8bf7493885612aa02beed15535), for a PUBLIC repo: GitHub lets a
+# (blob bdb288c08131d6411197ecdaacf3caa66fc5d1ff) folded with the private source repo's own caller of it,
+# `.github/workflows/desk-dispatch-caller.yml` (blob a79f6adf63a69f5f01c29b70b803ab72c8451104), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
 # reusable's jobs inline -- the triggers are the caller's; every `inputs.*` is
@@ -47,16 +47,13 @@
 # desk-dispatch: fire ONE fresh code-review-desk session for ONE pull request, only
 # when GitHub says a review is wanted ((internal ref) and (internal ref)).
 #
-# WHY. The desk used to be a five-minute cron inside a long-lived Claude Code
-# session that re-read ~500k tokens of history on every request and woke whether
-# or not anything had changed; measured over 14 days it was the single largest
-# Claude Code cost on the machine running it. This reusable is the cheap shape:
-# no model runs until an event arrives, and then one session handles one PR from
-# a ~30k-token prefix. The workflow itself costs no tokens and a few seconds of
-# `ubuntu-slim` -- billed as a whole minute, which is why a no-op run holds its
-# concurrency slot to the end of that minute when a check is still running: the
-# sibling completions on the same head collapse into one pending successor
-# instead of each booting a runner ((internal ref) D6 lever 1; the stamp step below).
+# WHY. The desk used to be a five-minute cron inside a long-lived session that
+# re-read ~500k tokens on every wake -- measured over 14 days, the single largest
+# Claude Code cost on its machine. This reusable is the cheap shape: no model runs
+# until an event arrives, then one session handles one PR. The workflow itself
+# costs a few seconds of `ubuntu-slim`, billed as a whole minute -- which is why a
+# no-op run holds its concurrency slot to the end of that minute while a check is
+# still running ((internal ref) D6 lever 1; the stamp step below).
 #
 # WHO REVIEWS. `reviewer` is the identity whose review requests count and whose
 # routine fires. It is a dedicated review account, not a person: the routine runs
@@ -92,129 +89,84 @@
 #                                                          every other review)
 #
 # WHY THE REVIEWER REQUEST IS MADE WITH AN APP TOKEN. GitHub starts no workflow run
-# for an event raised by GITHUB_TOKEN (the recursion guard -- measured in this repo,
-# post-release-bump.yml: a Release created under GITHUB_TOKEN "NEVER FIRES"). A
-# request made with `github.token` would land and raise a `review_requested` no
-# caller sees: a reviewer and no review. So a second, narrowly scoped installation
-# token (this caller repo only, pull-requests: write) is minted for that ONE call;
-# label writes and every read stay on `github.token`.
-#   drafts, bots, promotion heads, team requests, and the reviewer's own PRs are
-#   skipped with the reason in the job summary.
+# for an event raised by GITHUB_TOKEN (post-release-bump.yml measured the same
+# recursion guard), so a request made with `github.token` would land and raise a
+# `review_requested` no caller sees. A second installation token, scoped to this
+# caller repo and pull-requests: write, is minted for that ONE call; label writes
+# and every read stay on `github.token`. Drafts, bots, promotion heads, team
+# requests and the reviewer's own PRs are skipped with the reason in the job summary.
 #
 # THE GREEN GATE (Lukas, 2026-09-14). The review account is the most expensive
-# check on a PR; firing it before lint, tests and Bugbot have spoken made its first
-# pass find, at review prices, what a runner finds for cents -- on a head the author
-# had to change anyway. Nothing fires until the head is green; Bugbot is part of
-# the rollup (bugbot-gate). Review latency becomes CI latency, by design. What
+# check on a PR, so nothing fires until the head is green; Bugbot is part of the
+# rollup (bugbot-gate) and review latency becomes CI latency, by design. What
 # "green" means is `head_state()` in scripts/desk-dispatch.py, shared with
-# ship-dispatch.py: every CI check run and commit status on the head terminal and
-# none red, the dispatchers' own `... / dispatch` runs excluded (this run is
-# in_progress on the head while it decides). `mergeable_state` is read for
-# `dirty` only -- a review is not withheld for a missing review or a stale base.
+# ship-dispatch.py: every CI check run and commit status terminal and none red,
+# the dispatchers' own `... / dispatch` runs excluded; `mergeable_state` is read
+# for `dirty` only.
 #
 # WHY workflow_run AND NEVER check_suite. The caller's own run is a GitHub Actions
 # check suite, and a `check_suite` trigger cannot filter by app, so a caller on
-# `check_suite: [completed]` re-triggers itself on its own completion -- skip or
-# fire -- forever (Bugbot, (internal ref) and #54). `workflow_run` names the CI
-# workflows it follows and cannot name itself, so it cannot loop. Cursor Bugbot
-# needs no suite subscription: the `Bugbot gate` workflow waits for its verdict
-# and turns it into an Actions check run, and that workflow's completion is one
-# of the `workflow_run`s the caller lists. The dispatcher still refuses an Actions
-# check_suite before reading anything, and would accept a non-Actions one, so a
-# caller that subscribes anyway loops at the workflow level, not the script's.
-# Callers MUST send `workflow_run: {workflows: [<every pull-request workflow of
-# that repo>], types: [completed]}` and grant `checks: read` + `statuses: read`
-# for the gate to run. THE GATE DEGRADES PER CALLER: this file runs at `@main`
-# for every caller at once, and a caller from before the gate grants neither
-# read. Rather than a red `desk / dispatch` on every event in ten repos, a 403 on
-# the head read fires the review UNGATED -- exactly the pre-gate behaviour --
-# with the job summary naming the missing grants (the review account,
-# (internal ref)). A caller is therefore never broken by a promotion; it is merely
-# not yet gated until it is updated.
-#
-# THAT SENTENCE WAS FALSE FOR FOURTEEN HOURS. This file used to DECLARE a
-# `permissions:` block naming the two reads. A reusable's declared permissions
-# are not a grant, they are a DEMAND on the caller: GitHub compares them with the
-# caller's grant before a single step runs, and a caller granting less is a
-# `startup_failure` -- no job, no log, no summary, "likely failed because of a
-# workflow file issue". Measured: every desk run from a pre-gate caller between
-# #67's promotion (2026-09-14 16:51Z) and this fix ended that way ((internal ref) x3,
-# (internal ref) x2, #45 x2, ...), while the runs from the gated callers passed.
-# The degrade path lives in scripts/desk-dispatch.py, which never started. So
-# this reusable declares NO `permissions:` block (a declared block also turns
-# every scope it omits to `none`, which would strip the two reads from a caller
-# that DID grant them): the job's token carries exactly the caller's grants, the
-# documented behaviour of a called workflow, and the shortfall reaches the
-# script as the 403 the degrade path was written for. The floor -- `contents:
-# read`, `pull-requests: write`, `issues: write` -- is the caller's to grant
-# too; a caller without it fails at the label write with the message in the
-# log, not at startup. `test_the_reusables_declare_no_permissions_block` pins
-# this. A pull-request workflow not listed by the caller leaves the review
+# `check_suite: [completed]` re-triggers itself for ever (Bugbot on (internal ref)
+# and (internal ref)); `workflow_run` names the CI workflows it follows and cannot
+# name itself. Callers MUST send `workflow_run: {workflows: [<every pull-request
+# workflow of that repo>], types: [completed]}` and grant `checks: read` +
+# `statuses: read`. THE GATE DEGRADES PER CALLER: a caller from before the gate
+# grants neither read, so a 403 on the head read fires the review UNGATED with the
+# missing grants named in the job summary ((internal ref)) -- never a red run in
+# ten repos. A pull-request workflow the caller does not list leaves the review
 # unfired when it finishes last ((internal ref), (internal ref)).
+#
+# NO `permissions:` BLOCK IN THIS REUSABLE, DELIBERATELY. A reusable's declared
+# permissions are a DEMAND on the caller, not a grant: a caller granting less is
+# a `startup_failure` with no job, no log and no summary -- every desk run from a
+# pre-gate caller ended that way for fourteen hours after (internal ref) promoted,
+# and the degrade path in the script never started. Without a block the job's
+# token carries exactly the caller's grants and the shortfall reaches the script
+# as the 403 the degrade path was written for.
+# `test_the_reusables_declare_no_permissions_block` pins this.
 #
 # THE LOCK. `claude-desk:reviewing` on the PR means a session is on it; a second
 # review event while it is held is skipped (the hourly `--once` sweep catches up).
 # The session removes the label when it finishes (skill `--pr` mode, step 4); a
 # label older than `stale-minutes` is a dead session's and is stolen.
 #
-# THE OTHER LOCK. `claude-ship:driving` is the AUTHOR's, and a review fired while
-# it is held reviews a head the author is in the middle of replacing: measured over
-# 109 desk lock windows, 45% overlapped a live ship lock and 12 of the 13 windows
-# that filed no review at all sat inside that overlap, at 19.6 min and $3.47 each
-# ((internal ref)). The dispatcher defers on it -- held only, never mere presence,
-# capped at `ship-stale-minutes` wherever the label's age is readable; on a PR past
-# the 300-event window a leaked ship label reads `held` for ever and only the label
-# coming off or a new head clears it ((internal ref)) -- and takes NO lock while
-# deferring. The wait is
-# one-directional: ship never reads the desk's lock, so nothing deadlocks. The
-# caller's `unlabeled` type is what re-enters the deferred review when the author's
-# session releases; see the caller's header for why that event exists at all.
+# THE OTHER LOCK. `claude-ship:driving` is the AUTHOR's: a review fired while it
+# is held reviews a head the author is replacing (45 % of desk lock windows
+# overlapped a live ship lock and 12 of the 13 that filed no review sat inside
+# that overlap -- (internal ref)). The dispatcher DEFERS on it, held only, capped
+# at `ship-stale-minutes` wherever the label's age is readable ((internal ref) for
+# the unreadable case), takes NO lock while deferring, and re-enters on the
+# caller's `unlabeled` type. Ship never reads the desk's lock, so nothing deadlocks.
 #
 # FAIL CLOSED. An unreadable event, an unreadable reviews/events read, an empty
 # fire URL or token when there is work to do, or a fire the routine refuses are
 # refusals (red job, message names the input), never a silent skip (CLAUDE.md
 # rules 3, 8). This job is NOT a required context anywhere, so a red run blocks
-# nothing; it is the operator's signal that reviews stopped flowing.
+# nothing; it is the operator's signal that reviews stopped flowing. THE ONE
+# NON-2xx THAT IS NOT A REFUSAL is the routine's own rate limit ((internal ref)):
+# waited when the interval fits the budget, otherwise DEFERRED -- lock released,
+# `::warning::`, run green -- because the 20-minute sweep re-fires it.
 #
-# THE ONE NON-2xx THAT IS NOT A REFUSAL is the routine's own rate limit
-# ((internal ref)): the job waits the interval the routine names when that fits
-# its wait budget, and otherwise DEFERS -- lock released, `::warning::` on the
-# run, run green -- because the 20-minute sweep re-fires it, and a red run for a
-# normal condition was the noise that hid the real refusals.
+# THE CANONICAL CALLER is `desk-dispatch-caller.yml` beside this file
+# ((internal ref)); a caller calls `@main`, so any edit here a caller depends on
+# must be promoted before a caller relies on it ((internal ref)). The caller passes
+# `with.fire-url: ${{ vars.DESK_ROUTINE_FIRE_URL }}` and the three named secrets
+# below, and nothing else: `reviewer` is derived from the default, never
+# restated. The pilot repo's caller diverged from the canonical one at
+# (internal ref) (no `unlabeled` type); the canonical caller's header records
+# that window and why no check sees it.
 #
-# THE CANONICAL CALLER is `desk-dispatch-caller.yml` beside this file (#38), and
-# a pilot repo ((internal ref)) carried the identical file until (internal ref)
-# added the `unlabeled` type to the canonical one and not to the pilot's. Adding
-# it there is the REQUIRED FOLLOW-UP; the canonical caller's header records the
-# window, and why neither caller-drift nor the caller-shape test can close it.
-# It was deliberately NOT shipped with this reusable (#28): a caller calls `@main`,
-# so one landing here before this file reached main would have been a
-# startup_failure on every PR. That clause still holds -- the caller works only
-# because blob 3c732272 reached `main` on 2026-09-13 -- so any edit here that a
-# caller depends on must be promoted before a caller relies on it. The caller
-# passes `with.fire-url: ${{ vars.DESK_ROUTINE_FIRE_URL }}` and the three named
-# secrets below (RELEASE_TRAIN_APP_ID / _PRIVATE_KEY / DESK_ROUTINE_TOKEN), and
-# nothing else: `reviewer` is derived from the default, never restated.
-#
-# THE INVENTORY ROWS for this file still read `exempt` while the callers exist,
-# so caller-drift reports a stale exemption on both repos from the moment each
-# caller merges to `develop` (the audit reads train repos on `develop`, not at
-# promotion). That window is deliberate: caller first, row after, because the
-# audit reads the caller from the live branch and would check a `required` row
-# against a branch the caller is not on yet. The rows flip to `required` on the
+# THE INVENTORY ROWS for this file flip from `exempt` to `required` on the
 # condition `repo-inventory.yml`'s `desk_dispatch_rollout_pending` anchor states
-# -- the pilot OBSERVED dispatching on real PRs (a `Desk dispatch` run, then a
-# review-account verdict without a hand-fired session) -- and on nothing else.
+# -- the pilot OBSERVED dispatching on real PRs -- caller first, row after,
+# because the audit reads the caller from the live branch.
 #
 # THE CALLER'S OWN TOKEN writes the label, reads reviews/events in its own repo,
 # and reads the head's check runs and commit statuses for the gate
 # (`pull-requests: write`, `issues: write`, `checks: read`, `statuses: read`, on
-# `contents: read`) -- GRANTED BY THE CALLER, never declared here (see the note
-# above `jobs:`); a caller granting only the first two reaches the script and
-# fires UNGATED, with the reason in the job summary. The App token is minted ONLY to read
-# this private repo's checker (`permission-contents: read` on the private source repo), the
-# same shape as bugbot-gate.yml. The routine token and fire URL come from the
-# caller (`secrets.routine-token`, `inputs.fire-url`); nothing is inherited.
+# `contents: read`) -- GRANTED BY THE CALLER, never declared here. The App token
+# is minted ONLY to read this private repo's checker (`permission-contents: read`
+# on the private source repo); the routine token and fire URL come from the caller.
 #
 # NO `paths:` FILTER may ever be added by a caller; NO `cancel-in-progress` here
 # (reusable-no-cancel: a cancelled corpse on an unchanged sha reddens the rollup).
@@ -223,40 +175,28 @@ name: Desk dispatch
 on:
   pull_request:
     types: [opened, ready_for_review, review_requested, synchronize, unlabeled]
-  # NO BASE FILTER HERE, AND NOT FOR WANT OF TRYING ((internal ref)). Dropping
-  # every PR into staging or main at the trigger would have been the stronger
-  # guard -- no run exists, so not even a run cancelled while still pending can
-  # attach a void check-run to a sha that is simultaneously a branch tip. It also
-  # drops an emergency hotfix into `main` ((internal ref)'s `scripts/hotfix-repo.sh`
-  # opens one), leaving it with no reviewer staffed, and `on:` filters a BASE ref
-  # only -- there is no way to spell "from a `release-train/` branch" here. So the
-  # precise predicate can only live in the callee, and the callee's `if:` is the
-  # whole guard -- (internal ref).
+  # NO BASE FILTER HERE ((internal ref), (internal ref)): `on:` filters a BASE ref
+  # only and a base-ref filter would also drop an emergency hotfix into `main`,
+  # so the promotion predicate can only live in the callee's `if:`.
   # THE GREEN GATE (Lukas, 2026-09-14): a review fires only once the head is green,
   # and a CI workflow completing is the event that carries that. The list names
-  # EVERY workflow of THIS repo that runs on a pull-request event (a `workflow_run`
-  # trigger can name only sibling workflows, never a pattern). Every one: the
-  # dispatcher acts only when every run on the head is terminal, so a listed
-  # completion has to be the LAST one, and a pull-request workflow left off the
-  # list that finishes last leaves the review UNFIRED -- nothing re-fires
-  # ((internal ref), (internal ref)). The set is DERIVED, not kept by
-  # hand: `test_the_canonical_caller_is_gated_and_subscribes_to_no_check_suite`
-  # reads this repo's workflow files and reddens on a missing or an extra name.
-  # NEVER `check_suite` for the Actions app here: the caller's own run is such a
-  # suite and would re-trigger this workflow forever.
+  # EVERY workflow of THIS repo that runs on a pull-request event -- a completion
+  # left off the list that finishes last leaves the review UNFIRED, nothing
+  # re-fires ((internal ref), (internal ref)). The set is DERIVED:
+  # `test_the_canonical_caller_is_gated_and_subscribes_to_no_check_suite` reads
+  # this repo's workflow files and reddens on a missing or an extra name. NEVER
+  # `check_suite` for the Actions app: the caller's own run is such a suite.
   workflow_run:
-    # A `workflow_run`'s `branches` filter is on the TRIGGERING run's head branch,
-    # which for a PR run is the PR's feature branch -- so an allow-list of
-    # `develop` would exclude every PR. Ignoring the integration branches instead
-    # drops the `push` and cron completions (Caller inventory drift and
-    # Org-standards sync run on Mondays on `develop`), each of which would start
-    # a dispatch that finds no PR and skips (the review account, (internal ref)).
+    # A `workflow_run`'s `branches` filter is on the TRIGGERING run's head branch
+    # -- a PR run's feature branch -- so integration branches are IGNORED rather
+    # than `develop` allowed: that drops the `push` and cron completions ((internal ref)).
     branches-ignore: [develop, staging, main]
     workflows:
       - Add to engineer kanban
       - Bugbot review gate
       - CI
       - Code quality
+      - Commit hygiene
       - FR gate
       - Route kanban Status on closure
       - Set PR card Status on project
@@ -278,64 +218,33 @@ concurrency:
   group: desk-dispatch-${{ github.workflow }}-${{ github.event.pull_request.number || github.event.workflow_run.pull_requests[0].number || github.event.check_suite.pull_requests[0].number || github.event.workflow_run.head_sha || github.event.check_suite.head_sha }}
   cancel-in-progress: false
 
-# NO `permissions:` BLOCK IN THIS REUSABLE, DELIBERATELY -- see "THAT SENTENCE WAS
-# FALSE" above. (A self-contained render of this file DOES carry one: there the
-# caller and the callee are one file, so the block that lands is the caller's
-# grant, which is the opposite case -- tracebloc/quickstart#16.)
-# The token is the caller's; every caller declares its grants explicitly.
+# NO `permissions:` BLOCK IN THIS REUSABLE, DELIBERATELY -- see the header. (A
+# self-contained render DOES carry one: there caller and callee are one file, so
+# the block that lands is the caller's grant -- tracebloc/quickstart#16.)
 
 jobs:
   dispatch:
     name: desk / dispatch
     runs-on: ubuntu-slim
     timeout-minutes: 10
-    # NOT ON A PROMOTION PR ((internal ref)). A promotion PR's head
-    # sha IS a branch tip: `release-train/to-main`'s head is staging's tip, and
-    # `release-train/to-staging`'s is develop's. The callers subscribe to
-    # `pull_request` with no base filter, so every promotion queued a run here,
-    # the concurrency group above kept one and GitHub cancelled the pending rest --
-    # and those `cancelled` check-runs then sat on a sha that hop-verify.sh reads as
-    # a branch tip. It buckets `cancelled` as a VOID (nothing judged this sha) and a
-    # void outranks every green verdict, so the staging hop went from 16 repos
-    # verified on 2026-09-14 to 0 of 18 on 2026-09-21: no mismatch fileable, no
-    # finding closeable, and the scheduled job still exiting 0.
+    # NOT ON A PROMOTION PR ((internal ref)): a promotion PR's head sha IS a
+    # branch tip, and the runs every promotion queued here left `cancelled`
+    # check-runs on it that hop-verify.sh reads as a VOID outranking every green
+    # verdict -- the staging hop went from 16 repos verified to 0 of 18. Skipping
+    # is the whole fix: the desk strips reviewers off promotions, and a job
+    # skipped by `if:` concludes `skipped`, which hop-verify.sh allowlists.
     #
-    # Skipping is the whole fix, not a workaround for the reporting: the desk strips
-    # reviewers off promotions, so staffing and reviewing one is work it would
-    # undo. There is no promotion case this job was ever meant to serve.
-    # And a job skipped by `if:` concludes `skipped`, which hop-verify.sh
-    # allowlists as green -- where a cancelled one is unreadable by construction.
-    #
-    # BOTH HALVES ARE REQUIRED, AND THE BASE REF ALONE IS NOT THE RULE --
-    # (internal ref). "A PR into staging or main" reads like the durable
-    # predicate -- org-standards say nothing but a promotion may open one -- but
-    # (internal ref)'s `scripts/hotfix-repo.sh` does exactly that for an emergency
-    # prod fix, so dropping the dispatch on a base-ref match alone drops a hotfix
-    # into `main` with no reviewer staffed and no ship session. The narrowest
-    # predicate that still names every promotion is a TRAIN BRANCH going INTO a
-    # promotion branch, so both are required and a hotfix keeps its review.
-    #
-    # `release-train/` rather than `release-train/to-`: the train owns that
-    # namespace, and a promotion branch it adds later is a PR nobody here reviews
-    # for the same reason.
-    #
-    # BOTH HALVES SPELL `is_promo` EXACTLY, and the two clauses below that look
-    # like padding are why. `is_promo` in scripts/desk-dispatch.py reads
-    # `(release-train/* OR hotfix-backmerge/*) AND base in (staging, main,
-    # master)`, so a guard missing `hotfix-backmerge/` staffs a reviewer and a
-    # ship session on a backmerge the train already gates, and a guard missing
-    # `master` does the same on every repo whose production branch is named that
-    # -- in both cases the decider then skips and the run is spent for nothing.
-    # These are two statements of one rule (CLAUDE.md rule 1), and they are held
-    # to the same answers by evaluation rather than by eye:
-    # scripts/tests/callershape.py `assert_promotion_guard` evaluates THIS
-    # expression over every (head, base) of its matrix and compares each answer
-    # with the real `is_promo`.
-    #
-    # An event shape carrying neither ref yields nulls, both halves are false, and
-    # the job RUNS -- this file's usual fail-toward-acting. A dispatch that should
-    # have skipped is a wasted minute; one that wrongly skipped is a PR nobody
-    # reviews.
+    # BOTH HALVES ARE REQUIRED, AND THE BASE REF ALONE IS NOT THE RULE
+    # ((internal ref)): (internal ref)'s `scripts/hotfix-repo.sh` opens a PR into
+    # `main` for an emergency fix, so dropping on a base-ref match alone drops a
+    # hotfix with no reviewer staffed. The predicate is a TRAIN BRANCH going INTO
+    # a promotion branch; `release-train/` rather than `release-train/to-` because
+    # the train owns that namespace. BOTH HALVES SPELL `is_promo` EXACTLY --
+    # `(release-train/* OR hotfix-backmerge/*) AND base in (staging, main, master)`
+    # in scripts/desk-dispatch.py -- and scripts/tests/callershape.py
+    # `assert_promotion_guard` evaluates THIS expression over every (head, base)
+    # of its matrix against the real `is_promo`. An event shape carrying neither
+    # ref yields nulls and the job RUNS: a wasted minute beats an unreviewed PR.
     if: >-
       !((startsWith(github.event.pull_request.head.ref
       || github.event.workflow_run.head_branch
@@ -349,23 +258,13 @@ jobs:
       || github.event.check_suite.pull_requests[0].base.ref))
     steps:
       # WHEN THIS JOB STARTED, for the hold the dispatcher takes on a no-op
-      # ((internal ref) D6 lever 1). A job bills a rounded-up minute, and a dispatch
-      # whose verdict is "still in progress" exits at ~20 s while every sibling
-      # completion on the head starts another run; the concurrency group above
-      # keeps one pending and cancels the rest unstarted. The script therefore
-      # holds its slot until ~45 s after this stamp (ABSORB_UNTIL_SECONDS in
-      # scripts/desk-dispatch.py, DISPATCH_ABSORB_UNTIL to override), so a burst
-      # of N completions costs two billed runs instead of about N/2 -- and drops
-      # nothing: the one pending successor starts after the hold and reads the
-      # head as it then is. That holds while every run a caller can queue
-      # re-reads the head; a caller subscribing to `unlabeled` also queues runs
-      # that skip on the label name before any read, and GitHub cancels a PENDING
-      # run whenever a new one queues -- so such a run CAN supersede a pending
-      # meaningful one ((internal ref); the concurrency paragraph in
-      # desk-dispatch-caller.yml's header has the sequence and the price of
-      # closing it). First, before the mints, so the hold measures from
-      # as near the job's start as a step can see; a caller without this step
-      # gets no hold and behaves exactly as before.
+      # ((internal ref) D6 lever 1): a job bills a rounded-up minute, and a "still in
+      # progress" verdict exits at ~20 s while every sibling completion starts
+      # another run, so the script holds its slot until ~45 s after this stamp
+      # (ABSORB_UNTIL_SECONDS in scripts/desk-dispatch.py) and a burst of N
+      # completions costs two billed runs instead of about N/2, dropping nothing
+      # (the caveat for `unlabeled` runs is in desk-dispatch-caller.yml's header,
+      # (internal ref)). First, before the mints; a caller without this step gets no hold.
       - name: Note when this job started
         id: started
         run: echo "at=$(date +%s)" >> "$GITHUB_OUTPUT"
@@ -378,13 +277,10 @@ jobs:
           owner: ${{ github.repository_owner }}
           repositories: org-config
           permission-contents: read
-      # SCOPED to the caller repo and to pull-requests: write. Used for exactly one
-      # call, the reviewer request on a staff decision (see the header): an event
-      # raised by this token starts the caller's `review_requested` run, which an
-      # event raised by `github.token` never would.
-      # Only the two event shapes that can produce a `staff` decision mint it: every
-      # other dispatch (review_requested, synchronize, workflow_run) never uses this
-      # token and must not depend on the App holding pull-requests: write for it.
+      # SCOPED to the caller repo and to pull-requests: write, for exactly one
+      # call: the reviewer request on a staff decision (see the header) -- an
+      # event raised by this token starts the caller's `review_requested` run.
+      # Only the two event shapes that can produce a `staff` decision mint it.
       - name: Mint a pull-requests token for the reviewer request (an App event fires a run; github.token's does not)
         id: request-token
         if: github.event_name == 'pull_request' && (github.event.action == 'opened' || github.event.action == 'ready_for_review')
@@ -396,27 +292,14 @@ jobs:
           repositories: ${{ github.event.repository.name }}
           permission-pull-requests: write
       # SCOPED to the caller repo and to actions: write, for exactly one call: the
-      # in-place re-run of a STALE `bugbot / review` run ((internal ref); the decision
-      # is `heal_stale_gate` in scripts/desk-dispatch.py -- the gate would pass if
-      # evaluated now, so its recorded red is stale). As the App, for the reason the
-      # request token above exists: the re-run's completion must be a `workflow_run`
-      # the caller sees, and an event raised by `github.token` starts no run.
-      # `continue-on-error`, DELIBERATELY: the App holds `actions: read` until its
-      # installation is bumped to write, and a refused mint must not redden every
-      # dispatch in the fleet. The token is then empty, and the script refuses ONLY
-      # when it finds a stale red it could have healed, naming the missing grant.
-      # Minted on EVERY event this dispatcher acts on, and the condition names no
-      # action on purpose. It used to name three (`workflow_run`, `review_requested`,
-      # `synchronize`) on the premise that a staffing event never meets a recorded
-      # verdict; that premise is false. `opened` / `ready_for_review` with `reviewer`
-      # ALREADY requested is a `review` decision in `decide_ungated` -- no
-      # `review_requested` is ever raised for a no-op request -- so it runs the same
-      # green gate and reaches the same `heal_or_skip`, where an empty token makes the
-      # script refuse and name a grant the App may already hold. An action list here
-      # is a second copy of the script's arms with nothing to hold the two together;
-      # the event name is not, so `on.pull_request.types` can grow without this
-      # drifting. A mint on an event that turns out to need no heal costs one scoped,
-      # unused installation token.
+      # in-place re-run of a STALE `bugbot / review` run ((internal ref);
+      # `heal_stale_gate` in scripts/desk-dispatch.py), as the App so the re-run's
+      # completion is a `workflow_run` the caller sees. `continue-on-error`,
+      # DELIBERATELY: a refused mint must not redden every dispatch, and the
+      # script refuses ONLY when it finds a stale red it could have healed. Minted
+      # on EVERY event this dispatcher acts on, the condition naming no action:
+      # an action list here would be a second copy of the script's arms (a
+      # staffing event can meet a recorded verdict too, via `decide_ungated`).
       - name: Mint an actions token for re-running a stale Bugbot gate in place (tolerates a refused mint)
         id: rerun-token
         if: github.event_name == 'workflow_run' || github.event_name == 'pull_request'
@@ -430,59 +313,25 @@ jobs:
           permission-actions: write
       # A FOURTH scoped mint, for exactly ONE read: the base branch's
       # required-status-context list, so a red check that is NOT required stops
-      # holding the head while a red required one still does ((internal ref); the
-      # callee is `gate_required` / `required_contexts` in scripts/desk-dispatch.py).
-      # `the private source repo`'s own fleet audits run on a
-      # `pull_request` and report on the LIVE state of every OTHER repo in the org,
-      # so one repo drifting anywhere turned an inventory PR here red and the desk
-      # stopped reviewing the very PR that fixes the drift -- circular.
+      # holding the head while a red required one still does ((internal ref);
+      # `gate_required` / `required_contexts` in scripts/desk-dispatch.py) --
+      # this repo's own fleet audits report on OTHER repos' live state, so one
+      # repo drifting anywhere turned an inventory PR here red and the desk
+      # stopped reviewing the PR that fixes the drift.
       #
-      # SCOPED TO THE CALLER'S OWN REPO, AND READ-ONLY, and that narrowness is the
-      # whole justification rather than a detail of it. An ORG-WIDE `actions: write`
-      # mint on the 20-minutely sweep was proposed this wave and its PR closed
-      # unmerged, deliberately. This is narrower on BOTH axes -- one repo, not
-      # `owner`; read, not write -- so it is not that decision again. Do not widen
-      # either axis without the measurement that justifies it: `administration:
-      # read` cannot change protection, `administration: write` is the grant that
-      # could, and onboard-repo.yml records that this App deliberately holds only
-      # read (measured 2026-09-10).
-      #
-      # NO NEW ORG GRANT IS NEEDED, and it is measured rather than assumed, twice.
-      # `bricked-prs.yml` mints `permission-administration: read` from the SAME App
-      # this reusable mints from (its `dispatcher-app-id` is `RELEASE_TRAIN_APP_ID`,
-      # which is the app-id bricked-prs.yml names directly), and
-      # `create-github-app-token` cannot mint a permission the installation lacks.
-      # Measured on that workflow's 2026-09-18 run: its "Mint an installation
-      # token" step succeeded. Stronger than the mint, the same run's audit then
-      # printed one train branch's required-context list, byte-identical to an
-      # independent admin read of that branch's protection -- so the token does not
-      # merely mint, it reads, correctly, in production, the exact list this
-      # consumes. (The run id and the branch are named on the PR that wired this,
-      # not here: this file is delivered to PUBLIC repos and they identify a
-      # private one.) Note that workflow's mint is ORG-WIDE (`owner`, no
-      # `repositories`), so this one is strictly narrower than a grant already in
-      # use on this fleet.
-      #
-      # A SEPARATE MINT, not another permission folded onto one of the three above:
-      # a permission the installation ever stops holding would take the WHOLE
-      # dispatcher down instead of degrading this one feature.
-      #
-      # `continue-on-error`, DELIBERATELY -- and NOT in the snippet (internal ref)
-      # wrote out. Without it a refused mint fails the job, which is precisely the
-      # outcome the separate-mint rule above exists to prevent; the separation only
-      # buys tolerance if the step is also allowed to fail. With it, a refusal
-      # leaves the token EMPTY, and `gate_required` returns None on an empty token
-      # WITHOUT making the call -- every red holds the head, byte-for-byte today's
-      # behaviour. That is the fail-CLOSED direction (CLAUDE.md rule 3): a token
-      # that cannot be read never opens the gate, it keeps it shut. Degrading to
-      # the old gate is correct; taking the dispatcher down is not.
-      #
-      # NO `if:` CONDITION, on purpose. This reusable's caller triggers are
-      # `pull_request` and `workflow_run` and nothing else, and BOTH reach a
-      # `gate_required` call -- the suite path and the gated PR path. A condition
-      # here would therefore always be true while reading as though it were a
-      # second copy of the script's arms, which is the drift the `rerun-token`
-      # mint above had to have its own condition widened to fix.
+      # SCOPED TO THE CALLER'S OWN REPO, AND READ-ONLY, and that narrowness is
+      # the whole justification: an org-wide `actions: write` mint on the sweep
+      # was proposed and closed unmerged, and `administration: write` is the
+      # grant that could change protection. NO NEW ORG GRANT IS NEEDED: another
+      # workflow already mints `permission-administration: read` from the same
+      # App and reads a protection list byte-identical to an admin read (its run
+      # is named on the PR that wired this, not here -- this file is delivered to
+      # PUBLIC repos). A SEPARATE MINT, so a permission the installation stops
+      # holding degrades this one feature instead of taking the dispatcher down;
+      # `continue-on-error`, DELIBERATELY, for the same reason: a refused mint
+      # leaves the token EMPTY and `gate_required` returns None without calling,
+      # so every red holds the head -- the fail-CLOSED direction (rule 3). NO
+      # `if:` CONDITION: both caller triggers reach a `gate_required` call.
       - name: Mint a protection-read token for the base branch's required contexts (tolerates a refused mint)
         id: protection-token
         continue-on-error: true
@@ -493,14 +342,11 @@ jobs:
           owner: ${{ github.repository_owner }}
           repositories: ${{ github.event.repository.name }}
           permission-administration: read
-      # THE TOOLS REF ((internal ref) D4). `job.workflow_sha` is the commit of THIS
-      # reusable file -- the one the caller pinned -- so the scripts checked out
-      # below are the ones this workflow was reviewed with; a `@main` caller gets
-      # `main`'s. `tools-ref` overrides it to test a tools change against a pinned
-      # workflow. An EMPTY ref would make actions/checkout take the tools repo's
-      # DEFAULT branch fleet-wide, so it is refused here rather than checked out.
-      # The SHA is read out of `toJSON(job)` in shell because actionlint's schema
-      # of the `job` context (1.7.12) does not know `workflow_sha` yet.
+      # THE TOOLS REF ((internal ref) D4, (internal ref)): `job.workflow_sha` is the commit
+      # of THIS reusable file, so the scripts below are the ones it was reviewed
+      # with; `tools-ref` overrides it for a test. An EMPTY ref would check out the
+      # tools repo's DEFAULT branch fleet-wide, so it is refused. `toJSON(job)` because
+      # actionlint's `job` schema (1.7.12) does not know `workflow_sha`.
       - name: Resolve the tools ref, refusing an empty one
         id: tools-ref
         env:

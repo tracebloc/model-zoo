@@ -1,8 +1,8 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/stale-backlog.yml`
-# (blob f05adba5a2c25344faa067ceb27a5ee1eaee98e4) folded with the private source repo's own caller of it,
-# `.github/workflows/stale-backlog-caller.yml` (blob 2e125070f6578f50bd0aa234ab1e74d92f5b983d), for a PUBLIC repo: GitHub lets a
+# (blob 6d36150ba68ac975b519c0ad1ee471da276af61c) folded with the private source repo's own caller of it,
+# `.github/workflows/stale-backlog-caller.yml` (blob d15d285b2b1f39f7ee91c3ae8366e42c07aaf872), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
 # reusable's jobs inline -- the triggers are the caller's; every `inputs.*` is
@@ -46,42 +46,20 @@
 
 name: Close stale backlog issues
 
-# REUSABLE, and it had to become one before the bug could be fixed
-# ((internal ref) → (internal ref) item 1).
+# REUSABLE ((internal ref) -> (internal ref) item 1): `actions/stale` exempts on LABELS
+# ONLY and has no concept of the board, so a `North Stars` or `In progress` item
+# auto-closed after 8 weeks of silence like a Backlog item. Board awareness cannot
+# be expressed as a label, so it cannot be a config knob on an action -- it needs a
+# script, and a script cannot be maintained as sixteen byte-identical copies.
 #
-# THE BUG: `actions/stale` exempts on LABELS ONLY. It has no concept of the board,
-# so an item in `North Stars`, `Ready for prod` or `In progress` went stale and
-# auto-closed after 8 weeks of silence exactly like a Backlog item — a strategic
-# priority archived because nobody commented on it. `kanban-reconcile.yml` carries a
-# "Shield North Stars from the stale sweep" step, which is the workaround admitting
-# it rather than the fix.
-#
-# Board awareness cannot be expressed as a label, so it cannot be a config knob on
-# an action — it needs a script. And a script cannot be maintained as sixteen
-# byte-identical copies, which is why this was a 16-way copy that had to become a
-# reusable first. Fixing the copy model was the prerequisite, not the goal.
-#
-# The eligibility rule is an ALLOW-LIST OF ONE: exactly `Backlog`, on a card that is
-# not archived. Every other column, an archived card, an issue with no card, and a
-# Status that could not be read are all skipped. A column added next year is therefore
-# safe by default — a deny-list of the columns we happened to think of would make it
-# eligible and nobody would find out until something was closed.
-#
-# ARCHIVED CARDS KEEP THEIR STATUS, so "archived" had to become part of that rule
-# rather than being implied by it (Bugbot, .github#292). `kanban-archive.yml` archives
-# terminal items without clearing the field, and a card archived out of `Backlog` reads
-# `Backlog` forever — so the sweep matched work that had been deliberately taken off
-# the board, and closed it. `projectItems` returns archived items by default
-# (`includeArchived: true`), so the filter is explicit in ISSUES_Q and in `status_of`.
-#
-# FAIL CLOSED HERE MEANS SKIP, not act. Every other guard in this org fails closed
-# by refusing to report clean; this one is destructive, so an unreadable board must
-# mean "leave it alone". `strict: true` additionally fails the run so an outage is
-# visible rather than merely harmless.
-#
-# The logic and its 30-case decision table live in tracebloc/.github
-# (`scripts/stale-backlog.py`, `scripts/tests/stale-backlog-selftest.py`); callers
-# stay thin so the rule has exactly one home.
+# The eligibility rule is an ALLOW-LIST OF ONE -- exactly `Backlog`, on a card that
+# is not archived (archived cards keep their Status, Bugbot on (internal ref));
+# every other column, an archived card, no card and an unreadable Status are
+# skipped, so a column added next year is safe by default. FAIL CLOSED HERE MEANS
+# SKIP, not act: this sweep is destructive, so an unreadable board means "leave it
+# alone", and `strict: true` additionally reddens the run. The rule and its 30-case
+# decision table are `scripts/stale-backlog.py` and `scripts/tests/stale-backlog-selftest.py`
+# in this repo's tools checkout; callers stay thin so the rule has exactly one home.
 
 on:
   schedule:
@@ -98,41 +76,25 @@ jobs:
   stale:
     name: stale / stale
     runs-on: ubuntu-slim
-    # 14, not 15: `ubuntu-slim` hard-caps a job at 15 minutes, so a timeout AT the
-    # cap is the one value that can never speak -- the platform kills the job first,
-    # and a killed run reads as `cancelled`, not as this job's own timeout. 14 keeps
-    # the largest budget that is actually enforced by the declaration. Measured:
+    # 14, not 15: a timeout AT `ubuntu-slim`'s 15-minute cap can never speak, the
+    # platform kills the job first (scripts/runner-tier.py asserts it). Measured:
     # stale / stale runs 49 s, so the budget is not what constrains it either way.
     timeout-minutes: 14
     steps:
-      # The board read needs org-project access and the writes need issues:write,
-      # both of which the tracebloc-release-train App holds ((internal ref)). This
-      # workflow is App-native from the start and never had a PAT to migrate off.
-      # `owner:` makes the token ORG-scoped; a repo-scoped one cannot read the
-      # project at all, and this sweep would then skip every issue as UNKNOWN —
-      # silent and safe, but wrong.
+      # Authenticates as the tracebloc-release-train App ((internal ref)), App-native
+      # from the start; `owner:` makes the token ORG-scoped -- a repo-scoped one
+      # cannot read the project, and the sweep would skip every issue as UNKNOWN.
       #
-      # SCOPED FROM THE START ((internal ref)), derived from what the sweep actually
-      # calls rather than from what the App happens to hold:
-      #
+      # SCOPED FROM THE START ((internal ref)), derived from what the sweep calls:
       #   issues: write               `issue edit --add-label`, `issue comment`,
-      #                              `issue close` (stale-backlog.py:188-192)
+      #                              `issue close`
       #   organization-projects: read  ISSUES_Q reads `projectItems .. Status`; the
       #                              sweep never writes a board field
-      #
-      # No `pull-requests` — this workflow does not touch PRs, by design
-      # ((internal ref): it sweeps issues only). No `contents` — the App token is used
-      # ONLY as `GH_TOKEN` for the sweep; the `.github` checkout below uses the
-      # workflow token and `persist-credentials: false`.
-      #
-      # `repositories:` NARROWS THE ISSUE WRITES to the caller's own repo, which is
-      # exactly the sweep's scope: `--repo "${{ github.repository }}"`. Without it a
-      # destructive, unattended sweep would hold issue-close rights on all 19 repos
-      # while only ever closing in one.
-      #
-      # ORG PROJECTS IS UNAFFECTED BY REPO SCOPING -- measured, not assumed:
-      # (internal ref)'s verification run (32255581084) wrote the org project with
-      # `repositories:` set. That was the load-bearing unknown and it is settled.
+      # No `pull-requests` (issues only, (internal ref)); no `contents` (the tools
+      # checkout below uses its own read-only token). `repositories:` NARROWS THE
+      # ISSUE WRITES to the caller's repo -- a destructive, unattended sweep must
+      # not hold close rights on every repo -- and org projects are unaffected by
+      # repo scoping (measured under (internal ref)).
       - name: Mint an installation token
         id: app-token
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
@@ -144,7 +106,7 @@ jobs:
           permission-issues: write
           permission-organization-projects: read
 
-      # The script comes from .github, not the caller: one copy of the rule.
+      # The script comes from this repo's tools checkout, not the caller: one copy of the rule.
       - name: Mint a read-only token for org-config (private; the caller's own token cannot read it)
         id: org-config-token
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
@@ -155,14 +117,11 @@ jobs:
           repositories: org-config
           permission-contents: read
 
-      # THE TOOLS REF ((internal ref) D4). `job.workflow_sha` is the commit of THIS
-      # reusable file -- the one the caller pinned -- so the scripts checked out
-      # below are the ones this workflow was reviewed with; a `@main` caller gets
-      # `main`'s. `tools-ref` overrides it to test a tools change against a pinned
-      # workflow. An EMPTY ref would make actions/checkout take the tools repo's
-      # DEFAULT branch fleet-wide, so it is refused here rather than checked out.
-      # The SHA is read out of `toJSON(job)` in shell because actionlint's schema
-      # of the `job` context (1.7.12) does not know `workflow_sha` yet.
+      # THE TOOLS REF ((internal ref) D4, (internal ref)): `job.workflow_sha` is the commit
+      # of THIS reusable file, so the scripts below are the ones it was reviewed
+      # with; `tools-ref` overrides it for a test. An EMPTY ref would check out the
+      # tools repo's DEFAULT branch fleet-wide, so it is refused. `toJSON(job)` because
+      # actionlint's `job` schema (1.7.12) does not know `workflow_sha`.
       - name: Resolve the tools ref, refusing an empty one
         id: tools-ref
         env:
