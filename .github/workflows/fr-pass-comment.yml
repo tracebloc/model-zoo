@@ -1,7 +1,7 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/fr-pass-comment.yml`
-# (blob bb58b336924e67550e8389478a28ecaac83cda42) folded with the private source repo's own caller of it,
+# (blob 6d72b23618aab458f6792e2453429c6e8adc79c9) folded with the private source repo's own caller of it,
 # `.github/workflows/fr-pass-comment-caller.yml` (blob bc01ef34bf604788e80a0b19d31b8fe7edfaae15), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
@@ -53,58 +53,34 @@ name: FR pass comment handler
 # (D6: the dev-side review is gone — "On dev" is automatic — so /fr-pass only
 #  applies at staging, the single functional-review gate.)
 #
-# NEVER NO-OP IN SILENCE  ((internal ref))
-#   Every terminating path below leaves a signal on the thread: 👍 when the card
-#   moved, 👎 plus a one-paragraph comment saying why when it did not. The single
-#   deliberate exception is a comment that merely *mentions* the string without
-#   issuing the command ("/fr-passport", "you can /fr-pass it later", or a log
-#   line QUOTED INSIDE A CODE FENCE — (internal ref)) — reacting to prose would
-#   turn the bot into noise, and it reacted 👎 to a status note twice before the
-#   fence rule was added. What counts as issuing it is defined in exactly one
-#   place, the `# selftest:fr-pass-command-*` region below.
+# NEVER NO-OP IN SILENCE ((internal ref)): every terminating path leaves a signal
+#   on the thread -- 👍 when the card moved, 👎 plus a one-paragraph comment when
+#   it did not. The one exception is a comment that merely *mentions* the string
+#   without issuing the command (a quoted reply, an inline mention, a log line
+#   inside a code fence -- (internal ref)); what counts as issuing it is defined in
+#   exactly one place, the `# selftest:fr-pass-command-*` region below. Hence no
+#   decision may live in the job-level `if`: a false job `if` skips every step,
+#   leaving nothing to react or comment with.
 #
-#   The rule that follows from that: no decision may live in the job-level `if`.
-#   A false job `if` skips the job with zero steps, so there is nothing left to
-#   react or comment with — the run just reports `skipped` and the reviewer
-#   believes the card moved. The job `if` is therefore only a cheap "is this even
-#   about /fr-pass" filter; authorisation, self-signoff, board membership and the
-#   column check all happen in steps that can report.
+# A REFUSAL IS NOT A SUCCESS ((internal ref)): exactly three outcomes exit 0 --
+#   `advanced`, `already-advanced`, `not-a-command`. Every other path exits 1,
+#   including the handler correctly declining to move the card, because `gh run
+#   list` is the only place anyone reads many threads at once and green there
+#   must mean "the card moved". The 👎 and its note stay the real explanation.
 #
-# A REFUSAL IS NOT A SUCCESS  ((internal ref))
-#   Exactly three outcomes exit 0 — `advanced`, `already-advanced` and
-#   `not-a-command`. EVERY other terminating path exits 1, including
-#   `not-authorised`, `self-signoff`, `not-on-project`, `ambiguous-item`,
-#   `no-status` and `wrong-column`, where the handler worked perfectly and
-#   correctly declined to move the card.
-#
-#   Failing a deliberate refusal reads oddly, and it is the point. `gh run list`
-#   is the only place anyone reads many threads at once, and green there means
-#   "the card moved". While those six exited 0, 26 green runs concealed three
-#   cards that had not moved; the refusal was diagnosed as a bug in the advance
-#   logic and the cards were then moved by hand through the project API —
-#   bypassing the control rather than satisfying it. The 👎 and its note stay the
-#   real explanation; a red run is just the cheapest signal that one exists.
-#
-# WHY A COMMENT GATE
-#   It leaves a record on the thread, so reviewers can see who passed FR and
+# WHY A COMMENT GATE: it leaves a record on the thread of who passed FR and
 #   when. Dragging the card on the kanban works too — this is the shortcut.
 
 on:
   issue_comment:
     types: [created]
 
-# GITHUB_TOKEN stays read-only and is NOT used for any write here. Two reasons it
-# cannot be: the org default is `default_workflow_permissions: read`, and a called
-# workflow can only narrow the caller job's token, never widen it — so a
-# `permissions: issues: write` block on this workflow would be silently
-# ineffective while looking like it worked. That is exactly how the 👍/👎 reaction
-# came to fail with "Resource not accessible by integration (HTTP 403)" on every
-# run, including the ones that advanced their card successfully. All writes
-# therefore go through the token the first step mints as the tracebloc-release-train
-# App ((internal ref)), org-scoped with exactly the grants that step lists. The block
-# below pins GITHUB_TOKEN to contents:read and nothing else, which is also why there
-# is no GITHUB_TOKEN fallback on the writes: it would be dead code that logs a
-# misleading retry.
+# GITHUB_TOKEN stays read-only and is NOT used for any write: the org default is
+# `default_workflow_permissions: read`, and a called workflow can only narrow the
+# caller's token, never widen it, so a `permissions: issues: write` here would be
+# silently ineffective -- which is how the 👍/👎 reaction once 403'd on every run
+# ((internal ref)). All writes use the App token the first step mints, and there is
+# no GITHUB_TOKEN fallback on them: it would be dead code logging a misleading retry.
 permissions:
   contents: read
 
@@ -113,37 +89,18 @@ jobs:
     name: advance / advance
     # The job-level conditions are a cheap "is this even about /fr-pass" filter
     # and nothing more; no decision lives here (see NEVER NO-OP IN SILENCE).
-    #
-    # The first is deliberately loose — GitHub's contains() is a case-insensitive
-    # substring test, so "/FR-PASS", leading whitespace and trailing text all get
-    # through. Loose is the point: a comment that gets in but turns out not to be
-    # the command exits silently from the first step, whereas a genuine command
-    # that never gets in can never be reported. The precise match lives in the
-    # step.
-    #
-    # The other two stop this handler answering itself ((internal ref)). Every
-    # refusal note below contains the literal string `/fr-pass`, so posting one
-    # re-fired this workflow — 6 of the 26 runs on 2026-08-01 were the bot reading
-    # its own comment. That only ever terminated because the step's anchored grep
-    # rejects a line starting with an emoji, which is luck, not a design: reflow a
-    # note so `/fr-pass` lands first on its line and it loops until the concurrency
-    # limits bite.
-    #
-    #   * Not a bot account. Since the writes moved to the tracebloc-release-train
-    #     App ((internal ref)), the handler's own notes arrive under the App's `[bot]`
-    #     login and this clause catches them too. It caught nothing while the writes
-    #     used a human's PAT — those notes arrived under that person's login,
-    #     indistinguishable from their real reviews — which is why it is keyed on
-    #     the account type rather than a login: hard-coding the login would lock
-    #     out the busiest reviewer.
-    #   * Not one of our own notes. This is what actually breaks the loop, against
-    #     a marker the reporting step prepends to every note it posts, so it holds
-    #     however the wording is later reflowed. startsWith, not contains, and the
-    #     marker goes first for that reason: GitHub's "Quote reply" prefixes "> ",
-    #     so a human who quotes a refusal and issues the command underneath is
-    #     still heard. Skipping a verbatim note of our own costs nothing — there is
-    #     nobody to report to, and 👎-ing our own comment is precisely the noise the
-    #     not-a-command exception exists to avoid.
+    # The first is deliberately loose -- contains() is a case-insensitive
+    # substring test -- because a comment that gets in but is not the command
+    # exits silently from the first step, while a genuine command that never
+    # gets in can never be reported. The other two stop this handler answering
+    # itself ((internal ref): every refusal note contains the literal `/fr-pass`,
+    # and 6 of 26 runs one day were the bot reading its own comment):
+    #   * Not a bot account -- the handler's own notes arrive under the App's
+    #     `[bot]` login, keyed on account type rather than a login so the busiest
+    #     human reviewer is never locked out.
+    #   * Not one of our own notes -- the marker the reporting step prepends to
+    #     every note; startsWith, so a human who quotes a refusal ("> ...") and
+    #     issues the command underneath is still heard.
     if: >-
       contains(github.event.comment.body, '/fr-pass')
       && github.event.comment.user.type != 'Bot'
@@ -151,12 +108,9 @@ jobs:
     runs-on: ubuntu-slim
     timeout-minutes: 5
     steps:
-      # Authenticates as the tracebloc-release-train App ((internal ref)) instead of
-      # one human's PAT. Needs BOTH grants: `organization_projects: write` to advance
-      # the card and `issues: write` to post the outcome comment and its reaction.
-      # `owner:` makes the token ORG-scoped -- a repo-scoped one cannot reach an org
-      # ProjectV2. No fallback to the old PAT: a fallback would let a broken App path
-      # look like a working migration.
+      # Authenticates as the tracebloc-release-train App ((internal ref)), ORG-scoped
+      # by `owner:` (a repo-scoped token cannot reach an org ProjectV2), with no
+      # fallback to a PAT (it would let a broken App path look like a working migration).
       - name: Mint an installation token
         id: app-token
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
@@ -175,45 +129,61 @@ jobs:
           #   POST issues/comments/{id}/reactions          Issues write AND PRs write
           #   POST issues/{n}/comments                     Issues write (or PRs write)
           #
-          # `pull-requests: write`, AND THE REASON IS MEASURED ((internal ref)).
-          # This block used to read "`pull-requests` stays at read" on the
-          # argument that a PR's conversation IS an issue, so `issues: write`
-          # covers its comments. That is true of the OBJECT and false of the
-          # PERMISSION: when the comment hangs off a pull request, GitHub gates
-          # the reaction on `pull_requests`, not on `issues`.
-          #
-          # What that cost: EVERY real invocation failed. The card advanced and
-          # then the run died posting the thumb --
-          #
-          #   3. Decide the outcome and advance the card -> success
-          #      -> #671: FR on staging -> Ready for prod
-          #   4. Report the outcome -> failure
-          #      gh: Resource not accessible by integration (HTTP 403)
-          #
-          # -- on five runs on 2026-09-16 alone, every one with `IS_PR: true`.
-          # The installation has granted `pull_requests: write` since
-          # 2026-09-15; the mint was narrowing it to `read`, so the ceiling was
-          # this file's, not the org's. Raising it here grants the token
-          # nothing the installation did not already allow.
-          #
-          # It was diagnosed twice as a missing org-level `Issues: write` grant
-          # and filed as one. That grant was present and requested the whole
-          # time -- which is exactly why a wrong reason written down in a
-          # comment is worse than no reason: two sessions read this block and
-          # believed it.
-          #
-          # `Metadata` is granted implicitly alongside any repository permission,
-          # which is why the collaborator-permission read needs no row of its own.
-          # Note what happens if that call fails anyway: the step warns and falls
-          # back to `author_association`, a LOOSER authorisation test. So a scope
-          # error here degrades security rather than reddening -- if the warning
-          # "Could not read repository permission" starts appearing in these runs,
-          # treat it as this change's regression, not as noise.
-          #
-          # Nothing reads or writes repository content, so contents drops.
+          # `pull-requests: write`, AND THE REASON IS MEASURED ((internal ref)): when
+          # the comment hangs off a pull request GitHub gates the reaction on
+          # `pull_requests`, not `issues`, so with `read` here every real invocation
+          # advanced the card and then died posting the thumb. The installation has
+          # granted it since 2026-09-15; the ceiling was this file's. `Metadata` is
+          # implicit with any repository permission; if the collaborator read fails
+          # anyway the step falls back to `author_association`, a LOOSER test, so a
+          # "Could not read repository permission" warning is a regression here, not
+          # noise. Nothing reads or writes repository content, so contents drops.
           permission-issues: write
           permission-pull-requests: write
           permission-organization-projects: write
+
+      # THE SHARED GraphQL GUARD, `scripts/lib/graphql-read.sh`, is sourced by the
+      # step below after this checkout -- the three steps every reusable makes
+      # ((internal ref) D4; (internal ref), (internal ref)).
+      - name: Mint a read-only token for org-config (private; the caller's own token cannot read it)
+        id: org-config-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.RELEASE_TRAIN_APP_ID }}
+          private-key: ${{ secrets.RELEASE_TRAIN_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: org-config
+          permission-contents: read
+
+      # THE TOOLS REF ((internal ref) D4, (internal ref)): `job.workflow_sha` is the commit
+      # of THIS reusable file, so the scripts below are the ones it was reviewed
+      # with; `tools-ref` overrides it for a test. An EMPTY ref would check out the
+      # tools repo's DEFAULT branch fleet-wide, so it is refused. `toJSON(job)` because
+      # actionlint's `job` schema (1.7.12) does not know `workflow_sha`.
+      - name: Resolve the tools ref, refusing an empty one
+        id: tools-ref
+        env:
+          TOOLS_REF: ${{ 'main' }}
+          JOB_CONTEXT: ${{ toJSON(job) }}
+        run: |
+          if [ -z "$TOOLS_REF" ]; then
+            case "$JOB_CONTEXT" in
+              *'"workflow_sha"'*) TOOLS_REF="${JOB_CONTEXT#*\"workflow_sha\": \"}"; TOOLS_REF="${TOOLS_REF%%\"*}" ;;
+            esac
+          fi
+          if ! [[ "$TOOLS_REF" =~ ^[0-9a-f]{40}$ || ( -n "$TOOLS_REF" && "$TOOLS_REF" != *[![:alnum:]._/-]* ) ]]; then
+            echo "::error::the tools ref is empty or not a ref (${TOOLS_REF:-<empty>}); an empty ref would check out the tools repo's default branch instead of the commit this workflow was pinned at. Refusing."
+            exit 1
+          fi
+          echo "ref=$TOOLS_REF" >> "$GITHUB_OUTPUT"
+          echo "tools ref: $TOOLS_REF"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: tracebloc/org-config
+          token: ${{ steps.org-config-token.outputs.token }}
+          ref: ${{ 'main' }}
+          path: .org-config-tools
+          persist-credentials: false
 
       - name: Decide the outcome and advance the card
         id: assess
@@ -235,28 +205,8 @@ jobs:
           BOARD_URL: ${{ github.server_url }}/orgs/${{ 'tracebloc' }}/projects/${{ 2 }}
         run: |
           set -euo pipefail
-          # selftest:graphql-read-start  (byte-identical in every workflow that carries it)
-          # THE BODY DECIDES WHETHER A GraphQL READ SUCCEEDED, never the exit code
-          # alone. An HTTP 200 whose body carries `errors[]` (rate limit, partial
-          # payload, a NOT_FOUND on a sub-field) fed straight into `.data...nodes[]?`
-          # produces NOTHING, and nothing read as "not on the project" -- so the
-          # Item-closed automation could write Cancelled over shipped work
-          # (Bugbot on quickstart#5, (internal ref)). Empty and non-object bodies are
-          # refused for the same reason: a search over nothing finds nothing, and
-          # "found nothing" must never mean "absent". This function never
-          # whitelists an error type; the one benign NOT_FOUND is the caller's call.
-          #   $1  the raw payload   $2  what was being read (prefixes the message)
-          reject_graphql_errors() {
-            if ! jq -e 'type == "object"' >/dev/null 2>&1 <<< "$1"; then
-              echo "::error::$2: the response was not readable JSON (empty, truncated or not an object), so it cannot be shown to be error-free -- UNREADABLE, not absent" >&2
-              return 1
-            fi
-            if jq -e 'has("errors")' <<< "$1" >/dev/null 2>&1; then
-              echo "::error::$2: the response carries GraphQL errors[] ($(jq -r '[.errors[]? | ((.type // "?") + ": " + (.message // "?"))] | join("; ")' <<< "$1")) -- UNREADABLE, not absent" >&2
-              return 1
-            fi
-            return 0
-          }
+          # selftest:graphql-read-start  (the ONE line every GraphQL step carries; the function is scripts/lib/graphql-read.sh)
+          . .org-config-tools/scripts/lib/graphql-read.sh
           # selftest:graphql-read-end
 
           RESULT_FILE="$RUNNER_TEMP/fr-pass.result"
@@ -442,11 +392,9 @@ jobs:
           fi
 
           # ----------------------------------------- 3. self sign-off (D30)
-          # THE bug from (internal ref) lived here, as a clause in the job-level
-          # `if`: when the reviewer was also the PR author the whole job was
-          # skipped, so no step was left to react or explain. 8 of the 13
-          # /fr-pass comments on 2026-07-29 died exactly this way. The rule is
-          # unchanged; what changed is that it now says so out loud.
+          # THE bug from (internal ref) lived here, as a clause in the job-level `if`:
+          # a self-signoff skipped the whole job, so nothing was left to react or
+          # explain. The rule is unchanged; it now says so out loud.
           if [ "$ACTOR" = "$ITEM_AUTHOR" ] \
              && [ "$ALLOW_SELF_SIGNOFF" != "true" ] \
              && [ "$IS_PROMOTION" != "true" ]; then
@@ -565,13 +513,10 @@ jobs:
           ITEM_ID=$(printf '%s' "$NODES" | jq -r '.[0].id')
           CURRENT=$(printf '%s' "$NODES" | jq -r '.[0].fieldValueByName.name // ""')
 
-          # The two column names below are hard-coded, and this board has been
-          # renamed before ((internal ref) collapsed the dev-side FR columns).
-          # Check they still exist, so the next rename fails loudly here instead
-          # of reporting "wrong column" for every card on the board.
-          # (internal ref) rename shim, inert today: "Staging (human review)" is not a
-          # board column, so STAGING_REVIEW resolves to "FR on staging"; the loud
-          # failure below still fires if NEITHER exists.
+          # The two column names below are hard-coded and this board has been
+          # renamed before, so check they exist and fail loudly on the next rename.
+          # (internal ref) rename shim, inert today: STAGING_REVIEW resolves to "FR on
+          # staging" unless the board has "Staging (human review)"; NEITHER still fails.
           if printf '%s' "$PROJ" | jq -e '.data.organization.projectV2.field.options[]
                 | select(.name == "Staging (human review)")' > /dev/null; then
             STAGING_REVIEW="Staging (human review)"
@@ -628,12 +573,9 @@ jobs:
           # $o: String! variable rejects. -f forces a string. (Some option IDs contain
           # letters today, but don't rely on that — IDs regenerate if recreated.)
           MUT_ERR="$RUNNER_TEMP/fr-pass.mutate.err"
-          # THE WRITE'S BODY IS READ TOO. The payload used to go to /dev/null and
-          # the exit code alone decided, so an exit-0 response carrying errors[]
-          # posted "advanced" on a card that had not moved -- and this event
-          # fires once, so nothing would have corrected it. The refusal's text
-          # is appended to MUT_ERR after gh's own stderr, so the comment below
-          # quotes whichever of the two happened.
+          # THE WRITE'S BODY IS READ TOO ((internal ref)): an exit-0 errors[] response
+          # must not post "advanced" on a card that did not move, and this event
+          # fires once. The refusal's text joins gh's stderr in MUT_ERR for the note.
           # shellcheck disable=SC2016  # the $names here are GraphQL variables, not shell - keep literal
           if ! WRESP=$(gh api graphql -f query='
             mutation($p: ID!, $i: ID!, $f: ID!, $o: String!) {
@@ -710,32 +652,15 @@ jobs:
 
           FAILED=""
 
-          # Reaction. The old version used GITHUB_TOKEN and hid the outcome behind
-          # `|| true`, so every attempt died on HTTP 403 in silence — even the runs
-          # that DID advance the card. Reporting it instead of swallowing it was
-          # right; making the REACTION alone decide the run's verdict was not.
-          #
-          # THE REACTION IS NO LONGER ALLOWED TO FAIL THE RUN ON ITS OWN
-          # ((internal ref)). It 403s on every real invocation and has done through
-          # three separate diagnoses, each written into this file as settled:
-          # "the App lacks Issues: write" (filed twice, measured false — the
-          # installation had it), then "the mint narrows pull-requests to read"
-          # (fixed 2026-09-16 in (internal ref) — and `/fr-pass` failed 19 more
-          # times the same afternoon, `attempt=1`, on the fixed reusable). What is
-          # NOT in doubt is what happens on those runs: the card advances, then
-          # the thumb 403s, and a SUCCESSFUL advance reports red.
-          #
-          # That is the inversion worth removing. `FR on staging -> Ready for prod`
-          # is the single human gate in the pipeline ((internal ref) D6), and a
-          # gate that goes red when it worked teaches the operator to distrust it
-          # or to move the card by hand. So the verdict now follows the OUTCOME,
-          # and the reaction degrades to a warning WITH A FALLBACK: if the thumb
-          # cannot be delivered, the outcome is said in words instead (below), and
-          # the run fails only when NEITHER could reach the thread.
-          #
-          # This is deliberately not a fourth guess at the permission. It is
-          # correct whichever guess turns out to be right, and it stops the
-          # damage while that is still unknown.
+          # Reaction. THE REACTION IS NO LONGER ALLOWED TO FAIL THE RUN ON ITS OWN
+          # ((internal ref)): it 403'd on every real invocation through three
+          # diagnoses written into this file as settled, and what is not in doubt
+          # is that on those runs the card advanced and a SUCCESSFUL advance
+          # reported red -- at the single human gate in the pipeline
+          # ((internal ref) D6), which teaches the operator to distrust it. So
+          # the verdict follows the OUTCOME, the reaction degrades to a warning
+          # WITH A FALLBACK (the outcome said in words, below), and the run fails
+          # only when NEITHER reached the thread. fr-pass-report-selftest.py pins it.
           REACT_ERR="$RUNNER_TEMP/fr-pass.react.err"
           REACTED=1
           if ! gh api -X POST "/repos/$REPO_FULL/issues/comments/$COMMENT_ID/reactions" \
@@ -745,11 +670,9 @@ jobs:
             REACTED=0
           fi
 
-          # THE FALLBACK. A clean advance normally carries no note (see below), so
-          # when the thumb is the only feedback and it did not land, the thread
-          # learns nothing at all. Synthesise a note so the outcome is still
-          # reported; if a note already exists it already says more than this
-          # would, so leave it alone.
+          # THE FALLBACK: a clean advance carries no note, so when the thumb was the
+          # only feedback and did not land, synthesise one; an existing note already
+          # says more than this would, so leave it alone.
           if [ "$REACTED" -eq 0 ] && [ ! -s "$NOTE_FILE" ]; then
             if [ "$OUTCOME" = "advanced" ]; then
               # shellcheck disable=SC2016  # the backticks below are markdown code spans
@@ -765,13 +688,10 @@ jobs:
           # Explanation. Only outcomes that are a real problem carry a note; a
           # clean advance stays a bare 👍 so the happy path keeps the thread quiet.
           if [ -s "$NOTE_FILE" ]; then
-            # Prepend the marker the job `if` tests for, so this handler can
-            # recognise its own notes and not answer them ((internal ref)). Added
-            # here, at the single place a note is posted, rather than in each
-            # `decide` call above — a note that forgets it would resurrect the
-            # loop. First line, because the job `if` uses startsWith. HTML
-            # comments are stripped when GitHub renders markdown but kept in the
-            # stored body the event carries, so the thread reads as it did before.
+            # Prepend the marker the job `if` tests for, so this handler never
+            # answers its own notes ((internal ref)) -- at the single place a note is
+            # posted, first line because the `if` uses startsWith; GitHub hides an
+            # HTML comment when rendering but keeps it in the event's body.
             BODY=$(printf '%s\n\n%s\n' '<!-- fr-pass-handler -->' "$(cat "$NOTE_FILE")")
             COMMENT_ERR="$RUNNER_TEMP/fr-pass.comment.err"
             # REST, not `gh pr/issue comment`: a PR's conversation IS an issue, so
@@ -795,11 +715,9 @@ jobs:
             fi
           } >> "$GITHUB_STEP_SUMMARY"
 
-          # A write that failed must not leave a green run behind it — a red run
-          # is the last remaining signal once the thread could not be reached.
-          # `FAILED` now means exactly that: the COMMENT could not be posted. A
-          # failed reaction alone no longer lands here, because the fallback above
-          # turned it into a comment and this check covers that comment.
+          # A write that failed must not leave a green run: `FAILED` means the
+          # COMMENT could not be posted -- a failed reaction alone became a comment
+          # above, and this check covers that comment.
           if [ -n "$FAILED" ]; then
             echo "::error::/fr-pass could not report its outcome ($FAILED). Outcome was: $OUTCOME"
             exit 1
