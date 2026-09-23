@@ -1,8 +1,8 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/bugbot-gate.yml`
-# (blob 6cb768e7de2514666fadef05c47e947d3206bf17) folded with the private source repo's own caller of it,
-# `.github/workflows/bugbot-gate-caller.yml` (blob 5a12b5bf6c0dbaa0c137ef8a4a3047e3ce735b7a), for a PUBLIC repo: GitHub lets a
+# (blob 14b9ce6856a4d37925cc4244b00612ca24ea6b62) folded with the private source repo's own caller of it,
+# `.github/workflows/bugbot-gate-caller.yml` (blob 1e2b5ab156f2a18a3e0d7d5374b8efd57abd1da8), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
 # reusable's jobs inline -- the triggers are the caller's; every `inputs.*` is
@@ -50,142 +50,51 @@ name: Bugbot review gate
 # ((internal ref)). `scripts/bugbot-gate.py` carries the measurements and
 # the reasoning; this file is the wiring, and only says what the script cannot.
 #
-# THE SHORT VERSION OF WHY THIS IS NOT "ADD `Cursor Bugbot` TO THE REQUIRED
-# CONTEXTS". Measured 2026-08-22: Bugbot emits `success` when clean and `neutral`
-# when it has findings, and never `failure`. That makes requiring the context a
-# dichotomy with two bad horns:
+# WHY THIS IS NOT "ADD `Cursor Bugbot` TO THE REQUIRED CONTEXTS" ((internal ref)):
+# Bugbot emits `success` when clean and `neutral` when it has findings, never
+# `failure`, so requiring the context either gates nothing or permanently bricks
+# every PR that ever received a finding (Bugbot re-runs only on a push or a
+# `bugbot run`). So the verdict is REPORTED here and the decision is derived
+# from the threads.
 #
-#   * if `neutral` SATISFIES a required context -- GitHub's documented behaviour
-#     -- requiring it gates nothing, because `failure` never occurs;
-#   * if it does NOT, requiring it permanently bricks every PR that ever received
-#     a finding, because Bugbot re-runs only on a push or an explicit
-#     `bugbot run`, so resolving a finding can never turn the check green again
-#     -- and a promotion PR may not be pushed to at all. (internal ref) and
-#     (internal ref) both merged to `main` on 2026-08-21 carrying exactly that
-#     state (`neutral` on the merged head, one resolved Medium beneath).
+# ARMING THIS IS THREE STEPS, IN THIS ORDER: (1) this file reaches `main` --
+# every caller pins this repo's reusables `@main`, so a caller added first dies
+# with `startup_failure`; (2) callers are added and the gate is ADVICE, the whole
+# of what (internal ref) asks for; (3) the `bugbot / review` context is added to
+# branch protection once step 2 has been observed green on real PRs. Never the
+# reverse ((internal ref); a required context no workflow reports leaves every PR
+# waiting for ever, (internal ref)). The TEST tier is armed from the start:
+# `bugbot-gate-selftest.py` and `-mutations.py` run inside `selftests`, already
+# a required context.
 #
-# So the verdict is REPORTED here and the decision is derived from the threads.
-#
-# ARMING THIS IS THREE STEPS, IN THIS ORDER, AND THE ORDER IS THE POINT.
-#
-#   1. this file reaches `main`. Every caller in this org pins
-#      `tracebloc/.github/...@main` ((internal ref) Q3), so a caller added
-#      before the reusable is ON main references something main does not have and
-#      dies with a `startup_failure` -- a red check on the very PR introducing a
-#      gate. code-quality-caller.yml records the identical sequencing for its
-#      `action-pins` input: the job went to develop in #159 and was armed only
-#      once `main` carried it. That is why the PR adding THIS file adds no caller.
-#   2. a caller is added, starting with tracebloc/.github itself. The gate is
-#      ADVICE at this point, and saying so plainly is the whole of (internal ref).
-#   3. the `bugbot / review` context is added to branch protection, once step 2
-#      has been observed green on real PRs.
-#
-# Never the reverse. (internal ref)'s lesson is that a contract claiming a context
-# reality lacks is itself a finding; and a required context no workflow reports
-# leaves every PR waiting forever ((internal ref), pii-gate/pii-check). Arm while
-# green, then let the contract claim it.
-#
-# The TEST tier needs none of that and is armed from the start:
-# `scripts/tests/bugbot-gate-selftest.py` and `-mutations.py` both run inside
-# `selftests`, ALREADY a required context on develop/staging/main -- the same
-# trick selftests.yml uses to arm a guard with no branch-protection edit.
-#
-# NO `paths:` FILTER, and the caller must not add one. A required check that is
-# path-filtered never reports on a PR the filter skips, so the PR waits at
-# "Expected -- waiting for status" forever. This org has hit that twice
-# ((internal ref), pii-gate/pii-check); code-quality.yml's and selftests.yml's
-# headers both warn about it.
+# NO `paths:` FILTER, and the caller must not add one: a path-filtered required
+# check never reports on a PR the filter skips, so the PR waits at "Expected --
+# waiting for status" forever ((internal ref)).
 #
 # WHAT A CALLER MUST TRIGGER ON: `pull_request` with at least
 # `[opened, reopened, synchronize, ready_for_review]`. `ready_for_review` is
-# load-bearing, not boilerplate -- this gate deliberately PASSES a draft (a draft
-# cannot merge, and Bugbot's behaviour on drafts is not this gate's business), so
-# leaving that type out means the exemption is never lifted and the gate is
-# permanently green on a PR that was opened as a draft.
+# load-bearing: this gate deliberately PASSES a draft, so leaving that type out
+# means the exemption is never lifted on a PR opened as a draft.
 #
-# THE TRIGGER THIS WANTS AND CANNOT HAVE YET. Resolving a Bugbot thread is not a
-# `pull_request` event, so `pull_request_review_thread: [resolved]` is the right
-# trigger for the severity half of this gate. actionlint 1.7.12 -- a REQUIRED
-# check in tracebloc/.github, run with no config file and no `-ignore` on purpose
-# -- does not know that event name and rejects the workflow, so no caller can
-# carry it without landing a red required check. Measured against the pinned
-# binary: zero occurrences of `review_thread`.
+# THE TRIGGER THIS WANTS AND CANNOT HAVE YET: `pull_request_review_thread:
+# [resolved]`. actionlint 1.7.12 -- a REQUIRED check in this repo, run with no
+# config and no `-ignore` on purpose -- rejects the event name, so the failure
+# message says: resolve the thread, then RE-RUN this check (a follow-up on (internal ref)).
 #
-# The consequence is written into the failure message rather than left to be
-# discovered: resolve the thread, then RE-RUN this check. Not "push a commit",
-# which is what a stale gate otherwise teaches. Adding the trigger when
-# actionlint learns the event is a follow-up on (internal ref).
-#
-# THIS JOB WAITS, on purpose. Its central claim is that Bugbot reviewed the
-# CURRENT head, which is false for the first minutes after every push -- so it
-# polls. Measured 2026-09-13 over the 160 most recent PR heads of five repos
-# (all private; their names are withheld here because this comment is rendered
-# verbatim into PUBLIC repos' self-contained copies, and the scrub rule covers
-# `tracebloc/<repo>` references, not bare names -- tracebloc/quickstart#16),
-# every one of which carried a completed `Cursor Bugbot` run: Bugbot CLAIMS a head
-# (creates its check run) p50 10 s / p90 35 s / p95 65 s after the push, and
-# delivers the VERDICT p50 268 s / p75 381 s / p90 495 s / p95 577 s after it;
-# 3 of 160 took longer than 660 s (one at 846 s, and one head Bugbot was asked
-# to re-review by hand 2.5 h later). The wait runs concurrently with Bugbot's
-# own work, so it adds latency only when Bugbot is slower than usual.
-# `timeout-minutes` sits above the script's own budget so that the script, not
-# the runner, is what reports a timeout on all but the slowest runner setups
-# -- the job's `timeout-minutes` note below has the one measured exception.
-#
-# WHAT A RED AT THE DEADLINE MEANS, AND THE REMEDY ((internal ref)).
-# Because the claim lands within about a minute, a run whose wait expires almost
-# always finds a check that STARTED and has not finished: the script exits 1 --
-# the gate FAILS CLOSED on a CLAIMED-but-unfinished head. The one verdict-less
-# case it does NOT block is a head Bugbot never claimed at all: that exits 0 as
-# UNREVIEWED (three banners, not two; (internal ref) holds the open
-# decision on whether it should block), and the day step 3 above is taken that
-# exit code is a fail-open. So `bugbot / review` red on a head Bugbot is still reviewing
-# means "not yet", not "findings"; the remedy is **Re-run jobs** on THAT run
-# once Bugbot's check has completed. Re-run IN PLACE, never a fresh run: a
-# re-run replaces the check run on the head, while a second run of this job on
-# the same sha (a new event, a review-triggered run, a dispatch) ADDS a run
-# beside the red one -- and `statusCheckRollup.state` is worst-of across every
-# run on the commit (scripts/reusable-no-cancel.py, measured on .github#387),
-# which is what the PR's red X and ship.py's merge bar both read. A later
-# green run therefore does not clear an earlier red on the same head. That is
-# why the wait is sized to the TAIL and not the median: every deadline hit
-# costs somebody a re-run, and ship/desk read a red `bugbot / review` as fix
-# work before anything else.
-#
-# THE EVENT-DRIVEN SHAPE THIS DOES NOT TAKE, AND THE MEASUREMENTS THAT DECIDED
-# IT ((internal ref)). The runner sleeps through Bugbot's review; the
-# obvious saving is to evaluate on the event that ENDS the review instead of
-# polling for it. Both candidate events were measured on the same 160 heads:
-#
-#   * `pull_request_review: [submitted]` by `cursor[bot]` fired for 110 of the
-#     160 verdicts (69%). Bugbot submits a review when it has findings and
-#     usually a "found no new issues" review when clean -- but 40 clean heads
-#     and 10 `neutral` ones got a verdict and NO review at all. A gate that
-#     waited for that event would wait for ever on a third of pushes, and a
-#     `pull_request` run cut short at the median would leave those heads red
-#     with nothing coming to turn them green. Where the event does fire it
-#     lands p50 1 s BEFORE the check run completes and up to 193 s before it,
-#     so "evaluate immediately with wait 0" reads PENDING and goes red on the
-#     very event meant to settle it. And filtering the reviewer with a
-#     job-level `if:` leaves a SKIPPED `bugbot / review` on the head for every
-#     HUMAN review -- which GitHub counts as success for a required context, a
-#     fail-open path the day step 3 is taken. (The wiring itself is not the
-#     obstacle: a `pull_request_review` payload carries `pull_request`, so the
-#     `PR_NUMBER` read below already works from that event, and its
-#     `GITHUB_SHA` is the PR merge ref's like `pull_request`'s.)
-#   * `check_run: [completed]` for `Cursor Bugbot` fires for every verdict, but
-#     a `check_run`-triggered workflow runs the DEFAULT branch's file with
-#     `GITHUB_SHA` = the default branch's tip, so the job's own `bugbot /
-#     review` check lands on `develop`, not on the PR head, and neither the PR
-#     nor branch protection ever sees it. Reporting on the head from there
-#     means creating the check run by hand through the Checks API (`checks:
-#     write` on every caller; a check produced by the github-actions App, not
-#     by a job) -- a different gate, not a trigger change.
-#
-# Either way the tail cannot be handed to an event, and the wait cannot be
-# shortened without handing it to one (worst-of rollup, above). What is left
-# is the runner: this job now schedules on `ubuntu-slim`, which bills the same
-# minutes at a third of the rate and carries git, gh, Python 3.12 and Node 24.
+# THIS JOB WAITS, on purpose: its claim is that Bugbot reviewed the CURRENT
+# head, false for the first minutes after every push, so it polls, sized to the
+# TAIL of Bugbot's measured verdict latency (the `wait-seconds` description
+# holds the distribution; (internal ref) holds the measurement).
+# WHAT A RED AT THE DEADLINE MEANS: a CLAIMED-but-unfinished head fails closed
+# ("not yet", not "findings"); the remedy is **Re-run jobs** on THAT run, IN
+# PLACE -- a second run on the same sha ADDS a run beside the red one, and
+# `statusCheckRollup.state` is worst-of across every run on the commit
+# (scripts/reusable-no-cancel.py). An unclaimed head exits 0 as UNREVIEWED
+# ((internal ref) holds the open decision on whether it should block).
+# THE EVENT-DRIVEN SHAPE THIS DOES NOT TAKE, and the measurements that decided
+# it -- `pull_request_review` fires for 69 % of verdicts, `check_run` runs the
+# default branch's file -- are on (internal ref); what is left is the
+# runner, `ubuntu-slim`.
 
 on:
   pull_request:
@@ -208,43 +117,23 @@ permissions:
 jobs:
   review:
     name: bugbot / review
-    # `ubuntu-slim` ((internal ref)): this job produces no REQUIRED
-    # context anywhere -- 0 of 63 live branches (21 inventory repos x
-    # develop/staging/main, classic protection AND rulesets) name a bugbot
-    # context, measured 2026-09-13 -- so a label that failed to schedule could
-    # not hang a PR, only delay an advisory check. That measurement is why this
-    # file was the first hold lifted; since 2026-09-16 `scripts/runner-tier.py`
-    # holds no file on the full tier for being gating, and expects this one on
-    # slim like every other reusable. The image carries everything the steps
-    # below need (git, gh, Python 3.12, Node 24); the first slim run after
-    # promotion to `main` is the proof that it schedules, and nothing about
-    # this file's behaviour changes with the label.
+    # `ubuntu-slim` ((internal ref)): this job is a REQUIRED context
+    # nowhere (0 of 63 live branches, measured 2026-09-13), so a label that
+    # failed to schedule could only delay an advisory check; since 2026-09-16
+    # `scripts/runner-tier.py` expects every reusable on slim.
     runs-on: ubuntu-slim
-    # Above the script's own 660 s budget on purpose: the script should be the
-    # thing that reports a timeout, with the measured latencies in the message
-    # -- a runner-level kill produces no explanation at all. Below the 15
-    # minutes `ubuntu-slim` allows a job, which is a hard platform cap, so the
-    # slack between the two is 180 s for mint + checkout + setup-python. That
-    # is NOT always enough, and this file does not claim it is: over the same
-    # 160 runs this job's duration was 628 s at the p99 and 869 s at the max --
-    # a deadline-hitting run carrying ~209 s of setup, which 840 s kills before
-    # the script speaks. So a run that is BOTH past the wait budget AND in
-    # roughly the top 1% of runner setup is runner-killed with no PENDING
-    # report; the PR's red X then carries no "re-run in place" instruction and
-    # the reader has to know the remedy from this file. The alternative -- a
-    # 600 s budget for 240 s of slack -- would turn 4.4% of heads red at the
-    # deadline instead of 1.9% (the `wait-seconds` description has the
-    # distribution), every one a human re-run, to save the message on a far
-    # rarer kill. The budget stays at 660 and this comment states the trade.
+    # Above the script's own 660 s budget on purpose -- the script, not the
+    # runner, should report a timeout -- and below the 15-minute `ubuntu-slim`
+    # cap, so the slack for mint + checkout + setup-python is 180 s. That is not
+    # always enough (p99 setup on the slowest runs exceeds it and the platform
+    # kills the job with no PENDING report); the trade against a shorter wait
+    # budget is stated on `wait-seconds`, and bugbot-gate-selftest.py holds
+    # default + 180 <= timeout < the cap.
     timeout-minutes: 14
     steps:
-      # Same shape as code-quality.yml: the checker lives
-      # here, not in the calling repo, so the reusable fetches it. This repo is
-      # PRIVATE (the private source repo replaced the public `.github` as the host on
-      # 2026-09-10) and the caller's `github.token` reads only the caller's own
-      # repo, so the checkout needs a token that can read the private source repo: a
-      # read-only App installation token, minted from the two secrets the
-      # caller passes by name (`on.workflow_call.secrets` above, Q5).
+      # Same shape as code-quality.yml: the checker lives here, not in the
+      # calling repo, and this repo is PRIVATE, so the checkout needs a read-only
+      # App token minted from the two secrets the caller passes by name (Q5).
       - name: Mint a read-only token for org-config (private; the caller's own token cannot read it)
         id: org-config-token
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
@@ -255,14 +144,11 @@ jobs:
           repositories: org-config
           permission-contents: read
 
-      # THE TOOLS REF ((internal ref) D4). `job.workflow_sha` is the commit of THIS
-      # reusable file -- the one the caller pinned -- so the scripts checked out
-      # below are the ones this workflow was reviewed with; a `@main` caller gets
-      # `main`'s. `tools-ref` overrides it to test a tools change against a pinned
-      # workflow. An EMPTY ref would make actions/checkout take the tools repo's
-      # DEFAULT branch fleet-wide, so it is refused here rather than checked out.
-      # The SHA is read out of `toJSON(job)` in shell because actionlint's schema
-      # of the `job` context (1.7.12) does not know `workflow_sha` yet.
+      # THE TOOLS REF ((internal ref) D4, (internal ref)): `job.workflow_sha` is the commit
+      # of THIS reusable file, so the scripts below are the ones it was reviewed
+      # with; `tools-ref` overrides it for a test. An EMPTY ref would check out the
+      # tools repo's DEFAULT branch fleet-wide, so it is refused. `toJSON(job)` because
+      # actionlint's `job` schema (1.7.12) does not know `workflow_sha`.
       - name: Resolve the tools ref, refusing an empty one
         id: tools-ref
         env:

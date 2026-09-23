@@ -1,8 +1,8 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/code-quality.yml`
-# (blob 23c299ec089ba6bbe98ad9e3fa555a73a7d283dc) folded with the private source repo's own caller of it,
-# `.github/workflows/code-quality-caller.yml` (blob d0d9d4c4ecb1747e9f1b3fadcf516b79fe8c55bb), for a PUBLIC repo: GitHub lets a
+# (blob d3f487103020a8de224a8dcac97147c22aeb5bd1) folded with the private source repo's own caller of it,
+# `.github/workflows/code-quality-caller.yml` (blob a690dd9342c56a9efc609065bbfc5ff7e18f9131), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
 # reusable's jobs inline -- the triggers are the caller's; every `inputs.*` is
@@ -50,13 +50,11 @@ name: Code quality
 # workflow in this repo automates process (kanban, FR gate, WIP), and none
 # of them looks at what the code does.
 #
-# WHY (measured over 60 days of automated code review)
-#   The automated reviewer's false-positive rate is 3% — so what it reports is
-#   real, and it arrives at the most expensive possible moment. Of the findings
-#   we hand-classified, 20% were expressible as a lint or grep rule, and 14%
-#   were rules the team had already agreed on, being re-enforced one PR at a
-#   time by a reviewer instead of once by CI. This workflow moves that share to
-#   the left, where it costs seconds instead of a review round-trip.
+# WHY (measured over 60 days of automated code review): the reviewer's
+#   false-positive rate is 3 %, so what it reports is real and arrives at the
+#   most expensive moment; 20 % of hand-classified findings were expressible as
+#   a lint or grep rule and 14 % were rules the team had already agreed on. This
+#   workflow moves that share left, where it costs seconds, not a review round.
 #
 # JOBS — each is a SEPARATE job on purpose, with one measured exception
 #   ruff         Python lint (opt in with `python: true`)
@@ -66,67 +64,37 @@ name: Code quality
 #   action-pins  every `uses:` pinned to a commit SHA (on by default)
 #   format + pipefail early-close
 #                black --check (opt in with `format: true`) and the pipefail
-#                SIGPIPE gate (on by default, whole-tree) in ONE job: a job
-#                bills a rounded-up minute, and these two are required status
-#                contexts on no branch in the org ((internal ref) D6 lever 2, OQ9).
-#                Each half's steps are gated on its own input, so a caller's
-#                verdict per half is unchanged; the second half runs even after
-#                the first fails. The five names branch protection requires
-#                are each still one job and are never renamed.
+#                SIGPIPE gate (on by default, whole-tree) in ONE job, because
+#                both are required contexts on no branch ((internal ref) D6 lever 2,
+#                OQ9); that job's own header says how the halves stay independent.
 #   Separate jobs run independently, so a ruff failure never hides what
-#   shellcheck found. Steps inside one job would short-circuit; jobs do not --
-#   which is why the merged job carries `!cancelled()` on its second half.
+#   shellcheck found; steps inside one job would short-circuit.
 #
 # BLOCKING BEHAVIOUR — read this before adopting
-#   `soft-fail` defaults to TRUE: every finding is annotated on the diff and
-#   written to the job summary, and the job still exits 0. That is deliberate.
-#   A linter switched on as a required check against an unlinted backlog gets
-#   the check removed, not the backlog fixed. The intended path is:
-#
-#     1. Add the caller with the defaults below. Findings appear; nothing blocks.
-#     2. Run it once with `all-files: true` to size the whole backlog.
-#     3. Clear the backlog (or record a gitleaks baseline / add ignore pragmas
-#        for the deliberate exceptions).
-#     4. Flip `soft-fail: false` in the caller.
-#     5. Mark `Code quality / <job>` as a required status check in branch
-#        protection. Only then is it a gate.
-#
-#   Step 4 is the point of the exercise. `soft-fail: true` is a migration
-#   setting, not a destination: a linter that only ever warns changes nothing.
-#   If a repo is still on the default months from now, that is the finding.
-#
-#   SOFT-FAIL SOFTENS FINDINGS, NEVER A SCANNER THAT COULD NOT RUN. Every job
-#   treats exactly two exit codes as verdicts -- 0 (clean) and 1 (findings) --
-#   and anything else (ruff 2, shellcheck 2-4, gitleaks >1, 126/127, a signal)
-#   fails the job with exit 2 whatever `soft-fail` says. A scan that produced no
-#   verdict has not passed; recording it as clean is how a gate turns into
-#   decoration (Bugbot on (internal ref), (internal ref); (internal ref) rule 3).
+#   `soft-fail` defaults to TRUE: findings are annotated and summarised, and the
+#   job exits 0. A linter switched on as a required check against an unlinted
+#   backlog gets the check removed, not the backlog fixed, so: add the caller,
+#   size the backlog once with `all-files: true`, clear it (or baseline / add
+#   pragmas), flip `soft-fail: false`, then require `Code quality / <job>` in
+#   branch protection. The flip is the point; a linter that only warns changes
+#   nothing. SOFT-FAIL SOFTENS FINDINGS, NEVER A SCANNER THAT COULD NOT RUN:
+#   every job treats exactly 0 (clean) and 1 (findings) as verdicts and exits 2
+#   on anything else whatever `soft-fail` says (Bugbot on (internal ref),
+#   (internal ref); rule 3).
 #
 # ADOPTION -- not by copying a snippet from here. `scripts/onboard_repo.py`
 #   renders a repo's caller from this repo's own `code-quality-caller.yml`
-#   (found by its `uses:`, never by filename) with repo-inventory.yml's
-#   `caller_inputs` floor applied, so the live caller is the template and a
-#   copy here could only drift from it. Two rules that caller carries, and why:
-#   it asks only for `contents: read`; and it passes EXACTLY TWO secrets BY
-#   NAME -- `app-id` and `app-private-key`, declared REQUIRED under
-#   `on.workflow_call.secrets`, which mint a read-only token for the PRIVATE
-#   repo the house-rules and pipefail scripts are checked out of. Never
-#   `secrets: inherit` ((internal ref) Q5; (internal ref), unwound in
-#   (internal ref); the carve-out for these two on (internal ref)): callers pin
-#   `@main`, so the day a reusable gains a `${{ secrets.X }}` step, every
-#   inheriting caller hands it that repo's ENTIRE secret set (`toJSON(secrets)`
-#   dumps it). Explicit per-secret passing keeps the need visible in every
-#   caller diff, and the REQUIRED declaration makes a caller that forgets fail
-#   at startup rather than at run time with an empty app-id. A caller that ADDS
-#   `secrets: inherit` is what deserves a finding.
+#   (found by its `uses:`) with repo-inventory.yml's `caller_inputs` floor
+#   applied; the live caller is the template. That caller asks only for
+#   `contents: read` and passes EXACTLY TWO secrets BY NAME (the Q5 carve-out
+#   under `on.workflow_call.secrets` below); a caller that ADDS `secrets:
+#   inherit` is what deserves a finding.
 #
 # SUPPLY CHAIN
-#   gitleaks is installed from its release tarball pinned by version AND
-#   verified against a pinned SHA-256, rather than via gitleaks-action. Two
-#   reasons: gitleaks-action requires a GITLEAKS_LICENSE for organization-owned
-#   repos (it would simply fail here), and a version+digest pin on the artefact
-#   we actually execute is a stronger guarantee than a commit pin on a wrapper
-#   that downloads it for us. `actions/checkout` is pinned to a commit SHA.
+#   gitleaks is installed from its release tarball pinned by version AND a
+#   SHA-256 rather than via gitleaks-action (which needs a GITLEAKS_LICENSE for
+#   organisation-owned repos, and a digest pin on the artefact we execute beats
+#   a commit pin on a wrapper that downloads it). `actions/checkout` is SHA-pinned.
 #
 # EXTENDING house-rules
 #   Rules live in `scripts/house-rules.sh` in this repo. A repo adds its own
@@ -159,21 +127,11 @@ concurrency:
   group: code-quality-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-# THE DIFF BASE, DECLARED ONCE ((internal ref)).
-#
-# Five jobs below scan "the files this change touches", and each used to carry
-# its own `BASE_SHA: ${{ github.event.pull_request.base.sha }}`. On a
-# MERGE_GROUP event there is no pull request in the payload, so all five read
-# EMPTY and every one of them took its documented fail-open branch: a queue
-# entry was scanned WHOLE-TREE. That is not merely slow. These are the five
-# `quality / *` required contexts fleet-wide, so one finding anywhere in a
-# repo's tree would block EVERY entry in that repo's queue -- including pull
-# requests that never touched the offending file -- until somebody fixed an
-# unrelated line. The queue stalls for everyone.
-#
-# ONE DECLARATION, at workflow level, inherited by every step. Five copies is
-# how the events drifted apart in the first place: each copy was correct about
-# `pull_request` and silent about everything else, and nothing compared them.
+# THE DIFF BASE, DECLARED ONCE ((internal ref)). Five jobs scan "the files this
+# change touches"; each used to carry its own `BASE_SHA`, and on a MERGE_GROUP
+# event -- no pull request in the payload -- all five read EMPTY and scanned
+# whole-tree, so one finding anywhere in the tree blocked every entry in that
+# repo's queue. ONE DECLARATION at workflow level, inherited by every step;
 # `scripts/tests/code-quality-diff-base-selftest.py` EVALUATES this expression
 # against both payloads and refuses a second declaration anywhere in the file.
 #
@@ -238,14 +196,11 @@ jobs:
           repositories: org-config
           permission-contents: read
 
-      # THE TOOLS REF ((internal ref) D4). `job.workflow_sha` is the commit of THIS
-      # reusable file -- the one the caller pinned -- so the scripts checked out
-      # below are the ones this workflow was reviewed with; a `@main` caller gets
-      # `main`'s. `tools-ref` overrides it to test a tools change against a pinned
-      # workflow. An EMPTY ref would make actions/checkout take the tools repo's
-      # DEFAULT branch fleet-wide, so it is refused here rather than checked out.
-      # The SHA is read out of `toJSON(job)` in shell because actionlint's schema
-      # of the `job` context (1.7.12) does not know `workflow_sha` yet.
+      # THE TOOLS REF ((internal ref) D4, (internal ref)): `job.workflow_sha` is the commit
+      # of THIS reusable file, so the scripts below are the ones it was reviewed
+      # with; `tools-ref` overrides it for a test. An EMPTY ref would check out the
+      # tools repo's DEFAULT branch fleet-wide, so it is refused. `toJSON(job)` because
+      # actionlint's `job` schema (1.7.12) does not know `workflow_sha`.
       - name: Resolve the tools ref, refusing an empty one
         id: tools-ref
         if: ${{ steps.gates.outputs.early_close == 'true' }}
@@ -274,27 +229,19 @@ jobs:
           path: .org-config-tools
           persist-credentials: false
 
-      # PyYAML IS PROVISIONED, NEVER ASSUMED. The YAML phase imports it, and a
-      # missing import is (correctly) exit 2 -- "cannot tell" is a finding. But
-      # an rc 2 is a HARD failure regardless of soft-fail, so relying on
-      # whatever the runner image happens to ship would turn the first run of
-      # this coverage into a red gate across the fleet. Same pin and same
-      # invocation as selftests.yml and caller-drift.yml.
+      # PyYAML IS PROVISIONED, NEVER ASSUMED: the YAML phase imports it and a
+      # missing import is exit 2 -- a HARD failure regardless of soft-fail -- so
+      # the runner image's contents are not relied on. Same pin as selftests.yml.
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         if: ${{ steps.gates.outputs.early_close == 'true' && steps.gates.outputs.yaml_run_blocks == 'true' }}
         with:
           python-version: '3.12'
       - name: Install PyYAML for the YAML run-block phase
         if: ${{ steps.gates.outputs.early_close == 'true' && steps.gates.outputs.yaml_run_blocks == 'true' }}
-        # RETRIED, BECAUSE THIS SITS ON A GATE IN 18 REPOS (@saadqbal). A single
-        # PyPI hiccup reddened `code-quality` fleet-wide with a message about pip
-        # rather than about the code -- and a gate that fails for an unrelated
-        # reason is one people learn to re-run without reading.
-        #
-        # Three attempts with a widening pause. Deliberately NOT `continue-on-
-        # error`: without PyYAML the extractor exits 2 by design ("cannot tell"
-        # is a finding), so swallowing this would trade a loud unrelated failure
-        # for a quiet real one.
+        # RETRIED, BECAUSE THIS SITS ON A GATE IN 18 REPOS: one PyPI hiccup
+        # reddened `code-quality` fleet-wide with a message about pip, and a gate
+        # that fails for an unrelated reason gets re-run unread. Not
+        # `continue-on-error`: without PyYAML the extractor exits 2 by design.
         run: |
           set -euo pipefail
           for attempt in 1 2 3; do
@@ -303,14 +250,8 @@ jobs:
               exit 0
             fi
             echo "::warning::pip install pyyaml failed (attempt ${attempt}/3)"
-            # `if` rather than `[ "$attempt" -lt 3 ] && sleep ...`, for
-            # READABILITY, not for correctness. I first wrote this comment
-            # claiming the `&&` form would trip `set -e` on the last attempt and
-            # skip the diagnostic below. It does not: POSIX exempts every
-            # command of an AND-OR list except the last, so a false `[` there
-            # never triggers errexit. Verified both forms reach the end at rc 0
-            # before saying so, since being wrong in the other direction is how
-            # a comment starts teaching the bug.
+            # `if` rather than `[ ... ] && sleep`, for READABILITY only: POSIX
+            # exempts every command of an AND-OR list but the last from errexit.
             if [ "$attempt" -lt 3 ]; then
               sleep $(( attempt * 5 ))
             fi
@@ -331,18 +272,12 @@ jobs:
           GATE=".org-config-tools/scripts/pipefail-early-close.sh"
           chmod +x "$GATE"
 
-          # TWO SCOPES, ONE RULE ((internal ref)). `shell` is the tree's shell
-          # files -- the verdict this job has always produced, under whatever
-          # `soft-fail` the caller chose. `yaml` is the `run:` blocks of
-          # workflows and composite actions, which were never in scope at all:
-          # the classifier is extension-else-shebang and YAML is neither, so
-          # the gate reported SUCCESS on `(internal ref)@f4d6fec`'s live
-          # `printf | head -1`. Both halves are judged by the SAME awk; only
-          # the file list differs.
-          #
-          # THEY RUN AS SEPARATE INVOCATIONS, not one `all` pass, because the
-          # two halves need different blocking behaviour during the migration
-          # and a single exit code cannot say which half produced it.
+          # TWO SCOPES, ONE RULE ((internal ref)): `shell` is the tree's shell files
+          # under the caller's `soft-fail`; `yaml` is the `run:` blocks of
+          # workflows and composite actions, which the extension-else-shebang
+          # classifier never saw (the gate reported SUCCESS on a live `printf |
+          # head -1`). Same awk, different file list; SEPARATE invocations because
+          # the two halves need different blocking behaviour during the migration.
           OVERALL=0
           for scope in shell yaml; do
             if [ "$scope" = yaml ]; then
@@ -365,17 +300,11 @@ jobs:
             cat "$OUT"
             cat "$ERR" >&2 || true
 
-          # ONLY 0 AND 1 ARE VERDICTS. 0 = clean, 1 = findings; anything else is
-          # the gate failing to run -- rc 2 (cannot tell), 126/127 (not
-          # executable / not found), a signal death. Those are ALWAYS fatal,
-          # soft-fail or not: a gate that could not check has not passed, and
-          # letting soft-fail swallow it is how a gate becomes decoration
-          # ((internal ref) rule 3).
-          #
-          # Whitelisting the verdicts rather than blacklisting rc=2 is the
-          # load-bearing part. The first version tested `[ "$RC" = 2 ]`, so a
-          # missing or non-executable script exited 127, fell through to the
-          # soft-fail branch, and reported green (Bugbot, .github#300).
+          # ONLY 0 AND 1 ARE VERDICTS. Anything else is the gate failing to run
+          # -- rc 2 (cannot tell), 126/127, a signal -- and is ALWAYS fatal,
+          # soft-fail or not: a gate that could not check has not passed
+          # ((internal ref) rule 3). Whitelist, not `= 2`: the first version let a
+          # 127 fall through to soft-fail and report green (Bugbot on (internal ref)).
             if [ "$RC" != 0 ] && [ "$RC" != 1 ]; then
               echo "::error title=$TITLE::the gate exited $RC — it did not run to a verdict, so this is not a pass"
               {
@@ -430,31 +359,14 @@ jobs:
       # `!cancelled()` on every step here: the early-close half above may have
       # FAILED on a finding, and this half must still report its own.
 
-      # THE SHARED WORKSPACE IS NOT SHARED WITH BLACK. The early-close half
-      # above checks the private source repo out at `.org-config-tools`, and before this merge
-      # the format half ran in its own job where that tree did not exist. The
-      # early-close gate is unaffected by it either way -- `PIPEFAIL_ROOT` is
-      # the caller's checkout and `git ls-files` cannot reach an untracked
-      # subtree, as its own comment records -- but black does NOT discover
-      # through the git index: `black --check .` walks the directory, and
-      # `.org-config-tools` is in neither black's default excludes nor the
-      # caller's `.gitignore`. So all-files mode (a `workflow_dispatch` sizing
-      # run, or the diff-fallback) would have judged the private source repo's Python under
-      # the CALLER's `black-version` and the caller's `[tool.black]` -- files
-      # the caller cannot fix, reported as its own, and a version skew there
-      # is an `error:` (a hard failure even under soft-fail) rather than a
-      # formatting verdict. Diff mode never saw it, for the `git ls-files`
-      # reason above. Reported by Bugbot on (internal ref).
-      #
-      # Removed rather than excluded, deliberately: `--exclude` /
-      # `--extend-exclude` on the command line OVERRIDE the same key in the
-      # caller's `pyproject.toml`, so the fix for a path that is not the
-      # caller's would silently un-exclude paths that are. Deleting the tree
-      # restores exactly what the format half saw before the merge and leaves
-      # black's invocation -- and therefore every caller's verdict -- untouched.
-      # Nothing after this point reads `.org-config-tools`; house-rules and
-      # dead-weight check it out into their own jobs. A no-op when the
-      # early-close half is off and the tree was never created.
+      # THE SHARED WORKSPACE IS NOT SHARED WITH BLACK (Bugbot on (internal ref)):
+      # the early-close half checks the private source repo out at `.org-config-tools`, and
+      # black walks the directory rather than the git index, so all-files mode
+      # would judge the private source repo's Python under the CALLER's `black-version` -- a
+      # version skew there is an `error:`, hard even under soft-fail. Removed
+      # rather than excluded: a command-line `--exclude` OVERRIDES the caller's
+      # `pyproject.toml` excludes. Nothing after this point reads the tree; a
+      # no-op when the early-close half is off.
       - name: Drop the shared checker before black walks the tree
         if: ${{ !cancelled() && steps.gates.outputs.format == 'true' }}
         run: |
@@ -508,13 +420,10 @@ jobs:
         if: ${{ !cancelled() && steps.gates.outputs.format == 'true' && (steps.files.outputs.mode == 'all' || steps.files.outputs.count != '0') }}
         env:
           MODE: ${{ steps.files.outputs.mode }}
-          # Additive soft-fail, per this input's contract ("exit 0 even when
-          # soft-fail is false"): format is advisory when EITHER the global
-          # soft-fail OR the format-specific override is set. Unlike action-pins
-          # below, format-soft-fail defaults to false and no caller arms it, and
-          # there's no need to force format HARD during a soft migration -- so it
-          # stays an OR, not an authoritative override. Dropping the OR flipped
-          # every `soft-fail: true` caller to a hard format gate (Bugbot, #1681).
+          # Additive soft-fail, per this input's contract: format is advisory
+          # when EITHER the global `soft-fail` OR `format-soft-fail` is set --
+          # an OR, not the authoritative override action-pins uses. Dropping the
+          # OR flipped every `soft-fail: true` caller to a hard gate (Bugbot on (internal ref)).
           SOFT_FAIL: ${{ (false || false) && 'true' || 'false' }}
         run: |
           set -uo pipefail
@@ -531,11 +440,9 @@ jobs:
           fi
 
           COUNT=$(grep -c '^would reformat' /tmp/black.out || true)
-          # An ERROR is a different thing from a formatting verdict and must
-          # never be reported as one: a black that cannot parse the tree prints
-          # these while the reformat count stays 0. (This exact conflation
-          # produced a false "0 files need formatting" during the #1303
-          # sizing -- black 23.1.0 cannot run on Python 3.12+.)
+          # An ERROR is not a formatting verdict: a black that cannot parse the
+          # tree prints these while the reformat count stays 0 -- the conflation
+          # that produced a false "0 files need formatting" ((internal ref)).
           ERRS=$(grep -cE '^error:|would fail to reformat' /tmp/black.out || true)
 
           {
@@ -557,16 +464,11 @@ jobs:
             echo ""
           } >> "$GITHUB_STEP_SUMMARY"
 
-          # Decide from black's OUTPUT, not from its exit code. In diff mode
-          # black runs under xargs, and GNU xargs remaps ANY child status in
-          # 1-125 to its own 123 -- so a plain "would reformat" (black's 1)
-          # arrives as 123 and is indistinguishable from a real internal error.
-          # BSD xargs propagates 1 instead, which is why local validation on
-          # macOS passed while ubuntu CI would have hard-failed every advisory
-          # adopter. Reported by Bugbot + @aptracebloc on tracebloc/.github#115.
-          #
-          # Checked errors-first so a genuine internal error is never masked by
-          # a reformat finding in the same run.
+          # Decide from black's OUTPUT, not from its exit code: in diff mode black
+          # runs under xargs, and GNU xargs remaps any child status in 1-125 to
+          # 123, so black's "would reformat" (1) is indistinguishable from an
+          # internal error (Bugbot on (internal ref)). Errors first, so a real
+          # error is never masked by a reformat finding.
           if [ "${ERRS:-0}" -gt 0 ]; then
             echo "::error::black could not process ${ERRS} file(s) - failing closed (not a formatting verdict)."
             cat /tmp/black.out
@@ -630,14 +532,9 @@ jobs:
 
           # EVERY invocation below is `gitleaks git` — commit-scoped — and the
           # per-repo baselines DEPEND on that: baseline fingerprints embed the
-          # commit SHA that introduced each finding, so they only match findings
-          # produced by a git-mode scan. Switching any branch here to `gitleaks
-          # dir`/`detect` (path-scoped fingerprints) silently invalidates every
-          # baseline entry fleet-wide at once — 277 suppressions un-suppress in
-          # a single run ((internal ref) §4). Permanent fixtures live in per-repo
-          # `.gitleaks.toml` allowlists instead (auto-loaded from the checkout
-          # root, commit-INDEPENDENT); only genuine historical exposure stays
-          # baselined, tracked for rotation in (internal ref).
+          # commit SHA that introduced each finding, so a path-scoped `gitleaks
+          # dir` would un-suppress every baseline entry fleet-wide at once
+          # ((internal ref) §4). Permanent fixtures live in `.gitleaks.toml` allowlists.
           RC=0
           if [ "$ALL_FILES" = "true" ] || [ -z "${BASE_SHA:-}" ]; then
             echo "Scanning the full history."
@@ -647,13 +544,10 @@ jobs:
             # introduced, so a value added and then deleted again is still found.
             echo "Scanning commit range ${BASE_SHA}..${HEAD_SHA}"
             /tmp/gitleaks git "$@" --log-opts="--no-merges ${BASE_SHA}..${HEAD_SHA}" . || RC=$?
-            # gitleaks uses 0 = clean, 1 = leaks found; any other code is an
-            # operational error (missing base.sha, bad log-opts). Don't let a
-            # broken credential scan look clean — fall back to a full-history
-            # scan, the same as ruff/shellcheck/house-rules (Bugbot #65). If the
-            # FALLBACK errors too, RC carries that code into the verdict check
-            # below and the job fails -- it used to flow into the soft-fail
-            # branch and exit 0 ((internal ref)).
+            # gitleaks: 0 = clean, 1 = leaks found; any other code is an
+            # operational error, so fall back to a full-history scan (Bugbot on
+            # (internal ref)). If the FALLBACK errors too, RC carries that code
+            # into the verdict check below -- it used to reach soft-fail ((internal ref)).
             if [ "$RC" != "0" ] && [ "$RC" != "1" ]; then
               echo "::warning::gitleaks range scan errored (exit $RC) — falling back to a full-history scan."
               RC=0
@@ -661,13 +555,10 @@ jobs:
             fi
           fi
 
-          # ONLY 0 AND 1 ARE VERDICTS (Bugbot, (internal ref); (internal ref)). Any
-          # other code -- from the full scan, or from the fallback after the range
-          # scan already failed once -- is a scanner that could not run: a broken
-          # binary, an unreadable repository, a signal death, 126/127. That is not
-          # "zero leaks", and it exits 2 HERE, before the soft-fail branch at the
-          # end of this step can turn it into a green job. soft-fail governs
-          # findings (RC = 1), nothing else. Whitelist, not `= 2` (.github#300).
+          # ONLY 0 AND 1 ARE VERDICTS (Bugbot on (internal ref); (internal ref)): any
+          # other code -- from the full scan or the fallback -- is a scanner that
+          # could not run, not "zero leaks", and exits 2 HERE before soft-fail.
+          # Whitelist, not `= 2` ((internal ref)).
           if [ "$RC" != "0" ] && [ "$RC" != "1" ]; then
             echo "::error::gitleaks could not run (exit $RC) — the result is UNKNOWN, not clean"
             {
@@ -680,10 +571,8 @@ jobs:
           fi
 
           # A report that exists but cannot be read is a scan whose result is
-          # UNKNOWN -- it must never count as zero findings. `|| echo 0` did exactly
-          # that, and under the default soft-fail it exited 0 as all-clear (Bugbot,
-          # (internal ref)). Exit 2 here is deliberately outside the soft-fail path:
-          # soft-fail governs FINDINGS, not a scanner that could not be read.
+          # UNKNOWN, never zero findings (`|| echo 0` did exactly that -- Bugbot
+          # on (internal ref)); exit 2 is outside the soft-fail path on purpose.
           COUNT=0
           if [ -s /tmp/gitleaks.json ]; then
             if ! COUNT=$(jq 'length' /tmp/gitleaks.json 2>/tmp/gitleaks-jq.err); then
@@ -704,23 +593,11 @@ jobs:
           fi
 
           # Captured whole HERE, then sliced with a here-string below -- NOT
-          # `jq ... | head -50`. `head` closes the pipe after row 50; with a big
-          # enough finding set jq is still buffering, so it takes SIGPIPE, and
-          # under pipefail the PIPELINE returns 141. Errexit then aborts the step
-          # mid-summary -- and -e IS on here: Actions runs `run:` as `bash -e {0}`,
-          # so the `set -uo pipefail` above leaves it ON while reading as though it
-          # were off. The damage is not just a short table: the ::error::/::warning::
-          # annotations below never emit, and the soft-fail `exit 0` is skipped, so
-          # a repo configured `soft-fail: true` HARD-fails instead of reporting.
-          # Latent, not live -- it needs ~700+ findings to fill a 64K pipe buffer
-          # (measured: tips at ~250 findings / ~24K, nondeterministically at the
-          # boundary, because it is a race). A here-string is one command, so jq
-          # always runs to completion and the status is its own.
-          # ((internal ref) -- same class as .github#173 and the PII gate's #1409.)
-          #
-          # `|| true` keeps a parse failure non-fatal, which is what the existing
-          # `2>/dev/null` already intended; it is near-unreachable anyway, since
-          # COUNT != 0 means jq already parsed this file once.
+          # `jq ... | head -50`: `head` closes the pipe after row 50, jq takes
+          # SIGPIPE under pipefail, and Actions runs `run:` as `bash -e {0}` so
+          # errexit aborts the step mid-summary -- the annotations never emit and
+          # soft-fail's `exit 0` is skipped ((internal ref), the class the pipefail
+          # early-close gate above exists for). `|| true` keeps a parse failure non-fatal.
           ROWS=""
           if [ "$COUNT" != "0" ]; then
             ROWS=$(jq -r '.[] | "| \(.RuleID) | `\(.File)` | \(.StartLine) | \(.Commit[0:8]) |"' \
@@ -785,14 +662,11 @@ jobs:
           repositories: org-config
           permission-contents: read
 
-      # THE TOOLS REF ((internal ref) D4). `job.workflow_sha` is the commit of THIS
-      # reusable file -- the one the caller pinned -- so the scripts checked out
-      # below are the ones this workflow was reviewed with; a `@main` caller gets
-      # `main`'s. `tools-ref` overrides it to test a tools change against a pinned
-      # workflow. An EMPTY ref would make actions/checkout take the tools repo's
-      # DEFAULT branch fleet-wide, so it is refused here rather than checked out.
-      # The SHA is read out of `toJSON(job)` in shell because actionlint's schema
-      # of the `job` context (1.7.12) does not know `workflow_sha` yet.
+      # THE TOOLS REF ((internal ref) D4, (internal ref)): `job.workflow_sha` is the commit
+      # of THIS reusable file, so the scripts below are the ones it was reviewed
+      # with; `tools-ref` overrides it for a test. An EMPTY ref would check out the
+      # tools repo's DEFAULT branch fleet-wide, so it is refused. `toJSON(job)` because
+      # actionlint's `job` schema (1.7.12) does not know `workflow_sha`.
       - name: Resolve the tools ref, refusing an empty one
         id: tools-ref
         env:
@@ -852,18 +726,11 @@ jobs:
 
       # (internal ref) D3 ((internal ref)): what a repo declares, ships and installs must
       # be reachable from what it runs. Rides THIS job on purpose -- `quality /
-      # house-rules` is a required status check on every train repo's develop
-      # (measured 2026-09-09), so the checker is a gate the day it lands without
-      # 16 branch-protection edits; a new job name would be advice (rule 2)
-      # until each protection was hand-updated.
-      #
+      # house-rules` is a required status check on every train repo's develop, so
+      # the checker is a gate the day it lands without 16 protection edits.
       # WHOLE-TREE, never diff-scoped: removing an import elsewhere is what makes
-      # a pin dead, and that hunk is never in the PR that added the pin.
-      #
-      # Advisory by default (`dead-weight-soft-fail: true`) and hard per caller,
-      # so the fleet does not go red on promotion day. Python >= 3.11 for
-      # tomllib; ubuntu-latest ships 3.12. The version guard is a real refusal,
-      # not a skip: a checker that silently ran nothing would report clean.
+      # a pin dead. Advisory by default (`dead-weight-soft-fail`), hard per
+      # caller; the python >= 3.11 (tomllib) guard is a refusal, not a skip.
       - name: Run the dead-weight checker
         env:
           CONFIG: ${{ '.house-rules.conf' }}
@@ -892,23 +759,13 @@ jobs:
           python3 "$CHECKER" "$@"
 
   # Whole-tree action-pin gate ((internal ref), D10). Hand-pinning does not hold:
-  # while one PR pinned jlumbroso/free-disk-space, a second PR added a NEW
-  # unpinned call site of the same action in a non-overlapping hunk of the same
-  # file — both merged cleanly, no conflict, caught only by a human reading the
-  # diff (#1446/#1449). This job makes that silent recurrence impossible.
-  #
-  # WHOLE-TREE, NEVER DIFF-SCOPED — deliberately. A guard that inspects only
-  # what a PR adds reports clean forever over the existing backlog (the exact
-  # failure mode of PR-mode gitleaks on (internal ref)). Every run scans every
-  # workflow file in the checkout.
-  #
-  # THE GRAMMAR, and why not a YAML parse: pin-checking needs the `uses:` REF
-  # STRINGS, not the workflow's semantic structure. A strict line grammar
-  # (comment lines excluded; quoted refs unwrapped) covers every real workflow
-  # in the fleet, and anything it cannot parse — e.g. `uses: ${{ ... }}`
-  # expressions — is REPORTED as a finding rather than skipped: a guard that
-  # cannot verify must refuse to claim it did ((internal ref) property 2; with
-  # soft-fail off, that refusal is red).
+  # two PRs pinned and re-added the same action in non-overlapping hunks and
+  # both merged cleanly ((internal ref), (internal ref)). WHOLE-TREE, NEVER
+  # DIFF-SCOPED: a guard that inspects only what a PR adds reports clean forever
+  # over the existing backlog. THE GRAMMAR is a strict line grammar over the
+  # `uses:` ref strings, not a YAML parse; anything it cannot parse -- e.g.
+  # `uses: ${{ ... }}` -- is REPORTED, since a guard that cannot verify must
+  # refuse to claim it did ((internal ref) property 2).
   #
   # ALLOWED forms (everything else is a finding):
   #   ./local/path                      repo-local actions
@@ -931,15 +788,9 @@ jobs:
         env:
           # The pin-specific override alone decides this job's posture, so a repo
           # can arm the supply-chain check while the rest of its suite is still
-          # advisory during a migration. That is the whole reason this input is
-          # separate from `soft-fail`.
-          #
-          # It used to read `(inputs.soft-fail || inputs.action-pins-soft-fail)`.
-          # Because `soft-fail` defaults to true, that OR made the override
-          # incapable of EVER arming the job -- it could only ever weaken it --
-          # while 16 of 16 callers pass `action-pins-soft-fail: false` expecting
-          # the opposite, and four of them carry a comment claiming the check is
-          # "Armed ... independent of soft-fail above". It was not ((internal ref)).
+          # advisory. It used to read `(inputs.soft-fail || inputs.action-pins-soft-fail)`,
+          # which -- `soft-fail` defaulting true -- could only ever weaken the job while
+          # 16 of 16 callers passed `action-pins-soft-fail: false` expecting the opposite ((internal ref)).
           SOFT_FAIL: ${{ false && 'true' || 'false' }}
         run: |
           set -euo pipefail
