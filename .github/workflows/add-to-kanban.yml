@@ -16,6 +16,9 @@
 #     file was generated from became `the private source repo`.
 #     A bare name is left alone where the next character is `/` or `#`: that is a
 #     path or branch prefix, or the issue form, which is matched on its own.
+#     A name that is also an ordinary English word, declared as such on the
+#     inventory row, is left alone in prose as well: it is scrubbed only inside a
+#     code span, as `<org>/<repo>` (URL or not), or as `<repo>#N`.
 #   * CODE -- everything else: commands, heredoc bodies, strings a workflow posts,
 #     `repository:` values, URLs, step names -- was NOT edited. An internal
 #     reference there refuses the render (it is a defect in the source). A BARE
