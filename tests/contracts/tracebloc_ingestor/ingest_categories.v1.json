@@ -1,0 +1,29 @@
+{
+  "description": "The category enum of the ingestor's published ingest schema, the list an ingest is validated against. DERIVED by tools/ingest_category_contract.py --write, never hand-edited. The zoo's category directories are asserted equal to it, and it is asserted equal to the producer's develop in CI, so a stale copy cannot pass.",
+  "version": 1,
+  "generated_from": {
+    "path": "tracebloc_ingestor/contracts/schema/ingest.v1.json",
+    "pointer": "/properties/category/enum",
+    "ref": "85dd9d9f4a978a63e6f0e54573ce38ef32a1755d",
+    "ref_branch": "develop",
+    "ref_date": "2026-09-23"
+  },
+  "categories": [
+    "image_classification",
+    "object_detection",
+    "keypoint_detection",
+    "semantic_segmentation",
+    "text_classification",
+    "token_classification",
+    "sentence_pair_classification",
+    "tabular_classification",
+    "tabular_regression",
+    "time_series_forecasting",
+    "time_series_classification",
+    "time_to_event_prediction",
+    "masked_language_modeling",
+    "causal_language_modeling",
+    "seq2seq",
+    "embeddings"
+  ]
+}

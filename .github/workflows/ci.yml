@@ -71,3 +71,111 @@ jobs:
           cache-dependency-path: .github/requirements/survival.txt
       - run: pip install -r .github/requirements/survival.txt
       - run: pytest tests/ -v
+
+  # ── The category gate: model_zoo/ against the ingestor's published enum ──
+  #
+  # The zoo's category list is the set of directories under model_zoo/. The
+  # platform's list is the `category` enum of the ingestor's published ingest
+  # schema. tests/test_zoo_category_contract.py holds the tree to a VENDORED copy
+  # of that enum in every test job above; these two jobs hold the vendored copy to
+  # the producer's develop, because a check against a stale vendored file agrees
+  # with itself.
+  #
+  # 1) Fetch in an ISOLATED job that runs none of this repo's code -- the same
+  #    shape as verify-dumps-engine-pin.yml's fetch-engine-pin. The producer is a
+  #    private repo, so GITHUB_TOKEN cannot read it; the App token is minted,
+  #    scoped to that one repo and contents:read, and used ONLY here. Only the
+  #    schema file crosses to the job that runs the tests.
+  fetch-ingest-schema:
+    timeout-minutes: 10
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Mint an ingestor-read token
+        id: ingestor-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.RELEASE_TRAIN_APP_ID }}
+          private-key: ${{ secrets.RELEASE_TRAIN_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: data-ingestors
+          permission-contents: read
+      - name: Check out the producer's ingest schema
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.repository_owner }}/data-ingestors
+          ref: develop
+          token: ${{ steps.ingestor-token.outputs.token }}
+          path: _producer
+          persist-credentials: false
+          # EVERY CANDIDATE PATH, newest first -- the producer moved its schema
+          # into a contracts/ package and not every branch has moved yet. A path
+          # the checkout does not produce is that candidate's 404; the test job
+          # picks the newest present and refuses, naming every path, if none is.
+          # Kept equal to CANDIDATE_PATHS in tools/ingest_category_contract.py
+          # by tests/test_zoo_category_contract.py. Leading slashes anchor the
+          # patterns at the producer's root (non-cone patterns are
+          # gitignore-style and would otherwise match at any depth).
+          sparse-checkout: |
+            /tracebloc_ingestor/contracts/schema/ingest.v1.json
+            /tracebloc_ingestor/schema/ingest.v1.json
+          sparse-checkout-cone-mode: false
+      # The commit the comparison ran against, for the failure message -- and
+      # LOAD-BEARING FOR THE LAYOUT: upload-artifact roots the archive at the
+      # least common ancestor of what it uploads. With only the one schema file
+      # present that would be its own directory, and the test job would see a
+      # bare ingest.v1.json at neither candidate path. A file at _producer/
+      # pins the root there, so the candidate paths survive the round trip.
+      - name: Record the producer commit
+        run: git -C _producer rev-parse HEAD > _producer/PRODUCER_COMMIT
+      - name: Upload the producer's ingest schema
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ingest-schema
+          path: |
+            _producer/PRODUCER_COMMIT
+            _producer/tracebloc_ingestor/contracts/schema/ingest.v1.json
+            _producer/tracebloc_ingestor/schema/ingest.v1.json
+          if-no-files-found: error
+          retention-days: 1
+
+  # 2) Run the gate. `if: !cancelled()` IS THE FAIL-CLOSED HALF: a job skipped
+  #    because a job it `needs` failed reports SKIPPED, and a skipped check reads
+  #    as passing. So this job runs whether or not the fetch succeeded, and when
+  #    the fetch did not (a fork PR has no secrets; a revoked App; the producer
+  #    unreachable) the download below finds nothing and the marked test FAILS
+  #    naming what it could not read. "Could not look" is red, never green.
+  category-contract:
+    needs: fetch-ingest-schema
+    if: ${{ !cancelled() }}
+    timeout-minutes: 10
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Download the producer's ingest schema
+        # A missing artifact must reach the test as a missing checkout, so the
+        # red names the cause instead of a download error.
+        continue-on-error: true
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: ingest-schema
+          path: _producer
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+      # Stdlib only beyond pytest; unpinned for the reason the framework
+      # requirement files give.
+      - run: pip install pytest
+      - name: model_zoo/ agrees with the vendored category enum
+        run: pytest tests/test_zoo_category_contract.py -v
+      # Selected EXPLICITLY: the marker is deselected everywhere else (see
+      # tests/ingest_producer_marker.py). Runs even when the step above is red,
+      # so one run reports both layers.
+      - name: The vendored category enum agrees with the producer's develop
+        if: ${{ !cancelled() }}
+        env:
+          INGEST_PRODUCER_CHECKOUT: _producer
+        run: pytest tests/test_zoo_category_contract.py -m ingest_producer -v

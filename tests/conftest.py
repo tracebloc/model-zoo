@@ -48,6 +48,11 @@ def _prep_offline_weights():
 
 _PREP = _prep_offline_weights()
 
+# The `ingest_producer` marker: deselected unless `-m` names it. The hooks live in
+# their own file so the category-gate tests can drive the SAME hooks in a throwaway
+# session; see tests/ingest_producer_marker.py for why deselected, not skipped.
+from ingest_producer_marker import pytest_collection_modifyitems, pytest_configure  # noqa: E402,F401
+
 # Force the closed door for the whole test session (not setdefault — the point
 # is that the suite proves templates build with the hub shut, regardless of the
 # ambient environment).
