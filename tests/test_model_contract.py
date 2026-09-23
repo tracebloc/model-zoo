@@ -47,24 +47,21 @@ OPTIONAL_THIRD_PARTY = {
     "timm",
 }
 
-KNOWN_CATEGORIES = {
-    "image_classification",
-    "object_detection",
-    "text_classification",
-    "semantic_segmentation",
-    "keypoint_detection",
-    "tabular_classification",
-    "tabular_regression",
-    "time_series_forecasting",
-    "time_series_classification",
-    "time_to_event_prediction",
-    "masked_language_modeling",
-    "causal_language_modeling",
-    "token_classification",
-    "seq2seq",
-    "embeddings",
-    "sentence_pair_classification",
-}
+# The category list is NOT restated here. It used to be: a sixteen-entry literal,
+# one more hand-kept copy of the platform's category list that nothing compared to
+# anything. It is now the vendored copy of the ingestor's published enum, which
+# tests/test_zoo_category_contract.py holds equal to both the model_zoo/ tree and the
+# producer itself.
+def _published_categories() -> frozenset[str]:
+    spec = importlib.util.spec_from_file_location(
+        "ingest_category_contract", ROOT / "tools" / "ingest_category_contract.py"
+    )
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return frozenset(module.load_vendored())
+
+
+KNOWN_CATEGORIES = _published_categories()
 
 
 def _read_framework(path: pathlib.Path) -> str | None:
