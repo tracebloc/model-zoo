@@ -1,8 +1,8 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/customer-priority-bump.yml`
-# (blob 14769d1a63aded09733a6e2433911de9dc7c4618) folded with the private source repo's own caller of it,
-# `.github/workflows/customer-priority-bump-caller.yml` (blob ac9868ebd437e0c4ee636ca9ff1a68b5a2f72fa0), for a PUBLIC repo: GitHub lets a
+# (blob 7d6260ad219999a7623150aec3978f6e4c0bf0d1) folded with the private source repo's own caller of it,
+# `.github/workflows/customer-priority-bump-caller.yml` (blob cc2d991f335a4a40624d514c9b8992b5369d5ec1), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
 # reusable's jobs inline -- the triggers are the caller's; every `inputs.*` is
@@ -57,62 +57,17 @@ name: Label-driven issue triage
 #   work-type:bug   -> move the issue's kanban card from `Backlog` to `Ready`
 #                      ((internal ref)). Defects skip refinement.
 #
-# WHY BOTH LIVE IN ONE FILE, AND WHY THE FILENAME NO LONGER MATCHES
-# ----------------------------------------------------------------
-# The bug rule needs exactly one thing: to run on `issues: labeled` in every
-# repo. This reusable is the ONLY place in the org that already does, and 16 of
-# the 19 repos already call it. Adding a second reusable instead would need a
-# `repo-inventory.yml` row for all 19 repos plus a caller rollout -- and
-# `repo-inventory.yml` is guarded by `conformance-gate.yml`, so that change
-# cannot merge until an org audit passes on its exact head sha, which every other
-# merge invalidates. A rule that has been unimplemented since it was written does
-# not need to wait behind that; it needs to run.
-#
-# The cost is honest and stated: the file name and the 16 per-repo caller names
-# still say "customer priority bump", so a bug-label run shows up in each repo's
-# Actions tab under that name. The workflow's own `name:` above is the half that
-# could be fixed without touching 16 repos, so it was. Renaming the file is a
-# caller rollout (BUGBOT.md property 1: land the callee first) and is still open
-# work -- it no longer waits on anything, since the wiring below is complete.
-#
-# WIRED EVERYWHERE NOW. Every repo has a caller (`.github`'s landed under
-# (internal ref)) and `customer_priority_bump_caller_missing` is GONE from
-# `repo-inventory.yml` -- no repo carries that key any more, so any text sending a
-# reader to that lookup is describing a key that cannot answer. (The STRING still
-# appears elsewhere in the repo, in `scripts/reason-citations.py` and in this
-# comment; it is the INVENTORY that no longer records it. @aptracebloc on #350.)
-#
-# THE LABEL GAP IS CLOSED, AND NOW ASSERTED ((internal ref)). This block used to
-# record a live defect: repos carrying this caller with no `work-type:*` labels at
-# all. GitHub silently DROPS a template label the target repo lacks -- no error, no
-# annotation, no run -- so the issue was filed unlabelled, `bug-to-ready` never saw
-# its label, and the card sat in `Backlog`, the refinement queue nobody pulls from.
-# The exact miss (internal ref) was filed to close, surviving in the repos a
-# caller-presence check calls done.
-#
-# Measured 2026-08-27 before the fix: `(internal ref)`, `(internal ref)` and `(internal ref)`
-# had ZERO of the seven triage labels, and `(internal ref)` had TWO of seven. All
-# twenty now have all seven, and `.github/workflows/triage-labels.yml` runs daily to
-# keep it that way -- it derives the label domain from the two producers (this file's
-# `*-label` input defaults plus its `--add-label` writes, and every
-# `.github/ISSUE_TEMPLATE/*.yml` `labels:` entry) and asserts each label exists in
-# every repo the inventory declares. So a label deleted in a repo's Settings UI is a
-# red run rather than a silent stop.
-#
-# TWO LESSONS WORTH MORE THAN THE FIX, both about the DOMAIN and not the answer:
-#
-#   * `(internal ref)` was invisible to (internal ref) as filed, because that ticket
-#     derived over the `work-type:*` PREFIX. That repo had `work-type:bug` and
-#     `priority` and none of the other five, so a prefix sweep called it covered
-#     while four labels its templates apply were being dropped. Deriving from a
-#     prefix rather than from the producers is CLAUDE.md rule 6's vocabulary gap --
-#     committed by the ticket that was written to close it.
-#   * An earlier version of this comment named TWO repos, because it checked the
-#     repos the previous prose happened to name instead of the domain the inventory
-#     declares (@aptracebloc, #350).
-#
-# Both are why the check parses the producers and the inventory and holds no list of
-# its own. Do not reintroduce one here.
+# WHY BOTH LIVE IN ONE FILE, AND WHY THE FILENAME NO LONGER MATCHES: the bug
+# rule needs to run on `issues: labeled` in every repo, and this reusable is the
+# only one that already does; a second reusable would need a `repo-inventory.yml`
+# row per repo behind the conformance gate. The file and caller names still say
+# "customer priority bump"; renaming them is a caller rollout, still open work.
+# Every repo carries a caller ((internal ref)). THE TRIAGE LABELS EXIST FLEET-WIDE
+# AND A CHECK SAYS SO ((internal ref)): GitHub silently DROPS a template label the
+# repo lacks, so `triage-labels.yml` derives the label domain from the two
+# producers (this file's `*-label` defaults and its `--add-label` writes, plus
+# every issue template's `labels:`) and asserts each exists in every declared
+# repo -- it holds no list of its own ((internal ref)), and neither should this comment.
 
 on:
   issues:
@@ -123,19 +78,14 @@ jobs:
     name: bump / bump
     if: github.event.label.name == 'from:customer'
     runs-on: ubuntu-slim
-    # Under `ubuntu-slim`'s hard 15-minute cap, so the DECLARED timeout is the
-    # one that runs: with none, the job inherits GitHub's 360-minute default and
-    # the platform kills it at 15 with no timeout report at all ((internal ref)
-    # item 2; scripts/runner-tier.py asserts it for every slim job).
-    # Measured: no run in the sampled window; its sibling `bug-to-ready` already declares 10.
+    # Declared because `ubuntu-slim` kills at its 15-minute cap with no timeout
+    # report ((internal ref) item 2; scripts/runner-tier.py asserts it for every
+    # slim job). Measured: no run in the sampled window; its sibling `bug-to-ready` already declares 10.
     timeout-minutes: 10
     steps:
-      # Authenticates as the tracebloc-release-train App ((internal ref)) instead of
-      # one human's PAT. This one needs `issues: write` -- it labels an issue in the
-      # calling repo -- which the App gained alongside `organization_projects: write`.
-      # `owner:` makes the token ORG-scoped so the same mint works for every caller.
-      # No fallback to the old PAT: a fallback would let a broken App path look like
-      # a working migration.
+      # Authenticates as the tracebloc-release-train App ((internal ref)), ORG-scoped
+      # by `owner:` so the same mint works for every caller, with no fallback to a
+      # PAT (it would let a broken App path look like a working migration).
       - name: Mint an installation token
         id: app-token
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
@@ -143,24 +93,13 @@ jobs:
           app-id: ${{ secrets.RELEASE_TRAIN_APP_ID }}
           private-key: ${{ secrets.RELEASE_TRAIN_APP_PRIVATE_KEY }}
           owner: ${{ github.repository_owner }}
-          # LEAST PRIVILEGE, DERIVED FROM THIS JOB'S ONE CALL ((internal ref)). The
-          # step below runs `gh issue edit --add-label priority` and nothing else:
-          # it resolves the issue and the repo's label set (Issues read) and writes
-          # the label (Issues write). `issues: write` subsumes both.
-          #
-          # Nothing here touches a project board, a pull request, or repository
-          # content -- so `organization-projects`, `pull-requests` and
-          # `contents:write` all drop, along with the administration/actions/checks
-          # reads the unscoped mint was carrying.
-          #
-          # `repositories:` is deliberately NOT narrowed, matching the reasoning on
-          # the `bug-to-ready` mint below: repo narrowing is measured in this org
-          # for a READ (add-to-kanban.yml, (internal ref)) and not for a WRITE, and an
-          # unmeasured narrowing on a workflow that fires from every repo in the
-          # fleet fails red on every customer-labelled issue.
-          #
-          # NOT PROVEN BY READING: an under-scoped token fails at the call, not at
-          # the mint. The first `from:customer` label after this lands is the test.
+          # LEAST PRIVILEGE, DERIVED FROM THIS JOB'S ONE CALL ((internal ref)): the
+          # step below runs `gh issue edit --add-label priority` and nothing else,
+          # and `issues: write` subsumes the reads it needs. No board, PR or content
+          # scope. `repositories:` is deliberately NOT narrowed, as on the
+          # `bug-to-ready` mint below: repo narrowing is measured in this org for a
+          # READ ((internal ref)) and not for a WRITE that fires from every repo. An
+          # under-scoped token fails at the call, not at the mint.
           permission-issues: write
 
       - name: Label the customer issue as priority
@@ -170,31 +109,14 @@ jobs:
           REPO_FULL: ${{ github.repository }}
         run: |
           set -euo pipefail
-          # D5: priority is a binary "priority" label, not a project field. The
-          # label is visible on the issue itself and filterable everywhere; the
-          # Priority single-select field has been removed from the board.
-          #
-          # THE TRIGGER LABEL'S OWN DESCRIPTION NOW SAYS SO TOO, and for months it
-          # said the opposite ((internal ref)). All twenty enrolled repos advertised
-          # `from:customer` as "auto-bumps Priority to P1" -- an outcome D5 deleted
-          # and this step stopped producing -- so the label that fires the rule
-          # promised a board value nobody would ever see. It was uniformly wrong
-          # because .github#364 created the labels four repos lacked by faithfully
-          # copying names, colours and descriptions off the repos that had them.
-          # Swept across all twenty on 2026-08-27, byte-identical, to:
-          #
-          #   Filed from a customer request — automation adds the binary `priority` label
-          #
-          # Derived, not chosen: the sweep refused any text that did not name the
-          # label the `gh issue edit` line below actually writes, and refused the
-          # removed vocabulary outright. Change one, change the other.
-          #
-          # NOT UNDER A CHECK YET, said plainly rather than left to be assumed:
-          # `triage-labels-check.py` (.github#364) asserts a triage label EXISTS in
-          # every enrolled repo, not that its description still describes this step
-          # -- which is exactly how the stale text survived D5 with a green fleet.
-          # (internal ref) closes that, on top of #364 rather than beside it, because
-          # the file it extends is not on `develop` yet.
+          # D5: priority is a binary `priority` label, not a project field; the
+          # Priority single-select was removed from the board. THE TRIGGER LABEL'S
+          # OWN DESCRIPTION SAYS SO TOO ((internal ref)): for months every enrolled
+          # repo advertised `from:customer` as "auto-bumps Priority to P1", a
+          # promise D5 deleted, swept to one byte-identical text on 2026-08-27 that
+          # names the label this line writes. `triage-labels-check.py` asserts a
+          # label EXISTS, not that its description still describes this step --
+          # (internal ref) (open) closes that gap.
           gh issue edit "$ISSUE_NUMBER" --repo "$REPO_FULL" --add-label priority
           echo "-> Issue #$ISSUE_NUMBER labelled 'priority'"
 
@@ -203,27 +125,15 @@ jobs:
   # ---------------------------------------------------------------------------
   # THE RULE, quoted from `org-standards.md`: "label them `work-type:bug` (the
   # Bug template does it) and the board moves the card straight into `Ready`".
-  #
-  # Nothing implemented it. `add-to-kanban.yml` adds every new issue at
-  # `Backlog` and no workflow read the label afterwards, so the rule was carried
-  # by whoever remembered. Measured 2026-08-22: seven bug-labelled tickets filed
-  # in one day ((internal ref), #2327, #2329, #2340, #2341, #2344,
-  # (internal ref)) all landed in `Backlog` and all seven needed a hand-run
-  # mutation. A 100% miss rate is the tell that nothing does it at all -- a rule
-  # people mostly follow produces a mixed record.
-  #
-  # `Ready` is the queue engineers pull from; `Backlog` is the refinement queue
-  # nobody pulls from. That split is the whole point, so a defect filed correctly
-  # and labelled correctly was invisible to the people meant to pick it up.
+  # Nothing implemented it until (internal ref) (a 100 % miss rate on one day's
+  # seven bug tickets -- the tell that nothing does it at all). `Ready` is the
+  # queue engineers pull from; `Backlog` is the refinement queue nobody pulls from.
   bug-to-ready:
     name: bump / bug-to-ready
-    # A COST GATE, not the decision. It exists so that an unrelated label -- and
-    # every repo in the fleet fires this workflow on every `labeled` event -- does
-    # not mint an App token. The decision is `label_gate` in the step below, where
-    # it can be extracted, run and mutated by
-    # `scripts/tests/bug-to-ready-selftest.py`. `==` here is exact string
-    # equality, so this can only ever be STRICTER than that gate: it may skip work
-    # the gate would decline, never admit work the gate refuses.
+    # A COST GATE, not the decision: an unrelated label must not mint an App
+    # token. The decision is `label_gate` in the step below, extracted, run and
+    # mutated by `scripts/tests/bug-to-ready-selftest.py`; `==` is exact, so this
+    # can only be STRICTER than that gate, never admit what it refuses.
     if: github.event_name == 'issues' && github.event.label.name == 'work-type:bug'
     runs-on: ubuntu-slim
     timeout-minutes: 10
@@ -231,20 +141,11 @@ jobs:
     # App installation token minted below.
     permissions: {}
     steps:
-      # LEAST PRIVILEGE, DERIVED FROM WHAT THIS RUNS ((internal ref)), unlike the
-      # `bump` job above which still carries the App's full installation grant
-      # (`mint-scope.py`'s EXEMPT row for this file is about that job, not this
-      # one). This step reads one issue's project items and writes one
-      # single-select field on an org project -- so `issues: read` plus
-      # `organization-projects: write` is the whole requirement.
-      #
-      # `repositories:` is deliberately NOT narrowed here. The board write needs
-      # the ORG-level grant that `owner:` yields, and the interaction between repo
-      # narrowing and an org ProjectV2 write is measured for a READ
-      # (kanban-columns.yml, (internal ref)) and not for a write. An unmeasured
-      # narrowing on a workflow that fires for every bug in the fleet fails red on
-      # every defect filed, and this job's whole point is that a defect should not
-      # need a human to notice it.
+      # LEAST PRIVILEGE, DERIVED FROM WHAT THIS RUNS ((internal ref)): one issue's
+      # project items read, one single-select write on an org project -- so
+      # `issues: read` plus `organization-projects: write` is the whole requirement
+      # (the `bump` mint above is scoped the same way). `repositories:` is NOT narrowed: the org ProjectV2 write needs `owner:`'s
+      # org grant, and narrowing is measured for a READ only ((internal ref)).
       - name: Mint an installation token
         id: app-token
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
@@ -255,17 +156,58 @@ jobs:
           permission-issues: read
           permission-organization-projects: write
 
+      # THE SHARED GraphQL GUARD, `scripts/lib/graphql-read.sh`, is sourced by the
+      # step below after this checkout -- the three steps every reusable makes
+      # ((internal ref) D4; (internal ref), (internal ref)).
+      - name: Mint a read-only token for org-config (private; the caller's own token cannot read it)
+        id: org-config-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.RELEASE_TRAIN_APP_ID }}
+          private-key: ${{ secrets.RELEASE_TRAIN_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: org-config
+          permission-contents: read
+
+      # THE TOOLS REF ((internal ref) D4, (internal ref)): `job.workflow_sha` is the commit
+      # of THIS reusable file, so the scripts below are the ones it was reviewed
+      # with; `tools-ref` overrides it for a test. An EMPTY ref would check out the
+      # tools repo's DEFAULT branch fleet-wide, so it is refused. `toJSON(job)` because
+      # actionlint's `job` schema (1.7.12) does not know `workflow_sha`.
+      - name: Resolve the tools ref, refusing an empty one
+        id: tools-ref
+        env:
+          TOOLS_REF: ${{ 'main' }}
+          JOB_CONTEXT: ${{ toJSON(job) }}
+        run: |
+          if [ -z "$TOOLS_REF" ]; then
+            case "$JOB_CONTEXT" in
+              *'"workflow_sha"'*) TOOLS_REF="${JOB_CONTEXT#*\"workflow_sha\": \"}"; TOOLS_REF="${TOOLS_REF%%\"*}" ;;
+            esac
+          fi
+          if ! [[ "$TOOLS_REF" =~ ^[0-9a-f]{40}$ || ( -n "$TOOLS_REF" && "$TOOLS_REF" != *[![:alnum:]._/-]* ) ]]; then
+            echo "::error::the tools ref is empty or not a ref (${TOOLS_REF:-<empty>}); an empty ref would check out the tools repo's default branch instead of the commit this workflow was pinned at. Refusing."
+            exit 1
+          fi
+          echo "ref=$TOOLS_REF" >> "$GITHUB_OUTPUT"
+          echo "tools ref: $TOOLS_REF"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: tracebloc/org-config
+          token: ${{ steps.org-config-token.outputs.token }}
+          ref: ${{ 'main' }}
+          path: .org-config-tools
+          persist-credentials: false
+
       - name: Promote the card to Ready, but only from Backlog
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           ORG: ${{ 'tracebloc' }}
           PROJECT_NUMBER: ${{ 2 }}
           BUG_LABEL: ${{ 'work-type:bug' }}
-          # THE TWO ANCHORS, QUOTED SO THE BOARD CHECK CAN SEE THEM.
-          # `scripts/kanban-columns-check.py` collects every board column name a
-          # WRITERS workflow quotes on a code line and asserts it exists on the
-          # live board -- which is what stops a rename in the Projects UI turning
-          # this job into a silent no-op. Unquoted YAML values are invisible to it.
+          # THE TWO ANCHORS, QUOTED SO `scripts/kanban-columns-check.py` CAN SEE
+          # THEM: it asserts every quoted column name a WRITERS workflow carries
+          # exists on the live board; unquoted YAML values are invisible to it.
           SOURCE_COLUMN: "Backlog"
           TARGET_COLUMN: "Ready"
           EVENT_NAME: ${{ github.event_name }}
@@ -319,46 +261,18 @@ jobs:
           esac
           # selftest:label-gate-end
 
-          # Every GraphQL call in this job -- both reads AND the write -- goes through
-          # here. ONE function rather than a check per call site: the two reads
-          # each carried their own inline copy and the write carried none, which
-          # is exactly how the write came to be fail-open (Bugbot, .github#313).
-          # The function is the org-wide one ((internal ref) made every board
-          # writer carry it); the selftest extracts it by name, so the assertion
-          # and the mutation drive the same code the job runs (rule 9).
-          # selftest:graphql-read-start  (byte-identical in every workflow that carries it)
-          # THE BODY DECIDES WHETHER A GraphQL READ SUCCEEDED, never the exit code
-          # alone. An HTTP 200 whose body carries `errors[]` (rate limit, partial
-          # payload, a NOT_FOUND on a sub-field) fed straight into `.data...nodes[]?`
-          # produces NOTHING, and nothing read as "not on the project" -- so the
-          # Item-closed automation could write Cancelled over shipped work
-          # (Bugbot on quickstart#5, (internal ref)). Empty and non-object bodies are
-          # refused for the same reason: a search over nothing finds nothing, and
-          # "found nothing" must never mean "absent". This function never
-          # whitelists an error type; the one benign NOT_FOUND is the caller's call.
-          #   $1  the raw payload   $2  what was being read (prefixes the message)
-          reject_graphql_errors() {
-            if ! jq -e 'type == "object"' >/dev/null 2>&1 <<< "$1"; then
-              echo "::error::$2: the response was not readable JSON (empty, truncated or not an object), so it cannot be shown to be error-free -- UNREADABLE, not absent" >&2
-              return 1
-            fi
-            if jq -e 'has("errors")' <<< "$1" >/dev/null 2>&1; then
-              echo "::error::$2: the response carries GraphQL errors[] ($(jq -r '[.errors[]? | ((.type // "?") + ": " + (.message // "?"))] | join("; ")' <<< "$1")) -- UNREADABLE, not absent" >&2
-              return 1
-            fi
-            return 0
-          }
+          # Every GraphQL call in this job -- both reads AND the write -- goes
+          # through the shared guard ((internal ref)); the write once carried no
+          # check and was fail-open (Bugbot on (internal ref)).
+          # selftest:graphql-read-start  (the ONE line every GraphQL step carries; the function is scripts/lib/graphql-read.sh)
+          . .org-config-tools/scripts/lib/graphql-read.sh
           # selftest:graphql-read-end
 
 
           # ---- 2. the board, read ONCE ------------------------------------
-          # One query for the project id, the Status field id, the target option
-          # id AND the option ORDER. The order is what the monotonic gate is
-          # derived from, so reading it in the same response as the ids means the
-          # decision and the write cannot be made against two different boards.
-          #
-          # FAIL CLOSED on the read ((internal ref) rule 3): an unreadable board is
-          # not evidence that the card may move.
+          # One query for the ids AND the option ORDER the monotonic gate derives
+          # from, so the decision and the write cannot see two different boards.
+          # FAIL CLOSED on the read (rule 3): an unreadable board is no evidence.
           # shellcheck disable=SC2016  # the $names are GraphQL variables, not shell - keep literal
           if ! PROJ=$(gh api graphql -f query='
             query($org: String!, $num: Int!) {
@@ -409,13 +323,9 @@ jobs:
           fi
 
           # ---- 3. where is the card now? ----------------------------------
-          # THE ISSUE'S OWN projectItems, not a scan of the project. Project #2
-          # carries ~700 items, so a project-side scan is a pagination bug waiting
-          # to happen; the issue knows which cards it has. `totalCount` is read so
-          # a card beyond the page cannot be reported as "not on the board".
-          #
-          # The retry is for the `opened`+template case: the Bug template applies
-          # the label at creation, so this can race `add-to-kanban.yml`.
+          # THE ISSUE'S OWN projectItems, not a scan of the project; `totalCount`
+          # is read so a card beyond the page cannot read as "not on the board".
+          # The retry covers the Bug template racing `add-to-kanban.yml` on `opened`.
           ITEM_ID=""; CURRENT_COL=""; ARCHIVED=""
           for attempt in 1 2 3 4 5; do
             # shellcheck disable=SC2016  # the $names are GraphQL variables, not shell - keep literal
@@ -467,17 +377,11 @@ jobs:
             if [ "$attempt" -lt 5 ]; then sleep 5; fi
           done
 
-          # FAIL CLOSED, LOUDLY, AND THE DIRECTION IS THE DECISION HERE.
-          #
-          # The three sibling consumers of the board chose their failure paths as a
-          # SET ((internal ref)), and this one resembles `advance-deploy-env.yml`: no
-          # fallback, abort. `kanban-closure-router.yml` exits 0 on a card it cannot
-          # find because declining to write is its conservative end state -- it is
-          # protecting shipped state from being overwritten. Declining here is not
-          # conservative: it reproduces the exact defect this job exists to fix, a
-          # defect parked in `Backlog` that nobody reads. And `kanban-reconcile.yml`
-          # may skip because it runs weekly and gets another go; a `labeled` event
-          # fires ONCE, so a green no-op is the last anyone hears of it.
+          # FAIL CLOSED, LOUDLY, AND THE DIRECTION IS THE DECISION ((internal ref)):
+          # the router exits 0 on a card it cannot find because declining to write
+          # protects shipped state; declining HERE reproduces the defect this job
+          # exists to fix, and a `labeled` event fires ONCE, so a green no-op is the
+          # last anyone hears of it (bug-to-ready-selftest.py pins the refusal).
           if [ -z "$ITEM_ID" ] || [ "$ITEM_ID" = "null" ]; then
             echo "::error::issue #${NUMBER} carries '${BUG_LABEL}' but is not on project" \
                  "#${PROJECT_NUMBER} after 5 tries. It needs '${TARGET_COLUMN}' and this run could not" \
@@ -580,9 +484,8 @@ jobs:
                  "'${CURRENT_COL:-<no Status>}' and needs '${TARGET_COLUMN}' by hand" >&2
             exit 1
           fi
-          # The write goes through the SAME rejection as the two reads. This event
-          # fires exactly ONCE, so a false success here is permanent: the step logs a
-          # Backlog -> Ready move, stays green, and the card never moved.
+          # The write goes through the SAME rejection as the reads: this event fires
+          # ONCE, so a false success is permanent (Bugbot on (internal ref)).
           reject_graphql_errors "$WRESP" \
             "the Status write for issue #${NUMBER} came back with GraphQL errors at exit 0 - the card is still in '${CURRENT_COL:-<no Status>}' and needs '${TARGET_COLUMN}' by hand" || exit 1
           # Absence of errors is not presence of the write. Confirm the mutation
