@@ -1,7 +1,7 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/desk-dispatch.yml`
-# (blob c5fbe745cef58d3e781aebd0272788ef0c555fa6) folded with the private source repo's own caller of it,
+# (blob c07964acfd88ee49f74bf3630eab953111041072) folded with the private source repo's own caller of it,
 # `.github/workflows/desk-dispatch-caller.yml` (blob 1c8303c08d4b550fac12706a916a022f0a658701), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
@@ -167,6 +167,15 @@
 # is minted ONLY to read this private repo's checker (`permission-contents: read`
 # on the private source repo); the routine token and fire URL come from the caller.
 #
+# WHERE THE SESSION RUNS is a switch, read from the CALLER's variables (a reusable
+# sees its caller's `vars`): unset, the routine above; `vars.DESK_REVIEW_RUNNER`
+# set to `action`, a run of the caller repo's desk-review.yml instead, after the
+# same gate, guard and lock (`fire_review` in scripts/desk-dispatch.py;
+# (internal ref), a pilot, off by default). It needs one more mint, taken
+# only while the switch is on, and it is a REPOSITORY variable by design: set at
+# org level, every caller would dispatch a workflow its repo does not have and
+# refuse red.
+#
 # NO `paths:` FILTER may ever be added by a caller; NO `cancel-in-progress` here
 # (reusable-no-cancel: a cancelled corpse on an unchanged sha reddens the rollup).
 name: Desk dispatch
@@ -327,6 +336,26 @@ jobs:
           owner: ${{ github.repository_owner }}
           repositories: ${{ github.event.repository.name }}
           permission-administration: read
+      # A FIFTH scoped mint, and ONLY while the caller repo's review-runner switch
+      # is on (`vars.DESK_REVIEW_RUNNER` is `action`, (internal ref) -- a
+      # pilot, off by default): `actions: write` on the caller repo, for exactly one
+      # call, the `workflow_dispatch` of desk-review.yml that stands in for the
+      # routine's /fire (`dispatch_review_workflow` in scripts/desk-dispatch.py). As
+      # the App, because the caller's github.token holds no `actions` grant. Off, it
+      # is never minted, so the switch left unset changes nothing here.
+      # `continue-on-error`, like the two mints above: a refused mint leaves the
+      # token EMPTY, and the script refuses only when it has a review to start.
+      - name: Mint an actions token for the review workflow (only while the review-runner switch is on)
+        id: review-dispatch-token
+        if: vars.DESK_REVIEW_RUNNER == 'action'
+        continue-on-error: true
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.RELEASE_TRAIN_APP_ID }}
+          private-key: ${{ secrets.RELEASE_TRAIN_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-actions: write
       # THE TOOLS REF ((internal ref) D4, (internal ref)): `job.workflow_sha` is the commit
       # of THIS reusable file, so the scripts below are the ones it was reviewed
       # with; `tools-ref` overrides it for a test. An EMPTY ref would check out the
@@ -366,6 +395,8 @@ jobs:
           DISPATCH_T0: ${{ steps.started.outputs.at }}
           DESK_RERUN_TOKEN: ${{ steps.rerun-token.outputs.token }}
           DESK_PROTECTION_TOKEN: ${{ steps.protection-token.outputs.token }}
+          DESK_REVIEW_RUNNER: ${{ vars.DESK_REVIEW_RUNNER }}
+          DESK_REVIEW_DISPATCH_TOKEN: ${{ steps.review-dispatch-token.outputs.token }}
           DESK_REVIEWER: ${{ 'tracebloc-review' }}
           DESK_FIRE_URL: ${{ (vars.DESK_ROUTINE_FIRE_URL) }}
           DESK_ROUTINE_TOKEN: ${{ secrets.DESK_ROUTINE_TOKEN }}
