@@ -1,8 +1,8 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/desk-dispatch.yml`
-# (blob bdb288c08131d6411197ecdaacf3caa66fc5d1ff) folded with the private source repo's own caller of it,
-# `.github/workflows/desk-dispatch-caller.yml` (blob a79f6adf63a69f5f01c29b70b803ab72c8451104), for a PUBLIC repo: GitHub lets a
+# (blob c5fbe745cef58d3e781aebd0272788ef0c555fa6) folded with the private source repo's own caller of it,
+# `.github/workflows/desk-dispatch-caller.yml` (blob 1c8303c08d4b550fac12706a916a022f0a658701), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
 # reusable's jobs inline -- the triggers are the caller's; every `inputs.*` is
@@ -60,8 +60,8 @@
 #
 # WHO REVIEWS. `reviewer` is the identity whose review requests count and whose
 # routine fires. It is a dedicated review account, not a person: the routine runs
-# as that account (self-review mode in the skill, `CRC_SELF_REVIEW=1`), so the
-# staffing pass requests it on every PR it may review and the review lands as
+# as that account (self-review mode in the skill, `CRC_SELF_REVIEW=1`), so every
+# repo's CODEOWNERS requests it on every PR it may review and the review lands as
 # that account. A person's login here would make their name stand in for a bot
 # on every approval, and could never cover their own PRs.
 #
@@ -80,24 +80,20 @@
 #       would pass if evaluated now (its threads were      in place, as the App; no
 #       resolved after it ran -- (internal ref))             session; its completion is
 #                                                          the next event
-#   a GitHub Actions check_suite                        -> skip BEFORE any read
-#   PR opened or marked ready, non-draft               -> NO session: this job requests
-#                                                          `reviewer` AS THE APP and
-#                                                          assigns the author; the
-#                                                          review_requested that raises
-#                                                          fires the review
-#   ... with `reviewer` already requested              -> a review session, IF the head
-#                                                          is green (a no-op request
-#                                                          raises nothing; gated like
-#                                                          every other review)
+#   PR opened or marked ready, non-draft, with
+#     `reviewer` already requested (CODEOWNERS)       -> a review session, IF the head
+#                                                          is green
+#   ... `reviewer` not requested                       -> skip: nothing here staffs
 #
-# WHY THE REVIEWER REQUEST IS MADE WITH AN APP TOKEN. GitHub starts no workflow run
-# for an event raised by GITHUB_TOKEN (post-release-bump.yml measured the same
-# recursion guard), so a request made with `github.token` would land and raise a
-# `review_requested` no caller sees. A second installation token, scoped to this
-# caller repo and pull-requests: write, is minted for that ONE call; label writes
-# and every read stay on `github.token`. Drafts, bots, promotion heads, team
-# requests and the reviewer's own PRs are skipped with the reason in the job summary.
+# WHO STAFFS: CODEOWNERS ((internal ref)). Every repo with a desk caller carries
+# `* @tracebloc-review` in its CODEOWNERS, so GitHub requests `reviewer` when a PR
+# opens or leaves draft, and that request -- made as the PR's author, not as
+# GITHUB_TOKEN -- raises the `review_requested` that fires the review. This job
+# used to make the same request as the App and assign the author; CODEOWNERS made
+# the first request on 1,214 of 1,230 PRs merged 17-24 Sep and this job on 13, so
+# that arm and its App token went. The sweep never staffs either: CODEOWNERS is the
+# ONE staffing path. Drafts, bots, promotion heads, team requests and the
+# reviewer's own PRs are skipped with the reason in the job summary.
 #
 # THE GREEN GATE (Lukas, 2026-09-14). The review account is the most expensive
 # check on a PR, so nothing fires until the head is green; Bugbot is part of the
@@ -107,25 +103,25 @@
 # the dispatchers' own `... / dispatch` runs excluded; `mergeable_state` is read
 # for `dirty` only.
 #
-# WHY workflow_run AND NEVER check_suite. The caller's own run is a GitHub Actions
-# check suite, and a `check_suite` trigger cannot filter by app, so a caller on
-# `check_suite: [completed]` re-triggers itself for ever (Bugbot on (internal ref)
-# and (internal ref)); `workflow_run` names the CI workflows it follows and cannot
-# name itself. Callers MUST send `workflow_run: {workflows: [<every pull-request
-# workflow of that repo>], types: [completed]}` and grant `checks: read` +
-# `statuses: read`. THE GATE DEGRADES PER CALLER: a caller from before the gate
-# grants neither read, so a 403 on the head read fires the review UNGATED with the
-# missing grants named in the job summary ((internal ref)) -- never a red run in
-# ten repos. A pull-request workflow the caller does not list leaves the review
-# unfired when it finishes last ((internal ref), (internal ref)).
+# WHY workflow_run, NOT check_suite. `workflow_run` names the CI workflows a caller
+# follows, so its list is a contract caller-drift can check, and a `check_suite`
+# trigger cannot filter by app. No caller subscribes to `check_suite`, and GitHub
+# starts no workflow for a check suite GitHub Actions created, so the self-trigger
+# loop (internal ref) feared cannot start (its script-side refusal was deleted as
+# unreachable, (internal ref)). Callers MUST send `workflow_run: {workflows:
+# [<every pull-request workflow of that repo>], types: [completed]}` and grant
+# `checks: read` + `statuses: read`. There is no ungated degrade any more: every
+# desk caller grants both reads, and a 403 on the head read refuses like any failed
+# read -- a red run, no review ((internal ref)). A pull-request workflow the caller
+# does not list leaves the review unfired when it finishes last
+# ((internal ref), (internal ref)).
 #
 # NO `permissions:` BLOCK IN THIS REUSABLE, DELIBERATELY. A reusable's declared
 # permissions are a DEMAND on the caller, not a grant: a caller granting less is
 # a `startup_failure` with no job, no log and no summary -- every desk run from a
-# pre-gate caller ended that way for fourteen hours after (internal ref) promoted,
-# and the degrade path in the script never started. Without a block the job's
-# token carries exactly the caller's grants and the shortfall reaches the script
-# as the 403 the degrade path was written for.
+# pre-gate caller ended that way for fourteen hours after (internal ref) promoted.
+# Without a block the job's token carries exactly the caller's grants, and a
+# shortfall reaches the script as a 403 on the head read, which refuses by name.
 # `test_the_reusables_declare_no_permissions_block` pins this.
 #
 # THE LOCK. `claude-desk:reviewing` on the PR means a session is on it; a second
@@ -280,20 +276,6 @@ jobs:
           owner: ${{ github.repository_owner }}
           repositories: org-config
           permission-contents: read
-      # SCOPED to the caller repo and to pull-requests: write, for exactly one
-      # call: the reviewer request on a staff decision (see the header) -- an
-      # event raised by this token starts the caller's `review_requested` run.
-      # Only the two event shapes that can produce a `staff` decision mint it.
-      - name: Mint a pull-requests token for the reviewer request (an App event fires a run; github.token's does not)
-        id: request-token
-        if: github.event_name == 'pull_request' && (github.event.action == 'opened' || github.event.action == 'ready_for_review')
-        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
-        with:
-          app-id: ${{ secrets.RELEASE_TRAIN_APP_ID }}
-          private-key: ${{ secrets.RELEASE_TRAIN_APP_PRIVATE_KEY }}
-          owner: ${{ github.repository_owner }}
-          repositories: ${{ github.event.repository.name }}
-          permission-pull-requests: write
       # SCOPED to the caller repo and to actions: write, for exactly one call: the
       # in-place re-run of a STALE `bugbot / review` run ((internal ref);
       # `heal_stale_gate` in scripts/desk-dispatch.py), as the App so the re-run's
@@ -301,8 +283,8 @@ jobs:
       # DELIBERATELY: a refused mint must not redden every dispatch, and the
       # script refuses ONLY when it finds a stale red it could have healed. Minted
       # on EVERY event this dispatcher acts on, the condition naming no action:
-      # an action list here would be a second copy of the script's arms (a
-      # staffing event can meet a recorded verdict too, via `decide_ungated`).
+      # an action list here would be a second copy of the script's arms (an
+      # `opened` event can meet a recorded verdict too, via `decide_ungated`).
       - name: Mint an actions token for re-running a stale Bugbot gate in place (tolerates a refused mint)
         id: rerun-token
         if: github.event_name == 'workflow_run' || github.event_name == 'pull_request'
@@ -382,7 +364,6 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           DISPATCH_T0: ${{ steps.started.outputs.at }}
-          DESK_REQUEST_TOKEN: ${{ steps.request-token.outputs.token }}
           DESK_RERUN_TOKEN: ${{ steps.rerun-token.outputs.token }}
           DESK_PROTECTION_TOKEN: ${{ steps.protection-token.outputs.token }}
           DESK_REVIEWER: ${{ 'tracebloc-review' }}
