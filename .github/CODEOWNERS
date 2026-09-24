@@ -1,0 +1,11 @@
+# Code review is automated: the dedicated review account is requested on every
+# pull request the moment it opens, and a review from it satisfies the
+# required approving review. Before this file the review dispatcher made that
+# request itself when a pull request opened; this file makes it GitHub's own,
+# so it holds for every pull request whatever the dispatcher does.
+# The `*` rule below is the only rule here; there are no path rules. If one
+# is ever added, remember that the last matching rule wins in CODEOWNERS: a
+# path rule displaces the `*` line for its path, and whether this account is
+# requested there is decided by that rule alone, not by the line below.
+
+* @tracebloc-review
