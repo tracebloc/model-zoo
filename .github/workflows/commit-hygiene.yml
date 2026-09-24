@@ -1,10 +1,12 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
-# Public-safe copy of `.github/workflows/commit-hygiene.yml` (blob 1f019314b3e799375e63e3ebd671617cb4698942) for a PUBLIC repo:
+# Public-safe copy of `.github/workflows/commit-hygiene.yml` (blob 1f43a3c403550992eb9e8f974256dd8db1569e6c) for a PUBLIC repo:
 # the same workflow, byte for byte, except that its comments are scrubbed as
-# described below. Private repos carry the original; the conformance audit
-# compares a public repo's copy against THIS file and a private repo's
-# against the original.
+# described below and that 11 line(s) are LEFT OUT: the source brackets them
+# `# public-render: omit-begin` .. `# public-render: omit-end`, and each one wires a secret a
+# public repo must not receive. Private repos carry the original, region
+# included; the conformance audit compares a public repo's copy against THIS
+# file and a private repo's against the original.
 #
 # PUBLIC SURFACE. This file is delivered to a public repo. Exactly what was
 # scrubbed, and what was not:
@@ -35,9 +37,10 @@
 name: Commit hygiene
 
 # A COPY, not a reusable (`copies:` in repo-inventory.yml, beside add-to-kanban.yml):
-# the public content repos carry the public-safe render of this file byte for byte
-# under .github/workflows/, delivered by scripts/onboard_repo.py and content-asserted
-# by scripts/caller-drift.py. Private repos keep this original. (internal ref).
+# the public content repos carry the public-safe render of this file under
+# .github/workflows/, delivered by scripts/onboard_repo.py and content-asserted by
+# scripts/caller-drift.py. Private repos keep this original. (internal ref),
+# (internal ref).
 #
 # WHY THIS EXISTS. The org ruleset `content-repos-commit-hygiene` on the
 # `exposure: content` repos refused customer names in commit messages by NAMING
@@ -45,26 +48,40 @@ name: Commit hygiene
 # anonymous reader, parameters included, so the names the org must never publish
 # were published as the rule meant to keep them private. The regex is generic now
 # (cross-repo `name#N`, org-qualified repo names, RFC ids), which left the tenant
-# half with no enforcement. This workflow is that half, moved to where the needles
-# stay secret: they are read from the same org secret that feeds the weekly
-# anonymous exposure audit's tenant scan, parsed by scripts/public_surface.py, and
-# a hit is reported by the needle's NUMBER only -- never the name, never the
-# matched text. The logic is scripts/commit-hygiene.py; this file is the wiring.
+# half with no enforcement. This workflow scans every commit of a pull request;
+# the logic is scripts/commit-hygiene.py, this file is the wiring. It has TWO
+# SHAPES, and the inventory's `visibility` picks which one a repo carries:
+#
+#   * THIS ORIGINAL (private repos) wires the tenant needles from the org secret
+#     that also feeds the weekly anonymous exposure audit, parsed by
+#     scripts/public_surface.py, and scans each message against them AND against
+#     the internal-reference rule. A tenant hit is reported by the needle's NUMBER
+#     only -- never the name, never the matched text.
+#   * THE PUBLIC RENDER (scripts/render-self-contained.py) LEAVES THE NEEDLES OUT:
+#     the wiring below sits in a `public-render: omit` region, so a public repo
+#     receives neither the secret nor a line that names it. The needles are tenant
+#     names, and a public repository's Actions runner is not where those belong.
+#     The job there scans for INTERNAL REFERENCES only -- a private repo's issue
+#     (`<repo>#N`), its org-qualified name, an RFC id -- derived from the
+#     inventory in the tools checkout, and reports a hit by KIND, never by text.
 #
 # WHERE IT RUNS. Only where the commit log is a public surface: the job is gated
 # on `github.event.repository.private == false`, so the private repo that holds
 # this canonical skips it (a tenant name in a private commit log is nobody's
-# business), and every public repo that carries the copy runs it. Arm it as a
+# business), and every public repo that carries the render runs it. Arm it as a
 # required status check on the content repos' `develop` once it has been observed
 # green there (CLAUDE.md rule 4: never land a red gate).
 #
 # FAIL CLOSED (CLAUDE.md rule 3), and the script says which way:
 #   exit 0  every commit scanned, clean
-#   exit 1  a hit -- `commit <sha7>: subject/body matches private needle #N`
-#   exit 2  could not tell: a fork head (no secrets), an absent or empty secret
-#           ("tenant needles not configured -- the scan did not run"), more
-#           commits than GitHub's endpoint lists (250, refused before any read),
-#           a list that does not match the event's count, or a failed read.
+#   exit 1  a hit -- `commit <sha7>: subject/body matches private needle #N`, or
+#           `commit <sha7>: subject/body carries an internal reference (<kind>, ...)`
+#   exit 2  could not tell: a fork head (no secrets), needles that are WIRED but
+#           resolved EMPTY (the secret did not reach this repository -- the scan
+#           did not run), a needle that does not compile, an inventory the rule
+#           cannot be built from, more commits than GitHub's endpoint lists (250,
+#           refused before any read), a list that does not match the event's
+#           count, or a failed read.
 # A fork PR is refused in the FIRST step below rather than by the script: the
 # script is fetched from the tools repo with an App token minted from secrets a
 # fork head does not receive, so on a fork the mint would fail first and the log
@@ -111,7 +128,7 @@ jobs:
         if: ${{ github.event.pull_request.head.repo.fork }}
         run: |
           set -euo pipefail
-          echo "::error::commit hygiene: COULD NOT TELL -- the pull request head is a FORK, and a fork PR receives no secrets, so the tenant needles cannot be read and the scan did not run. A maintainer reads the commit messages by hand before merging."
+          echo "::error::commit hygiene: COULD NOT TELL -- the pull request head is a FORK, and a fork PR receives no secrets, so the tools repo cannot be checked out and the scan did not run. A maintainer reads the commit messages by hand before merging."
           exit 2
 
       # The checker lives in the tools repo, which is PRIVATE, so the checkout
@@ -142,16 +159,20 @@ jobs:
         with:
           python-version: '3.12'
 
-      # Nothing is pip-installed: the checker and the module it imports use only
-      # the standard library and shell out to `gh`, preinstalled on the runner.
-      - name: Scan the pull request's commit messages against the tenant needles
+      # The checker builds the internal-reference rule from the inventory in that
+      # checkout, which is parsed as YAML, not grepped -- the one dependency,
+      # pinned as the exposure audit pins it. A failed install fails the job
+      # before the scan step, never a scan against an unreadable inventory.
+      - name: Install PyYAML
+        run: python -m pip install --quiet --disable-pip-version-check 'pyyaml==6.0.2'
+
+      # The scan reads the messages through `gh`, preinstalled on the runner. Which
+      # checks run is read off the ENVIRONMENT'S KEYS, never its values: the tenant
+      # needles are wired below in the private original and left out of the public
+      # render, and the script scans tenants only where the key is present.
+      - name: Scan the pull request's commit messages
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
-          # The tenant needles, one regex per line, from the org secret the
-          # anonymous exposure audit already reads. An EMPTY value is exit 2, not
-          # green: an unscanned log is not a clean one. The secret must be made
-          # available to the public repos that carry this copy.
-          ORG_CONFIG_TENANT_NEEDLES: ${{ secrets.PUBLISH_FORBIDDEN_TENANTS }}
         run: python3 .org-config-tools/scripts/commit-hygiene.py
