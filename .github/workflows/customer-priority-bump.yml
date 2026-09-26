@@ -1,7 +1,7 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/customer-priority-bump.yml`
-# (blob 7d6260ad219999a7623150aec3978f6e4c0bf0d1) folded with the private source repo's own caller of it,
+# (blob 74a2b0ced319c5e2c54f23c5809c61015fe883d2) folded with the private source repo's own caller of it,
 # `.github/workflows/customer-priority-bump-caller.yml` (blob cc2d991f335a4a40624d514c9b8992b5369d5ec1), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
@@ -59,6 +59,10 @@ name: Label-driven issue triage
 #                      removed from the board under D5.
 #   work-type:bug   -> move the issue's kanban card from `Backlog` to `Ready`
 #                      ((internal ref)). Defects skip refinement.
+#                      Then ask the bug-fix sweep for a pass at once, so the
+#                      Ready queue drains sooner than on its cron. The pass
+#                      fires the longest-idle bugs first, so behind a backlog
+#                      this one waits its turn ((internal ref)).
 #
 # WHY BOTH LIVE IN ONE FILE, AND WHY THE FILENAME NO LONGER MATCHES: the bug
 # rule needs to run on `issues: labeled` in every repo, and this reusable is the
@@ -504,3 +508,45 @@ jobs:
             echo
             echo "\`${BUG_LABEL}\` on issue #${NUMBER}: \`${CURRENT_COL:-<no Status>}\` -> \`${TARGET_COLUMN}\`"
           } >> "$GITHUB_STEP_SUMMARY"
+
+      # THE EVENT EDGE ((internal ref)). The board sweep runs on a cron GitHub lands late
+      # or skips, so a card that just reached Ready waited for it; this asks for a pass
+      # now. No decision lives here -- the sweep is the one implementation (rule 9), so a
+      # label on a card in any column costs one board read and nothing more, and a burst
+      # collapses in the sweep's `concurrency` group into one pass that reads them all.
+      # No `--ref`: the sweep runs from its default branch, the code its cron runs.
+      # A DISPATCHING ARM, SO IT FAILS OPEN ((internal ref)): a refused mint or dispatch
+      # is a ::warning:: on a green run; the card has moved and the cron is the backstop.
+      # Its own mint, one repo and `actions: write` only, as dispatch-sweep.yml's.
+      - name: Mint an actions token for org-config (to ask the bug-fix sweep for a pass)
+        id: sweep-token
+        continue-on-error: true
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.RELEASE_TRAIN_APP_ID }}
+          private-key: ${{ secrets.RELEASE_TRAIN_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: org-config
+          permission-actions: write
+
+      - name: Ask the bug-fix sweep for a pass now
+        env:
+          SWEEP_TOKEN: ${{ steps.sweep-token.outputs.token }}
+          SWEEP_REPO: tracebloc/org-config
+          SWEEP_WORKFLOW: bugfix-sweep.yml
+        run: |
+          # selftest:sweep-kick-start
+          kick_sweep() {   # $1=token  $2=repo  $3=workflow file
+            if [ -z "${1:-}" ]; then
+              echo "::warning::no actions token for ${2} - the bug-fix sweep's next scheduled pass picks this bug up"
+              return 0
+            fi
+            if _out=$(GH_TOKEN="$1" gh workflow run "$3" --repo "$2" 2>&1); then
+              echo "asked ${2}'s ${3} for a pass"
+            else
+              echo "::warning::could not dispatch ${3} on ${2} (${_out//$'\n'/ }) - the bug-fix sweep's next scheduled pass picks this bug up"
+            fi
+            return 0
+          }
+          # selftest:sweep-kick-end
+          kick_sweep "${SWEEP_TOKEN:-}" "$SWEEP_REPO" "$SWEEP_WORKFLOW"
