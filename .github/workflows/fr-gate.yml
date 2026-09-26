@@ -47,7 +47,7 @@
 # The comments below are the reusable's own and describe the reusable; where
 # they mention `inputs.*` or callers, read them as history.
 #
-# The trigger types of its label re-arm companion `.github/workflows/fr-gate-label-caller.yml` (blob fdfb860ba72c2c115075baecf29d0741ab2968ca) are folded into `on:` -- ONE public file carries both.
+# The trigger types of its label re-arm companion `.github/workflows/fr-gate-label-caller.yml` (blob a6c672934f6b1c03c475ab38b520c2c5b10199df) are folded into `on:` -- ONE public file carries both.
 
 name: FR gate
 
