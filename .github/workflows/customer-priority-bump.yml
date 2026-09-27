@@ -1,7 +1,7 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/customer-priority-bump.yml`
-# (blob 74a2b0ced319c5e2c54f23c5809c61015fe883d2) folded with the private source repo's own caller of it,
+# (blob fcf9c4824b8d1e5ba56a549abc3e409fe64eca3c) folded with the private source repo's own caller of it,
 # `.github/workflows/customer-priority-bump-caller.yml` (blob cc2d991f335a4a40624d514c9b8992b5369d5ec1), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
@@ -514,10 +514,17 @@ jobs:
       # now. No decision lives here -- the sweep is the one implementation (rule 9), so a
       # label on a card in any column costs one board read and nothing more, and a burst
       # collapses in the sweep's `concurrency` group into one pass that reads them all.
-      # No `--ref`: the sweep runs from its default branch, the code its cron runs.
-      # A DISPATCHING ARM, SO IT FAILS OPEN ((internal ref)): a refused mint or dispatch
-      # is a ::warning:: on a green run; the card has moved and the cron is the backstop.
-      # Its own mint, one repo and `actions: write` only, as dispatch-sweep.yml's.
+      # The pass runs on the sweep repo's DEFAULT branch, the code its cron runs, and
+      # that branch is READ at run time, never written down here. REST only: the ref
+      # comes from `GET /repos/{repo}` (repository metadata, which every installation
+      # token can read) and the dispatch is `POST .../dispatches` (`actions: write`).
+      # `gh workflow run` without `--ref` looks the default branch up over GraphQL
+      # (`defaultBranchRef`), and this actions-only token is refused that read, so
+      # every kick made that way failed before it dispatched anything.
+      # A DISPATCHING ARM, SO IT FAILS OPEN ((internal ref)): a refused mint, read or
+      # dispatch is a ::warning:: on a green run; the card has moved and the cron is
+      # the backstop. Its own mint, one repo and `actions: write` only, as
+      # dispatch-sweep.yml's.
       - name: Mint an actions token for org-config (to ask the bug-fix sweep for a pass)
         id: sweep-token
         continue-on-error: true
@@ -541,8 +548,13 @@ jobs:
               echo "::warning::no actions token for ${2} - the bug-fix sweep's next scheduled pass picks this bug up"
               return 0
             fi
-            if _out=$(GH_TOKEN="$1" gh workflow run "$3" --repo "$2" 2>&1); then
-              echo "asked ${2}'s ${3} for a pass"
+            if ! _ref=$(GH_TOKEN="$1" gh api "repos/$2" --jq .default_branch 2>&1) || [ -z "$_ref" ]; then
+              _ref=${_ref//$'\n'/ }
+              echo "::warning::could not read ${2}'s default branch (${_ref:-an empty answer}) - nothing dispatched; the bug-fix sweep's next scheduled pass picks this bug up"
+              return 0
+            fi
+            if _out=$(GH_TOKEN="$1" gh api -X POST "repos/$2/actions/workflows/$3/dispatches" -f ref="$_ref" 2>&1); then
+              echo "asked ${2}'s ${3} for a pass on ${_ref}"
             else
               echo "::warning::could not dispatch ${3} on ${2} (${_out//$'\n'/ }) - the bug-fix sweep's next scheduled pass picks this bug up"
             fi

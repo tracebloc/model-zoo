@@ -1,7 +1,7 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/desk-dispatch.yml`
-# (blob c07964acfd88ee49f74bf3630eab953111041072) folded with the private source repo's own caller of it,
+# (blob 10bb57bf61d5e56267c086ae21022336d33e7e64) folded with the private source repo's own caller of it,
 # `.github/workflows/desk-dispatch-caller.yml` (blob 1c8303c08d4b550fac12706a916a022f0a658701), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
@@ -129,6 +129,14 @@
 # The session removes the label when it finishes (skill `--pr` mode, step 4); a
 # label older than `stale-minutes` is a dead session's and is stolen.
 #
+# THE PR'S ONE CLAIM ((internal ref) part 2). Once the lock is won, the
+# dispatcher also takes the claim every desk and ship session takes before it works
+# a PR -- `claude-ship:driving-<n>`, a label only one creator gets -- under a token
+# it makes up for the session, and writes `claim=<token>` on the PR's payload line.
+# The session adopts it, so nothing takes the PR in the minutes the fired session
+# spends booting. A fire that starts no session gives it back, owner-checked
+# (`take_session_claim` / `release_session_claim` in scripts/desk-dispatch.py).
+#
 # THE OTHER LOCK. `claude-ship:driving` is the AUTHOR's: a review fired while it
 # is held reviews a head the author is replacing (45 % of desk lock windows
 # overlapped a live ship lock and 12 of the 13 that filed no review sat inside
@@ -143,8 +151,9 @@
 # rules 3, 8). This job is NOT a required context anywhere, so a red run blocks
 # nothing; it is the operator's signal that reviews stopped flowing. THE ONE
 # NON-2xx THAT IS NOT A REFUSAL is the routine's own rate limit ((internal ref)):
-# waited when the interval fits the budget, otherwise DEFERRED -- lock released,
-# `::warning::`, run green -- because the 20-minute sweep re-fires it.
+# DEFERRED on the first answer, never waited out in the job ((internal ref)) --
+# lock and claim released, `::warning::`, run green -- because the 20-minute sweep
+# re-fires it.
 #
 # THE CANONICAL CALLER is `desk-dispatch-caller.yml` beside this file
 # ((internal ref)); a caller calls `@main`, so any edit here a caller depends on
