@@ -1,7 +1,7 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/fr-pass-comment.yml`
-# (blob 6d72b23618aab458f6792e2453429c6e8adc79c9) folded with the private source repo's own caller of it,
+# (blob d8f166432687627c59dad6f09fa7163d17894ca8) folded with the private source repo's own caller of it,
 # `.github/workflows/fr-pass-comment-caller.yml` (blob bc01ef34bf604788e80a0b19d31b8fe7edfaae15), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
@@ -204,6 +204,8 @@ jobs:
           # Via the environment, never interpolated into the script: a comment
           # body is attacker-controlled text and must not reach the shell parser.
           COMMENT_BODY: ${{ github.event.comment.body }}
+          # The item's labels as the event carries them, for the `fr-hold` read.
+          LABELS: ${{ toJSON(github.event.issue.labels.*.name) }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           BOARD_URL: ${{ github.server_url }}/orgs/${{ 'tracebloc' }}/projects/${{ 2 }}
         run: |
@@ -409,6 +411,37 @@ jobs:
               "_Release-train promotion PRs are exempt from this rule automatically. To allow self sign-off on everything org-wide, set \`allow-self-signoff: true\` on \`fr-pass-comment.yml\`._"
             exit 1
           fi
+
+          # ------------------------------------------- 3b. is the card held?
+          # selftest:fr-hold-start
+          # A HOLD IS A LABEL, NOT PROSE ((internal ref)). A reviewer's HOLD used to
+          # be a comment, and a later /fr-pass moved the card anyway ((internal ref),
+          # moved four minutes after it was held). `fr-hold` on the item is the
+          # hold; removing it is the release. Read the way fr-gate.yml reads
+          # `skip-fr-gate`, so onboard_repo.py's label derivation finds it. A
+          # here-string, not a pipe into `grep -q` (the pipefail early-close class).
+          #
+          # FAIL CLOSED ON AN UNREADABLE LIST ((internal ref)). A grep miss is the
+          # only "not held" signal, so an empty, `null` or non-array LABELS read as
+          # "no hold" and moved a held card. Unless LABELS is the JSON array of
+          # names `toJSON()` promises, nobody can say whether the item is held, so
+          # the card stays put. `jq -e` on empty input exits non-zero too.
+          if ! jq -e 'type == "array" and all(.[]; type == "string")' \
+                 <<< "$LABELS" > /dev/null 2>&1; then
+            decide labels-unreadable \
+              "⚠️ \`/fr-pass\` was **not** applied: the item's labels could not be read from the event, so whether it carries \`fr-hold\` is unknown and its card stays where it is." \
+              "" \
+              "Comment \`/fr-pass\` again. If this repeats, it is a bug in the handler, not something you did. Run log: $RUN_URL"
+            exit 1
+          fi
+          if grep -q '"fr-hold"' <<< "$LABELS"; then
+            decide held \
+              "✋ \`/fr-pass\` was **not** applied: this item carries the \`fr-hold\` label, so its card stays where it is." \
+              "" \
+              "A functional reviewer put it on hold; the reason is on this thread. To release the hold, remove the \`fr-hold\` label, then comment \`/fr-pass\` again."
+            exit 1
+          fi
+          # selftest:fr-hold-end
 
           # ----------------------------------------- 4. resolve the board item
           REPO_NAME="${REPO_FULL#*/}"
