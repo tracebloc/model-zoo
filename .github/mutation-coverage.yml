@@ -1,0 +1,46 @@
+# Mutation coverage declaration. Read by `mutation-coverage / check`
+# (.github/workflows/mutation-coverage.yml, a generated file).
+#
+# `guards:` says WHERE guards live, never which exist: a script added under
+# tools/ is in the set the day it lands, and reads as UNCOVERED until a row
+# file names it or it is listed under `exempt:`.
+#
+# `rows:` lists the files that hold MUTATION ROWS, by name. A row starts from
+# the real, passing input, asserts it passes, applies one change, asserts the
+# change applied, and asserts the exact finding the tool reports. A row file
+# names each tool it covers by its repo-relative path, literally.
+#
+# THE GATE COUNTS A NAME, NOT A ROW. tests/test_engine_pin_drift_guard.py holds
+# the rows for tools/check_engine_pin_drift.py. It also names
+# tools/verify_dumps_against_engine_pin.py, only to read `_PROVENANCE_KEYS`
+# from it, so the gate reports that tool covered although no row breaks it.
+# It cannot be listed below (an entry for a covered tool is STALE), so the
+# issue that owns the list, tracebloc/model-zoo#84, covers it too.
+#
+# `exempt:` is a RATCHET: an entry whose tool gains a row is STALE and an entry
+# the base does not carry is NEW, both red, so the list only shrinks. To cover
+# a tool, add its rows, add the file to `rows:` and delete its entry here in
+# the same PR.
+guards:
+  - tools/*.py
+rows:
+  - tests/test_engine_pin_drift_guard.py
+exempt:
+  - path: tools/check_dump_coverage.py
+    ticket: tracebloc/model-zoo#84
+  - path: tools/derive_seed_excluded.py
+    ticket: tracebloc/model-zoo#84
+  - path: tools/ingest_category_contract.py
+    ticket: tracebloc/model-zoo#84
+  - path: tools/od_acceptance_sweep.py
+    ticket: tracebloc/model-zoo#84
+  - path: tools/prep_offline_weights.py
+    ticket: tracebloc/model-zoo#84
+  - path: tools/seed_contract.py
+    ticket: tracebloc/model-zoo#84
+  - path: tools/seed_index.py
+    ticket: tracebloc/model-zoo#84
+  - path: tools/sync_zoo_weights.py
+    ticket: tracebloc/model-zoo#84
+  - path: tools/verify_backbone_seeds.py
+    ticket: tracebloc/model-zoo#84
