@@ -2,7 +2,7 @@
 #
 # Self-contained copy of the reusable workflow `.github/workflows/desk-dispatch.yml`
 # (blob b5f0cbbfe7e920c1a189b0c04ae23b388e3d5876) folded with the private source repo's own caller of it,
-# `.github/workflows/desk-dispatch-caller.yml` (blob 210af38cc9324d8c1d13f89b68f5035a3742848d), for a PUBLIC repo: GitHub lets a
+# `.github/workflows/desk-dispatch-caller.yml` (blob adb8c063d98eb394118f010f8bc46bcfada4e43f), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
 # reusable's jobs inline -- the triggers are the caller's; every `inputs.*` is
