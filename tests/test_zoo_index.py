@@ -115,3 +115,16 @@ def test_a_packaged_template_is_named_by_its_directory() -> None:
     assert build_index.template_name(
         pathlib.PurePosixPath("image_classification/pytorch/resnet_18.py")
     ) == "resnet_18"
+
+
+def test_sdk_scratch_copies_are_not_templates(tmp_path: pathlib.Path) -> None:
+    """``upload_model()`` leaves a gitignored ``tmpmodel_<name>/`` copy beside a
+    template; it must not become a row a CI clone does not have."""
+    template = 'framework = "sklearn"\ncategory = "tabular_regression"\n'
+    real = tmp_path / "tabular_regression" / "sklearn" / "ridge.py"
+    real.parent.mkdir(parents=True)
+    real.write_text(template)
+    scratch = tmp_path / "tabular_regression" / "sklearn" / "tmpmodel_ridge" / "ridge.py"
+    scratch.parent.mkdir()
+    scratch.write_text(template)
+    assert [path for path, _ in build_index.discover(tmp_path)] == [real]

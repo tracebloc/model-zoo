@@ -317,10 +317,19 @@ def template_name(rel: pathlib.PurePosixPath) -> str:
     return parts[2] if len(parts) > 3 else rel.stem
 
 
-def discover() -> list[tuple[pathlib.Path, dict]]:
+#: Directories the SDK's ``upload_model()`` leaves beside a template, holding a
+#: verbatim copy of it. Gitignored (``tmpmodel_*/``), so absent from CI and
+#: present in many checkouts; indexing them would add rows no clone has.
+SCRATCH_DIR_PREFIX = "tmpmodel_"
+
+
+def discover(root: pathlib.Path = MODEL_ROOT) -> list[tuple[pathlib.Path, dict]]:
     """Every template under model_zoo/, in id order, with its module constants."""
     found = []
-    for path in sorted(MODEL_ROOT.rglob("*.py")):
+    for path in sorted(root.rglob("*.py")):
+        rel_dirs = path.relative_to(root).parts[:-1]
+        if any(part.startswith(SCRATCH_DIR_PREFIX) for part in rel_dirs):
+            continue
         consts = _module_constants(path)
         if isinstance(consts.get("framework"), str):
             found.append((path, consts))
