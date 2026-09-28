@@ -209,6 +209,7 @@ on:
       - Code quality
       - Commit hygiene
       - FR gate
+      - Mutation coverage
       - Route kanban Status on closure
       - Set PR card Status on project
       - Verify dumps against engine pin

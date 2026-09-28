@@ -1,0 +1,199 @@
+# GENERATED FILE -- DO NOT EDIT BY HAND.
+#
+# Self-contained copy of the reusable workflow `.github/workflows/mutation-coverage.yml`
+# (blob d66e6e442ec3822bb59f836e2883986c386dcb06) folded with the private source repo's own caller of it,
+# `.github/workflows/mutation-coverage-caller.yml` (blob 239a5c175a6a05ee61c3ae490177b9f7387df3bb), for a PUBLIC repo: GitHub lets a
+# public repo `uses:` a reusable workflow only from a public repo, and the
+# reusables live in the private source repo. So this file carries the
+# reusable's jobs inline -- the triggers are the caller's; every `inputs.*` is
+# resolved to a literal (repo-inventory.yml's `caller_inputs` floor, else the
+# reusable's default -- the caller's own toolchain choices are NOT copied); the
+# App-token secrets are named directly; a job whose condition resolves to a
+# constant false is omitted; and each job's display name keeps the
+# `mutation-coverage / ` prefix so the check contexts branch protection requires do
+# not change. Scripts are still fetched from the private source repo at run time with a
+# read-only App installation token; on a fork PR that token cannot be minted
+# (no secrets), so the checkout fails closed rather than running untrusted input.
+# Where the copy checks the private source repo out, its `tools-ref` is the literal `main` --
+# the ref every caller of the reusable pins -- because a public copy has no
+# reusable to take the commit from (the private original defaults to its own).
+#
+# PUBLIC SURFACE. This file is delivered to a public repo. Exactly what was
+# scrubbed, and what was not:
+#
+#   * COMMENT TEXT -- a whole-line YAML `#` comment, a `#`-first line of a `run:`
+#     script that is not inside a heredoc, and this header -- was scrubbed: every
+#     private-repo issue reference, private repo name (org-qualified OR bare),
+#     RFC id and tenant name became `(internal ref)`, and the private repo this
+#     file was generated from became `the private source repo`.
+#     A bare name is left alone where the next character is `/` or `#`: that is a
+#     path or branch prefix, or the issue form, which is matched on its own.
+#     A name that is also an ordinary English word, declared as such on the
+#     inventory row, is left alone in prose as well: it is scrubbed only inside a
+#     code span, as `<org>/<repo>` (URL or not), or as `<repo>#N`.
+#   * CODE -- everything else: commands, heredoc bodies, strings a workflow posts,
+#     `repository:` values, URLs, step names -- was NOT edited. An internal
+#     reference there refuses the render (it is a defect in the source). A BARE
+#     private repo name is never judged in code at all: several are also public
+#     product identifiers -- an image a public chart installs, a package name, a
+#     branch prefix -- so only the org-qualified spelling refuses there, with one
+#     exception: the name of the private repo this file was generated from, which
+#     the code states verbatim because the workflow checks that repo out and
+#     fetches its scripts from it at run time.
+#
+# Regenerate:  python3 scripts/render-self-contained.py          (in the private source repo)
+# Verify:      python3 scripts/render-self-contained.py --check  (make selftest-self-contained)
+#
+# The comments below are the reusable's own and describe the reusable; where
+# they mention `inputs.*` or callers, read them as history.
+
+name: Mutation coverage
+
+# Reusable workflow (the private source repo, epic (internal ref)).
+# EVERY GUARD HAS A MUTATION ROW, OR A TICKETED EXEMPTION. The repo declares
+# where its guards and its mutation rows live in `.github/mutation-coverage.yml`;
+# the gate derives the guard set from the tree, finds each guard's full path in
+# a row file, and holds the EXEMPT list to a ratchet against the PR's base.
+# `scripts/mutation-coverage.py` carries the rules and their reasoning; this file
+# is the wiring, and only says what the script cannot. The rows themselves run
+# at night; this check only proves a row EXISTS, so it is cheap enough for every
+# pull request.
+#
+# ARMING THIS IS THREE STEPS, IN THIS ORDER (the order bugbot-gate.yml and
+# release-note-check.yml took): (1) this file reaches `main` -- every caller
+# pins `@main`, so a caller added first dies with `startup_failure`; (2) one PR
+# per repo adds the caller AND the declaration, and flips that repo's
+# `mutation-coverage.yml` cell in repo-inventory.yml, caller first and row
+# after (the ADOPTION RECIPE below); the check is ADVICE; (3) the repo's PR
+# declares `mutation-coverage / check` in its `required_checks_pending`, the
+# context is observed green on `develop`, and an org admin arms it. Never the reverse:
+# a required context no workflow reports leaves every PR waiting for ever.
+#
+# NO `paths:` FILTER, and the caller must not add one: a path-filtered required
+# check never reports on a PR the filter skips, and that PR waits at "Expected --
+# waiting for status" for ever. A PR that touches no guard still runs, and that
+# is also what catches a guard deleted with its EXEMPT entry left behind.
+#
+# WHAT A CALLER MUST TRIGGER ON: `pull_request` with at least `[opened,
+# reopened, synchronize, ready_for_review]`, plus `merge_group` where the repo
+# uses a merge queue (a required check the queue does not see blocks every
+# entry). `BASE_SHA` below reads the base from either payload. No `edited`: the
+# verdict depends on the tree, never on the PR's title or body. A caller MUST
+# NOT set `cancel-in-progress: true` (scripts/reusable-no-cancel.py).
+#
+# ADOPTION RECIPE, one PR per repo:
+#   1. The declaration, at `.github/mutation-coverage.yml` -- its grammar is the
+#      docstring of scripts/mutation-coverage.py. `guards:` says WHERE guards
+#      live, never which exist; `rows:` names the files that hold mutation rows.
+#      A ROW FILE MUST NAME EACH GUARD BY ITS REPO-RELATIVE PATH, LITERALLY:
+#      `ROOT / "scripts" / "x.py"` or an import by module name does not, and the
+#      guard reads as UNCOVERED until a row names `scripts/x.py`. Every gap
+#      today goes in `exempt:` with the ticket that will close it; that first
+#      list is accepted as the seed, and from then on it can only shrink. A repo
+#      with no row file yet declares `rows: []` and exempts EVERY guard (the
+#      docstring's ZERO ROW FILES).
+#   2. The caller, `.github/workflows/mutation-coverage-caller.yml`, pinned
+#      `@main`: generated by `scripts/onboard_repo.py` from the private source repo's own
+#      caller once the private source repo has one (until then onboarding reports "author by
+#      hand", and the shape is the one `release-note-check-caller.yml` has, with
+#      this file's triggers and `secrets:` block). `(internal ref)` and `(internal ref)`
+#      are private rows and call `@main` like the rest; the public `model-zoo`
+#      and `quickstart` cannot call a private reusable and get the rendered,
+#      self-contained form (`scripts/render-self-contained.py`, held by
+#      caller-drift).
+#   3. In repo-inventory.yml, the repo's `mutation-coverage.yml` cell flips from
+#      `exempt: *mutation_coverage_rollout_pending` to required, in the same PR
+#      as its caller -- caller first, row after, so the audit never requires a
+#      caller that is not there. Then step (3) of the arming order above.
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, ready_for_review]
+
+# Only `contents: read`: the gate reads the caller's tree and history and
+# nothing else. Requesting more would exceed a minimal caller's grant and fail
+# the run at startup with no jobs.
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: mutation-coverage / check
+    # No `if:`. A required check must report on every PR it is asked about; a
+    # skipped job reports nothing a protection rule can wait on.
+    # `ubuntu-slim` ((internal ref)): two checkouts, one token mint and
+    # one `git ls-files` pass -- a one-minute job.
+    runs-on: ubuntu-slim
+    timeout-minutes: 10
+    steps:
+      # The CALLER's tree FIRST: a checkout at the workspace root cleans the
+      # directory, so one taken after the tools checkout would delete
+      # `.org-config-tools`. Full history, because the EXEMPT ratchet reads the
+      # declaration AT THE BASE COMMIT. The merge result (the default ref) is
+      # what would land, so that is the tree the gate judges. The tools copy is
+      # untracked there, and the gate reads only `git ls-files`.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      # Same shape as code-quality.yml and release-note-check.yml: the gate lives
+      # here, not in the calling repo, and this repo is PRIVATE, so the checkout
+      # needs a read-only App token minted from the two secrets the caller
+      # passes by name (Q5).
+      - name: Mint a read-only token for org-config (private; the caller's own token cannot read it)
+        id: org-config-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.RELEASE_TRAIN_APP_ID }}
+          private-key: ${{ secrets.RELEASE_TRAIN_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: org-config
+          permission-contents: read
+
+      # THE TOOLS REF ((internal ref) D4, (internal ref)): `job.workflow_sha` is the commit
+      # of THIS reusable file, so the gate below is the one it was reviewed with.
+      # `tools-ref` overrides it for a test. An EMPTY ref would check out the
+      # tools repo's DEFAULT branch fleet-wide, so it is refused. `toJSON(job)`
+      # because actionlint's `job` schema (1.7.12) does not know `workflow_sha`.
+      - name: Resolve the tools ref, refusing an empty one
+        id: tools-ref
+        env:
+          TOOLS_REF: ${{ 'main' }}
+          JOB_CONTEXT: ${{ toJSON(job) }}
+        run: |
+          if [ -z "$TOOLS_REF" ]; then
+            case "$JOB_CONTEXT" in
+              *'"workflow_sha"'*) TOOLS_REF="${JOB_CONTEXT#*\"workflow_sha\": \"}"; TOOLS_REF="${TOOLS_REF%%\"*}" ;;
+            esac
+          fi
+          if ! [[ "$TOOLS_REF" =~ ^[0-9a-f]{40}$ || ( -n "$TOOLS_REF" && "$TOOLS_REF" != *[![:alnum:]._/-]* ) ]]; then
+            echo "::error::the tools ref is empty or not a ref (${TOOLS_REF:-<empty>}); an empty ref would check out the tools repo's default branch instead of the commit this workflow was pinned at. Refusing."
+            exit 1
+          fi
+          echo "ref=$TOOLS_REF" >> "$GITHUB_OUTPUT"
+          echo "tools ref: $TOOLS_REF"
+      - name: Check out the shared gate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: tracebloc/org-config
+          token: ${{ steps.org-config-token.outputs.token }}
+          ref: ${{ 'main' }}
+          path: .org-config-tools
+          persist-credentials: false
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+
+      # PyYAML, pinned: the declaration is YAML, read by `yaml.safe_load`.
+      - name: Install PyYAML for the declaration
+        run: python -m pip install --quiet --disable-pip-version-check 'pyyaml==6.0.2'
+
+      - name: Mutation coverage
+        env:
+          # The base from either payload (the same expression code-quality.yml
+          # declares once). EMPTY -- an event with no base -- is a refusal in the
+          # gate, never an unratcheted pass.
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
+        run: python3 .org-config-tools/scripts/mutation-coverage.py --base "$BASE_SHA"
