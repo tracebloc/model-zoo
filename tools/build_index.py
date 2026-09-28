@@ -434,21 +434,19 @@ def is_averageable(path: pathlib.Path, framework: str) -> bool:
 
 
 def _offline() -> None:
-    """Build with the hub shut, the way the test suite does: a template that
-    fetched at construction would otherwise download while being indexed."""
-    cache = tempfile.mkdtemp(prefix="model-zoo-index-cache-")
-    hub = os.path.join(cache, "hub")
-    os.environ.update(
-        {
-            "HF_HUB_OFFLINE": "1",
-            "TRANSFORMERS_OFFLINE": "1",
-            "HF_DATASETS_OFFLINE": "1",
-            "HF_HOME": cache,
-            "HF_HUB_CACHE": hub,
-            "HUGGINGFACE_HUB_CACHE": hub,
-            "TORCH_HOME": cache,
-        }
+    """Build with the hub and the network shut, the way the test suite does
+    (``tests/conftest.py``): a template that fetched at construction would
+    otherwise download while being indexed. The environment is TAKEN from
+    ``tools/prep_offline_weights.py``'s ``_offline_env`` rather than restated,
+    so the two cannot drift; the datasets flag goes on top, as in conftest."""
+    spec = importlib.util.spec_from_file_location(
+        "prep_offline_weights", ROOT / "tools" / "prep_offline_weights.py"
     )
+    prep = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(prep)
+    os.environ.update(prep._offline_env(tempfile.mkdtemp(prefix="model-zoo-index-cache-")))
+    os.environ["HF_DATASETS_OFFLINE"] = "1"
+    prep._block_network()
 
 
 def load_committed() -> dict[str, dict]:
