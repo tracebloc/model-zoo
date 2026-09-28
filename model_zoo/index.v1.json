@@ -1,0 +1,1985 @@
+{
+  "version": 1,
+  "templates": [
+    {
+      "id": "causal_language_modeling/pytorch/distilgpt2",
+      "category": "causal_language_modeling",
+      "framework": "pytorch",
+      "model_type": "",
+      "label": "DistilGPT2",
+      "batch": 8,
+      "params": 81912576,
+      "averageable": true
+    },
+    {
+      "id": "causal_language_modeling/pytorch/medium_causal_lm",
+      "category": "causal_language_modeling",
+      "framework": "pytorch",
+      "model_type": "",
+      "label": "Medium Causal LM",
+      "batch": 32,
+      "params": 34835258,
+      "averageable": true
+    },
+    {
+      "id": "causal_language_modeling/pytorch/nanogpt_style_scratch",
+      "category": "causal_language_modeling",
+      "framework": "pytorch",
+      "model_type": "",
+      "label": "NanoGPT Style Scratch",
+      "batch": 16,
+      "params": 109313850,
+      "averageable": true
+    },
+    {
+      "id": "causal_language_modeling/pytorch/simple_causal_lm",
+      "category": "causal_language_modeling",
+      "framework": "pytorch",
+      "model_type": "",
+      "label": "Simple Causal LM",
+      "batch": 32,
+      "params": 18948410,
+      "averageable": true
+    },
+    {
+      "id": "embeddings/pytorch/minilm",
+      "category": "embeddings",
+      "framework": "pytorch",
+      "model_type": "",
+      "label": "MiniLM",
+      "batch": 16,
+      "params": 22713216,
+      "averageable": true
+    },
+    {
+      "id": "embeddings/pytorch/simple_text_encoder",
+      "category": "embeddings",
+      "framework": "pytorch",
+      "model_type": "",
+      "label": "Simple Text Encoder",
+      "batch": 16,
+      "params": 10053632,
+      "averageable": true
+    },
+    {
+      "id": "image_classification/pytorch/aimv2",
+      "category": "image_classification",
+      "framework": "pytorch",
+      "model_type": null,
+      "label": "AIMv2",
+      "batch": 16,
+      "params": 309199874,
+      "averageable": true
+    },
+    {
+      "id": "image_classification/pytorch/convnext_v2",
+      "category": "image_classification",
+      "framework": "pytorch",
+      "model_type": null,
+      "label": "ConvNeXt V2",
+      "batch": 32,
+      "params": 27868034,
+      "averageable": true
+    },
+    {
+      "id": "image_classification/pytorch/dinov3",
+      "category": "image_classification",
+      "framework": "pytorch",
+      "model_type": null,
+      "label": "DINOv3",
+      "batch": 16,
+      "params": 85661954,
+      "averageable": true
+    },
+    {
+      "id": "image_classification/pytorch/eva_02",
+      "category": "image_classification",
+      "framework": "pytorch",
+      "model_type": null,
+      "label": "EVA 02",
+      "batch": 16,
+      "params": 86350082,
+      "averageable": true
+    },
+    {
+      "id": "image_classification/pytorch/fastvit",
+      "category": "image_classification",
+      "framework": "pytorch",
+      "model_type": null,
+      "label": "FastViT",
+      "batch": 64,
+      "params": 8450626,
+      "averageable": true
+    },
+    {
+      "id": "image_classification/pytorch/hiera",
+      "category": "image_classification",
+      "framework": "pytorch",
+      "model_type": null,
+      "label": "Hiera",
+      "batch": 32,
+      "params": 27142754,
+      "averageable": true
+    },
+    {
+      "id": "image_classification/pytorch/lenet",
+      "category": "image_classification",
+      "framework": "pytorch",
+      "model_type": null,
+      "label": "LeNet",
+      "batch": 256,
+      "params": 5406650,
+      "averageable": true
+    },
+    {
+      "id": "image_classification/pytorch/mambaout",
+      "category": "image_classification",
+      "framework": "pytorch",
+      "model_type": null,
+      "label": "MambaOut",
+      "batch": 32,
+      "params": 24244706,
+      "averageable": true
+    },
+    {
+      "id": "image_classification/pytorch/maxvit",
+      "category": "image_classification",
+      "framework": "pytorch",
+      "model_type": null,
+      "label": "MaxViT",
+      "batch": 256,
+      "params": 30408648,
+      "averageable": true
+    },
+    {
+      "id": "image_classification/pytorch/resnet_18",
+      "category": "image_classification",
+      "framework": "pytorch",
+      "model_type": null,
+      "label": "ResNet 18",
+      "batch": 256,
+      "params": 11177538,
+      "averageable": true
+    },
+    {
+      "id": "image_classification/pytorch/siglip2",
+      "category": "image_classification",
+      "framework": "pytorch",
+      "model_type": null,
+      "label": "SigLIP2",
+      "batch": 16,
+      "params": 92885762,
+      "averageable": true
+    },
+    {
+      "id": "image_classification/pytorch/simple_cnn",
+      "category": "image_classification",
+      "framework": "pytorch",
+      "model_type": null,
+      "label": "Simple CNN",
+      "batch": 256,
+      "params": 5406606,
+      "averageable": true
+    },
+    {
+      "id": "image_classification/pytorch/squeezenet",
+      "category": "image_classification",
+      "framework": "pytorch",
+      "model_type": null,
+      "label": "SqueezeNet",
+      "batch": 256,
+      "params": 736450,
+      "averageable": true
+    },
+    {
+      "id": "image_classification/pytorch/swin_transformer",
+      "category": "image_classification",
+      "framework": "pytorch",
+      "model_type": null,
+      "label": "Swin Transformer",
+      "batch": 16,
+      "params": 27520892,
+      "averageable": true
+    },
+    {
+      "id": "image_classification/pytorch/vgg_16",
+      "category": "image_classification",
+      "framework": "pytorch",
+      "model_type": null,
+      "label": "VGG 16",
+      "batch": 16,
+      "params": 134268738,
+      "averageable": true
+    },
+    {
+      "id": "image_classification/pytorch/vgg_custom",
+      "category": "image_classification",
+      "framework": "pytorch",
+      "model_type": null,
+      "label": "VGG Custom",
+      "batch": 16,
+      "params": 134277186,
+      "averageable": true
+    },
+    {
+      "id": "image_classification/pytorch/vit",
+      "category": "image_classification",
+      "framework": "pytorch",
+      "model_type": null,
+      "label": "ViT",
+      "batch": 16,
+      "params": 86390786,
+      "averageable": true
+    },
+    {
+      "id": "image_classification/pytorch/vit_b_16",
+      "category": "image_classification",
+      "framework": "pytorch",
+      "model_type": null,
+      "label": "ViT B 16",
+      "batch": 16,
+      "params": 85800194,
+      "averageable": true
+    },
+    {
+      "id": "image_classification/pytorch/vit_google",
+      "category": "image_classification",
+      "framework": "pytorch",
+      "model_type": null,
+      "label": "ViT Google",
+      "batch": 16,
+      "params": 85800194,
+      "averageable": true
+    },
+    {
+      "id": "image_classification/pytorch/wide_resnet_50_2",
+      "category": "image_classification",
+      "framework": "pytorch",
+      "model_type": null,
+      "label": "Wide ResNet 50 2",
+      "batch": 16,
+      "params": 66838338,
+      "averageable": true
+    },
+    {
+      "id": "keypoint_detection/pytorch/alphapose",
+      "category": "keypoint_detection",
+      "framework": "pytorch",
+      "model_type": "",
+      "label": "AlphaPose",
+      "batch": 128,
+      "params": 32554752,
+      "averageable": true
+    },
+    {
+      "id": "keypoint_detection/pytorch/cpm",
+      "category": "keypoint_detection",
+      "framework": "pytorch",
+      "model_type": "",
+      "label": "CPM",
+      "batch": 128,
+      "params": 1883184,
+      "averageable": true
+    },
+    {
+      "id": "keypoint_detection/pytorch/cpm_heatmap",
+      "category": "keypoint_detection",
+      "framework": "pytorch",
+      "model_type": "heatmap",
+      "label": "CPM Heatmap",
+      "batch": 128,
+      "params": 1879056,
+      "averageable": true
+    },
+    {
+      "id": "keypoint_detection/pytorch/cpn",
+      "category": "keypoint_detection",
+      "framework": "pytorch",
+      "model_type": "",
+      "label": "CPN",
+      "batch": 128,
+      "params": 27454832,
+      "averageable": true
+    },
+    {
+      "id": "keypoint_detection/pytorch/cpn_heatmap",
+      "category": "keypoint_detection",
+      "framework": "pytorch",
+      "model_type": "heatmap",
+      "label": "CPN Heatmap",
+      "batch": 128,
+      "params": 27446608,
+      "averageable": true
+    },
+    {
+      "id": "keypoint_detection/pytorch/deeppose",
+      "category": "keypoint_detection",
+      "framework": "pytorch",
+      "model_type": "",
+      "label": "DeepPose",
+      "batch": 128,
+      "params": 7508144,
+      "averageable": true
+    },
+    {
+      "id": "keypoint_detection/pytorch/dsnt",
+      "category": "keypoint_detection",
+      "framework": "pytorch",
+      "model_type": "",
+      "label": "DSNT",
+      "batch": 128,
+      "params": 960896,
+      "averageable": true
+    },
+    {
+      "id": "keypoint_detection/pytorch/faster_rcnn_sppe",
+      "category": "keypoint_detection",
+      "framework": "pytorch",
+      "model_type": "",
+      "label": "Faster R-CNN SPPE",
+      "batch": 128,
+      "params": 26864752,
+      "averageable": true
+    },
+    {
+      "id": "keypoint_detection/pytorch/hrnet",
+      "category": "keypoint_detection",
+      "framework": "pytorch",
+      "model_type": "",
+      "label": "HRNet",
+      "batch": 128,
+      "params": 1577520,
+      "averageable": true
+    },
+    {
+      "id": "keypoint_detection/pytorch/hrnet_heatmap",
+      "category": "keypoint_detection",
+      "framework": "pytorch",
+      "model_type": "heatmap",
+      "label": "HRNet Heatmap",
+      "batch": 128,
+      "params": 1561104,
+      "averageable": true
+    },
+    {
+      "id": "keypoint_detection/pytorch/keypoint_rcnn",
+      "category": "keypoint_detection",
+      "framework": "pytorch",
+      "model_type": "rcnn",
+      "label": "Keypoint R-CNN",
+      "batch": 4,
+      "params": 59190378,
+      "averageable": true
+    },
+    {
+      "id": "keypoint_detection/pytorch/openpose",
+      "category": "keypoint_detection",
+      "framework": "pytorch",
+      "model_type": "",
+      "label": "OpenPose",
+      "batch": 128,
+      "params": 13809872,
+      "averageable": true
+    },
+    {
+      "id": "keypoint_detection/pytorch/resnet_50",
+      "category": "keypoint_detection",
+      "framework": "pytorch",
+      "model_type": "",
+      "label": "ResNet 50",
+      "batch": 128,
+      "params": 34000208,
+      "averageable": true
+    },
+    {
+      "id": "keypoint_detection/pytorch/resnet_sppe",
+      "category": "keypoint_detection",
+      "framework": "pytorch",
+      "model_type": "",
+      "label": "ResNet SPPE",
+      "batch": 128,
+      "params": 23606384,
+      "averageable": true
+    },
+    {
+      "id": "keypoint_detection/pytorch/rtmpose",
+      "category": "keypoint_detection",
+      "framework": "pytorch",
+      "model_type": "",
+      "label": "RTMPose",
+      "batch": 64,
+      "params": 7949728,
+      "averageable": true
+    },
+    {
+      "id": "keypoint_detection/pytorch/sapiens",
+      "category": "keypoint_detection",
+      "framework": "pytorch",
+      "model_type": "direct",
+      "label": "Sapiens",
+      "batch": 16,
+      "params": 85883955,
+      "averageable": true
+    },
+    {
+      "id": "keypoint_detection/pytorch/shg",
+      "category": "keypoint_detection",
+      "framework": "pytorch",
+      "model_type": "",
+      "label": "SHG",
+      "batch": 128,
+      "params": 124161408,
+      "averageable": true
+    },
+    {
+      "id": "keypoint_detection/pytorch/shg_heatmap",
+      "category": "keypoint_detection",
+      "framework": "pytorch",
+      "model_type": "heatmap",
+      "label": "SHG Heatmap",
+      "batch": 128,
+      "params": 124095616,
+      "averageable": true
+    },
+    {
+      "id": "keypoint_detection/pytorch/vitpose",
+      "category": "keypoint_detection",
+      "framework": "pytorch",
+      "model_type": "direct",
+      "label": "ViTPose",
+      "batch": 32,
+      "params": 85961489,
+      "averageable": true
+    },
+    {
+      "id": "keypoint_detection/pytorch/vitpose_plus",
+      "category": "keypoint_detection",
+      "framework": "pytorch",
+      "model_type": "direct",
+      "label": "ViTPose Plus",
+      "batch": 32,
+      "params": 125444625,
+      "averageable": true
+    },
+    {
+      "id": "masked_language_modeling/pytorch/bert_large_mlm",
+      "category": "masked_language_modeling",
+      "framework": "pytorch",
+      "model_type": "",
+      "label": "BERT Large MLM",
+      "batch": 8,
+      "params": 335172410,
+      "averageable": true
+    },
+    {
+      "id": "masked_language_modeling/pytorch/conv_mlm",
+      "category": "masked_language_modeling",
+      "framework": "pytorch",
+      "model_type": "",
+      "label": "Conv MLM",
+      "batch": 64,
+      "params": 47283002,
+      "averageable": true
+    },
+    {
+      "id": "masked_language_modeling/pytorch/deep_narrow_mlm",
+      "category": "masked_language_modeling",
+      "framework": "pytorch",
+      "model_type": "",
+      "label": "Deep Narrow MLM",
+      "batch": 32,
+      "params": 40340538,
+      "averageable": true
+    },
+    {
+      "id": "masked_language_modeling/pytorch/distil_mlm",
+      "category": "masked_language_modeling",
+      "framework": "pytorch",
+      "model_type": "",
+      "label": "Distil MLM",
+      "batch": 32,
+      "params": 66393402,
+      "averageable": true
+    },
+    {
+      "id": "masked_language_modeling/pytorch/medium_mlm",
+      "category": "masked_language_modeling",
+      "framework": "pytorch",
+      "model_type": "",
+      "label": "Medium MLM",
+      "batch": 32,
+      "params": 34835258,
+      "averageable": true
+    },
+    {
+      "id": "masked_language_modeling/pytorch/netmedgpt_style_scratch",
+      "category": "masked_language_modeling",
+      "framework": "pytorch",
+      "model_type": "",
+      "label": "NetMedGPT Style Scratch",
+      "batch": 16,
+      "params": 109512762,
+      "averageable": true
+    },
+    {
+      "id": "masked_language_modeling/pytorch/netmedgpt_style_warmstart",
+      "category": "masked_language_modeling",
+      "framework": "pytorch",
+      "model_type": "",
+      "label": "NetMedGPT Style Warmstart",
+      "batch": 16,
+      "params": 109514298,
+      "averageable": true
+    },
+    {
+      "id": "masked_language_modeling/pytorch/prenorm_mlm",
+      "category": "masked_language_modeling",
+      "framework": "pytorch",
+      "model_type": "",
+      "label": "PreNorm MLM",
+      "batch": 16,
+      "params": 109514298,
+      "averageable": true
+    },
+    {
+      "id": "masked_language_modeling/pytorch/relative_position_mlm",
+      "category": "masked_language_modeling",
+      "framework": "pytorch",
+      "model_type": "",
+      "label": "Relative Position MLM",
+      "batch": 16,
+      "params": 109119546,
+      "averageable": true
+    },
+    {
+      "id": "masked_language_modeling/pytorch/simple_mlm",
+      "category": "masked_language_modeling",
+      "framework": "pytorch",
+      "model_type": "",
+      "label": "Simple MLM",
+      "batch": 32,
+      "params": 17897786,
+      "averageable": true
+    },
+    {
+      "id": "masked_language_modeling/pytorch/tiny_mlm",
+      "category": "masked_language_modeling",
+      "framework": "pytorch",
+      "model_type": "",
+      "label": "Tiny MLM",
+      "batch": 64,
+      "params": 8174906,
+      "averageable": true
+    },
+    {
+      "id": "masked_language_modeling/pytorch/wide_mini_mlm",
+      "category": "masked_language_modeling",
+      "framework": "pytorch",
+      "model_type": "",
+      "label": "Wide Mini MLM",
+      "batch": 32,
+      "params": 28795194,
+      "averageable": true
+    },
+    {
+      "id": "object_detection/pytorch/atss_resnet",
+      "category": "object_detection",
+      "framework": "pytorch",
+      "model_type": "torchvision_detection",
+      "label": "ATSS ResNet",
+      "batch": 8,
+      "params": 32136529,
+      "averageable": true
+    },
+    {
+      "id": "object_detection/pytorch/cascade_rcnn",
+      "category": "object_detection",
+      "framework": "pytorch",
+      "model_type": "torchvision_detection",
+      "label": "Cascade R-CNN",
+      "batch": 4,
+      "params": 69333266,
+      "averageable": true
+    },
+    {
+      "id": "object_detection/pytorch/centernet_resnet",
+      "category": "object_detection",
+      "framework": "pytorch",
+      "model_type": "torchvision_detection",
+      "label": "CenterNet ResNet",
+      "batch": 8,
+      "params": 27296081,
+      "averageable": true
+    },
+    {
+      "id": "object_detection/pytorch/efficientdet_d0",
+      "category": "object_detection",
+      "framework": "pytorch",
+      "model_type": "torchvision_detection",
+      "label": "EfficientDet D0",
+      "batch": 8,
+      "params": 3857038,
+      "averageable": true
+    },
+    {
+      "id": "object_detection/pytorch/faster_rcnn_convnext_small",
+      "category": "object_detection",
+      "framework": "pytorch",
+      "model_type": "torchvision_detection",
+      "label": "Faster R-CNN ConvNeXt Small",
+      "batch": 2,
+      "params": 66739376,
+      "averageable": true
+    },
+    {
+      "id": "object_detection/pytorch/faster_rcnn_mobilenet",
+      "category": "object_detection",
+      "framework": "pytorch",
+      "model_type": "torchvision_detection",
+      "label": "Faster R-CNN MobileNet",
+      "batch": 8,
+      "params": 19011004,
+      "averageable": true
+    },
+    {
+      "id": "object_detection/pytorch/faster_rcnn_mobilenet_320",
+      "category": "object_detection",
+      "framework": "pytorch",
+      "model_type": "torchvision_detection",
+      "label": "Faster R-CNN MobileNet 320",
+      "batch": 16,
+      "params": 19011004,
+      "averageable": true
+    },
+    {
+      "id": "object_detection/pytorch/faster_rcnn_resnet",
+      "category": "object_detection",
+      "framework": "pytorch",
+      "model_type": "rcnn",
+      "label": "Faster R-CNN ResNet",
+      "batch": 4,
+      "params": 41408656,
+      "averageable": true
+    },
+    {
+      "id": "object_detection/pytorch/faster_rcnn_resnet_v2",
+      "category": "object_detection",
+      "framework": "pytorch",
+      "model_type": "torchvision_detection",
+      "label": "Faster R-CNN ResNet V2",
+      "batch": 2,
+      "params": 43312528,
+      "averageable": true
+    },
+    {
+      "id": "object_detection/pytorch/faster_rcnn_swin_t",
+      "category": "object_detection",
+      "framework": "pytorch",
+      "model_type": "torchvision_detection",
+      "label": "Faster R-CNN Swin T",
+      "batch": 2,
+      "params": 44804042,
+      "averageable": true
+    },
+    {
+      "id": "object_detection/pytorch/fcos",
+      "category": "object_detection",
+      "framework": "pytorch",
+      "model_type": "torchvision_detection",
+      "label": "FCOS",
+      "batch": 8,
+      "params": 32142930,
+      "averageable": true
+    },
+    {
+      "id": "object_detection/pytorch/fcos_convnext_small",
+      "category": "object_detection",
+      "framework": "pytorch",
+      "model_type": "torchvision_detection",
+      "label": "FCOS ConvNeXt Small",
+      "batch": 2,
+      "params": 57514610,
+      "averageable": true
+    },
+    {
+      "id": "object_detection/pytorch/fcos_swin_t",
+      "category": "object_detection",
+      "framework": "pytorch",
+      "model_type": "torchvision_detection",
+      "label": "FCOS Swin T",
+      "batch": 2,
+      "params": 35579276,
+      "averageable": true
+    },
+    {
+      "id": "object_detection/pytorch/gfl_resnet",
+      "category": "object_detection",
+      "framework": "pytorch",
+      "model_type": "torchvision_detection",
+      "label": "GFL ResNet",
+      "batch": 4,
+      "params": 32286102,
+      "averageable": true
+    },
+    {
+      "id": "object_detection/pytorch/retinanet",
+      "category": "object_detection",
+      "framework": "pytorch",
+      "model_type": "torchvision_detection",
+      "label": "RetinaNet",
+      "batch": 8,
+      "params": 32450009,
+      "averageable": true
+    },
+    {
+      "id": "object_detection/pytorch/retinanet_v2",
+      "category": "object_detection",
+      "framework": "pytorch",
+      "model_type": "torchvision_detection",
+      "label": "RetinaNet V2",
+      "batch": 2,
+      "params": 36580825,
+      "averageable": true
+    },
+    {
+      "id": "object_detection/pytorch/rtmdet_s",
+      "category": "object_detection",
+      "framework": "pytorch",
+      "model_type": "torchvision_detection",
+      "label": "RTMDet S",
+      "batch": 8,
+      "params": 8860995,
+      "averageable": true
+    },
+    {
+      "id": "object_detection/pytorch/sparse_rcnn",
+      "category": "object_detection",
+      "framework": "pytorch",
+      "model_type": "torchvision_detection",
+      "label": "Sparse R-CNN",
+      "batch": 2,
+      "params": 106187574,
+      "averageable": true
+    },
+    {
+      "id": "object_detection/pytorch/ssd_vgg16",
+      "category": "object_detection",
+      "framework": "pytorch",
+      "model_type": "torchvision_detection",
+      "label": "SSD VGG16",
+      "batch": 16,
+      "params": 25216190,
+      "averageable": true
+    },
+    {
+      "id": "object_detection/pytorch/ssdlite_mobilenet",
+      "category": "object_detection",
+      "framework": "pytorch",
+      "model_type": "torchvision_detection",
+      "label": "SSDLite MobileNet",
+      "batch": 24,
+      "params": 2358980,
+      "averageable": true
+    },
+    {
+      "id": "object_detection/pytorch/tood_resnet",
+      "category": "object_detection",
+      "framework": "pytorch",
+      "model_type": "torchvision_detection",
+      "label": "TOOD ResNet",
+      "batch": 4,
+      "params": 31115730,
+      "averageable": true
+    },
+    {
+      "id": "object_detection/pytorch/vfnet_resnet",
+      "category": "object_detection",
+      "framework": "pytorch",
+      "model_type": "torchvision_detection",
+      "label": "VFNet ResNet",
+      "batch": 4,
+      "params": 30967130,
+      "averageable": true
+    },
+    {
+      "id": "object_detection/pytorch/yolo11_s",
+      "category": "object_detection",
+      "framework": "pytorch",
+      "model_type": "torchvision_detection",
+      "label": "YOLO11 S",
+      "batch": 8,
+      "params": 9432807,
+      "averageable": true
+    },
+    {
+      "id": "object_detection/pytorch/yolo_v1/model",
+      "category": "object_detection",
+      "framework": "pytorch",
+      "model_type": "yolo",
+      "label": "YOLO V1",
+      "batch": 64,
+      "params": 267004093,
+      "averageable": true
+    },
+    {
+      "id": "object_detection/pytorch/yolo_v5/model",
+      "category": "object_detection",
+      "framework": "pytorch",
+      "model_type": "yolo",
+      "label": "YOLO V5",
+      "batch": 64,
+      "params": 13376813,
+      "averageable": true
+    },
+    {
+      "id": "object_detection/pytorch/yolo_v8/model",
+      "category": "object_detection",
+      "framework": "pytorch",
+      "model_type": "yolo",
+      "label": "YOLO V8",
+      "batch": 64,
+      "params": 9022132,
+      "averageable": true
+    },
+    {
+      "id": "object_detection/pytorch/yolov10_s",
+      "category": "object_detection",
+      "framework": "pytorch",
+      "model_type": "torchvision_detection",
+      "label": "YOLOv10 S",
+      "batch": 8,
+      "params": 8076398,
+      "averageable": true
+    },
+    {
+      "id": "object_detection/pytorch/yolov12_s",
+      "category": "object_detection",
+      "framework": "pytorch",
+      "model_type": "torchvision_detection",
+      "label": "YOLOv12 S",
+      "batch": 8,
+      "params": 9258151,
+      "averageable": true
+    },
+    {
+      "id": "object_detection/pytorch/yolov8_s",
+      "category": "object_detection",
+      "framework": "pytorch",
+      "model_type": "torchvision_detection",
+      "label": "YOLOv8 S",
+      "batch": 8,
+      "params": 11140615,
+      "averageable": true
+    },
+    {
+      "id": "object_detection/pytorch/yolov9_s",
+      "category": "object_detection",
+      "framework": "pytorch",
+      "model_type": "torchvision_detection",
+      "label": "YOLOv9 S",
+      "batch": 8,
+      "params": 7292423,
+      "averageable": true
+    },
+    {
+      "id": "object_detection/pytorch/yolox_s",
+      "category": "object_detection",
+      "framework": "pytorch",
+      "model_type": "torchvision_detection",
+      "label": "YOLOX S",
+      "batch": 8,
+      "params": 8942326,
+      "averageable": true
+    },
+    {
+      "id": "semantic_segmentation/pytorch/deeplab",
+      "category": "semantic_segmentation",
+      "framework": "pytorch",
+      "model_type": null,
+      "label": "DeepLab",
+      "batch": 8,
+      "params": 39633986,
+      "averageable": true
+    },
+    {
+      "id": "semantic_segmentation/pytorch/dinov3_seg",
+      "category": "semantic_segmentation",
+      "framework": "pytorch",
+      "model_type": null,
+      "label": "DINOv3 Seg",
+      "batch": 8,
+      "params": 85661954,
+      "averageable": true
+    },
+    {
+      "id": "semantic_segmentation/pytorch/dpt",
+      "category": "semantic_segmentation",
+      "framework": "pytorch",
+      "model_type": null,
+      "label": "DPT",
+      "batch": 4,
+      "params": 343884292,
+      "averageable": true
+    },
+    {
+      "id": "semantic_segmentation/pytorch/fcn",
+      "category": "semantic_segmentation",
+      "framework": "pytorch",
+      "model_type": null,
+      "label": "FCN",
+      "batch": 8,
+      "params": 33606982,
+      "averageable": true
+    },
+    {
+      "id": "semantic_segmentation/pytorch/hrnet",
+      "category": "semantic_segmentation",
+      "framework": "pytorch",
+      "model_type": null,
+      "label": "HRNet",
+      "batch": 8,
+      "params": 11737026,
+      "averageable": true
+    },
+    {
+      "id": "semantic_segmentation/pytorch/mask2former",
+      "category": "semantic_segmentation",
+      "framework": "pytorch",
+      "model_type": null,
+      "label": "Mask2Former",
+      "batch": 4,
+      "params": 47403133,
+      "averageable": true
+    },
+    {
+      "id": "semantic_segmentation/pytorch/oneformer",
+      "category": "semantic_segmentation",
+      "framework": "pytorch",
+      "model_type": null,
+      "label": "OneFormer",
+      "batch": 4,
+      "params": 50699902,
+      "averageable": true
+    },
+    {
+      "id": "semantic_segmentation/pytorch/sam2",
+      "category": "semantic_segmentation",
+      "framework": "pytorch",
+      "model_type": null,
+      "label": "SAM2",
+      "batch": 2,
+      "params": 27219650,
+      "averageable": true
+    },
+    {
+      "id": "semantic_segmentation/pytorch/segformer",
+      "category": "semantic_segmentation",
+      "framework": "pytorch",
+      "model_type": null,
+      "label": "SegFormer",
+      "batch": 8,
+      "params": 3714658,
+      "averageable": true
+    },
+    {
+      "id": "semantic_segmentation/pytorch/segmenter",
+      "category": "semantic_segmentation",
+      "framework": "pytorch",
+      "model_type": null,
+      "label": "Segmenter",
+      "batch": 8,
+      "params": 3714658,
+      "averageable": true
+    },
+    {
+      "id": "semantic_segmentation/pytorch/segnet",
+      "category": "semantic_segmentation",
+      "framework": "pytorch",
+      "model_type": null,
+      "label": "SegNet",
+      "batch": 8,
+      "params": 24870384,
+      "averageable": true
+    },
+    {
+      "id": "semantic_segmentation/pytorch/unet",
+      "category": "semantic_segmentation",
+      "framework": "pytorch",
+      "model_type": null,
+      "label": "U-Net",
+      "batch": 8,
+      "params": 31037698,
+      "averageable": true
+    },
+    {
+      "id": "semantic_segmentation/pytorch/upernet",
+      "category": "semantic_segmentation",
+      "framework": "pytorch",
+      "model_type": null,
+      "label": "UperNet",
+      "batch": 4,
+      "params": 81763236,
+      "averageable": true
+    },
+    {
+      "id": "sentence_pair_classification/pytorch/bert_base_uncased",
+      "category": "sentence_pair_classification",
+      "framework": "pytorch",
+      "model_type": "",
+      "label": "BERT Base Uncased",
+      "batch": 512,
+      "params": 109483778,
+      "averageable": true
+    },
+    {
+      "id": "sentence_pair_classification/pytorch/simple_sentence_pair",
+      "category": "sentence_pair_classification",
+      "framework": "pytorch",
+      "model_type": "",
+      "label": "Simple Sentence Pair",
+      "batch": 512,
+      "params": 3923586,
+      "averageable": true
+    },
+    {
+      "id": "seq2seq/pytorch/simple_seq2seq",
+      "category": "seq2seq",
+      "framework": "pytorch",
+      "model_type": "",
+      "label": "Simple Seq2Seq",
+      "batch": 4,
+      "params": 45578240,
+      "averageable": true
+    },
+    {
+      "id": "seq2seq/pytorch/t5_small",
+      "category": "seq2seq",
+      "framework": "pytorch",
+      "model_type": "",
+      "label": "T5 Small",
+      "batch": 8,
+      "params": 60506624,
+      "averageable": true
+    },
+    {
+      "id": "tabular_classification/pytorch/cnn",
+      "category": "tabular_classification",
+      "framework": "pytorch",
+      "model_type": "",
+      "label": "CNN",
+      "batch": 4096,
+      "params": 215141,
+      "averageable": true
+    },
+    {
+      "id": "tabular_classification/pytorch/fcn",
+      "category": "tabular_classification",
+      "framework": "pytorch",
+      "model_type": "",
+      "label": "FCN",
+      "batch": 4096,
+      "params": 15109,
+      "averageable": true
+    },
+    {
+      "id": "tabular_classification/pytorch/ft_transformer",
+      "category": "tabular_classification",
+      "framework": "pytorch",
+      "model_type": "",
+      "label": "FT Transformer",
+      "batch": 512,
+      "params": 156869,
+      "averageable": true
+    },
+    {
+      "id": "tabular_classification/pytorch/lstm",
+      "category": "tabular_classification",
+      "framework": "pytorch",
+      "model_type": "",
+      "label": "LSTM",
+      "batch": 4096,
+      "params": 100741,
+      "averageable": true
+    },
+    {
+      "id": "tabular_classification/pytorch/rnn",
+      "category": "tabular_classification",
+      "framework": "pytorch",
+      "model_type": "",
+      "label": "RNN",
+      "batch": 4096,
+      "params": 31621,
+      "averageable": true
+    },
+    {
+      "id": "tabular_classification/pytorch/tabm",
+      "category": "tabular_classification",
+      "framework": "pytorch",
+      "model_type": "",
+      "label": "TabM",
+      "batch": 1024,
+      "params": 38085,
+      "averageable": true
+    },
+    {
+      "id": "tabular_classification/sklearn/catboost_classifier",
+      "category": "tabular_classification",
+      "framework": "sklearn",
+      "model_type": "catboost",
+      "label": "CatBoost Classifier",
+      "batch": 512,
+      "params": null,
+      "averageable": true
+    },
+    {
+      "id": "tabular_classification/sklearn/decision_tree",
+      "category": "tabular_classification",
+      "framework": "sklearn",
+      "model_type": "tree",
+      "label": "Decision Tree",
+      "batch": 4,
+      "params": null,
+      "averageable": false
+    },
+    {
+      "id": "tabular_classification/sklearn/ebm_classifier",
+      "category": "tabular_classification",
+      "framework": "sklearn",
+      "model_type": "tree",
+      "label": "EBM Classifier",
+      "batch": 4096,
+      "params": null,
+      "averageable": false
+    },
+    {
+      "id": "tabular_classification/sklearn/ensemble",
+      "category": "tabular_classification",
+      "framework": "sklearn",
+      "model_type": "ensemble",
+      "label": "Ensemble",
+      "batch": 4,
+      "params": null,
+      "averageable": false
+    },
+    {
+      "id": "tabular_classification/sklearn/gbm",
+      "category": "tabular_classification",
+      "framework": "sklearn",
+      "model_type": "tree",
+      "label": "GBM",
+      "batch": 4,
+      "params": null,
+      "averageable": false
+    },
+    {
+      "id": "tabular_classification/sklearn/hist_gradient_boosting_classifier",
+      "category": "tabular_classification",
+      "framework": "sklearn",
+      "model_type": "tree",
+      "label": "Hist Gradient Boosting Classifier",
+      "batch": 4096,
+      "params": null,
+      "averageable": false
+    },
+    {
+      "id": "tabular_classification/sklearn/knn",
+      "category": "tabular_classification",
+      "framework": "sklearn",
+      "model_type": "clustering",
+      "label": "KNN",
+      "batch": 4,
+      "params": null,
+      "averageable": false
+    },
+    {
+      "id": "tabular_classification/sklearn/lightgbm_classifier",
+      "category": "tabular_classification",
+      "framework": "sklearn",
+      "model_type": "lightgbm",
+      "label": "LightGBM Classifier",
+      "batch": 512,
+      "params": null,
+      "averageable": true
+    },
+    {
+      "id": "tabular_classification/sklearn/logistic_regression",
+      "category": "tabular_classification",
+      "framework": "sklearn",
+      "model_type": "linear",
+      "label": "Logistic Regression",
+      "batch": 4,
+      "params": null,
+      "averageable": true
+    },
+    {
+      "id": "tabular_classification/sklearn/logistic_regression_stability",
+      "category": "tabular_classification",
+      "framework": "sklearn",
+      "model_type": "linear",
+      "label": "Logistic Regression Stability",
+      "batch": 4,
+      "params": null,
+      "averageable": false
+    },
+    {
+      "id": "tabular_classification/sklearn/mlp",
+      "category": "tabular_classification",
+      "framework": "sklearn",
+      "model_type": "neural_network",
+      "label": "MLP",
+      "batch": 4,
+      "params": null,
+      "averageable": true
+    },
+    {
+      "id": "tabular_classification/sklearn/naive_bayes",
+      "category": "tabular_classification",
+      "framework": "sklearn",
+      "model_type": "naive",
+      "label": "Naive Bayes",
+      "batch": 4,
+      "params": null,
+      "averageable": true
+    },
+    {
+      "id": "tabular_classification/sklearn/random_forest",
+      "category": "tabular_classification",
+      "framework": "sklearn",
+      "model_type": "tree",
+      "label": "Random Forest",
+      "batch": 4,
+      "params": null,
+      "averageable": true
+    },
+    {
+      "id": "tabular_classification/sklearn/random_forest_stability",
+      "category": "tabular_classification",
+      "framework": "sklearn",
+      "model_type": "tree",
+      "label": "Random Forest Stability",
+      "batch": 4,
+      "params": null,
+      "averageable": false
+    },
+    {
+      "id": "tabular_classification/sklearn/svm",
+      "category": "tabular_classification",
+      "framework": "sklearn",
+      "model_type": "svm",
+      "label": "SVM",
+      "batch": 4,
+      "params": null,
+      "averageable": false
+    },
+    {
+      "id": "tabular_classification/sklearn/xgboost_classifier",
+      "category": "tabular_classification",
+      "framework": "sklearn",
+      "model_type": "xgboost",
+      "label": "XGBoost Classifier",
+      "batch": 512,
+      "params": null,
+      "averageable": true
+    },
+    {
+      "id": "tabular_regression/pytorch/cnn",
+      "category": "tabular_regression",
+      "framework": "pytorch",
+      "model_type": "",
+      "label": "CNN",
+      "batch": 512,
+      "params": 79713,
+      "averageable": true
+    },
+    {
+      "id": "tabular_regression/pytorch/fcn",
+      "category": "tabular_regression",
+      "framework": "pytorch",
+      "model_type": "",
+      "label": "FCN",
+      "batch": 512,
+      "params": 10625,
+      "averageable": true
+    },
+    {
+      "id": "tabular_regression/pytorch/ft_transformer",
+      "category": "tabular_regression",
+      "framework": "pytorch",
+      "model_type": "",
+      "label": "FT Transformer",
+      "batch": 512,
+      "params": 152385,
+      "averageable": true
+    },
+    {
+      "id": "tabular_regression/pytorch/mlp",
+      "category": "tabular_regression",
+      "framework": "pytorch",
+      "model_type": "",
+      "label": "MLP",
+      "batch": 512,
+      "params": 3457,
+      "averageable": true
+    },
+    {
+      "id": "tabular_regression/pytorch/rnn",
+      "category": "tabular_regression",
+      "framework": "pytorch",
+      "model_type": "",
+      "label": "RNN",
+      "batch": 512,
+      "params": 27137,
+      "averageable": true
+    },
+    {
+      "id": "tabular_regression/pytorch/tabm",
+      "category": "tabular_regression",
+      "framework": "pytorch",
+      "model_type": "",
+      "label": "TabM",
+      "batch": 1024,
+      "params": 32289,
+      "averageable": true
+    },
+    {
+      "id": "tabular_regression/sklearn/decision_tree",
+      "category": "tabular_regression",
+      "framework": "sklearn",
+      "model_type": "tree",
+      "label": "Decision Tree",
+      "batch": 512,
+      "params": null,
+      "averageable": false
+    },
+    {
+      "id": "tabular_regression/sklearn/ebm_regressor",
+      "category": "tabular_regression",
+      "framework": "sklearn",
+      "model_type": "tree",
+      "label": "EBM Regressor",
+      "batch": 4096,
+      "params": null,
+      "averageable": false
+    },
+    {
+      "id": "tabular_regression/sklearn/elastic_net",
+      "category": "tabular_regression",
+      "framework": "sklearn",
+      "model_type": "linear",
+      "label": "Elastic Net",
+      "batch": 512,
+      "params": null,
+      "averageable": true
+    },
+    {
+      "id": "tabular_regression/sklearn/gradient_boosting",
+      "category": "tabular_regression",
+      "framework": "sklearn",
+      "model_type": "tree",
+      "label": "Gradient Boosting",
+      "batch": 512,
+      "params": null,
+      "averageable": false
+    },
+    {
+      "id": "tabular_regression/sklearn/hist_gradient_boosting_regressor",
+      "category": "tabular_regression",
+      "framework": "sklearn",
+      "model_type": "tree",
+      "label": "Hist Gradient Boosting Regressor",
+      "batch": 4096,
+      "params": null,
+      "averageable": false
+    },
+    {
+      "id": "tabular_regression/sklearn/knn",
+      "category": "tabular_regression",
+      "framework": "sklearn",
+      "model_type": "ensemble",
+      "label": "KNN",
+      "batch": 512,
+      "params": null,
+      "averageable": false
+    },
+    {
+      "id": "tabular_regression/sklearn/lasso",
+      "category": "tabular_regression",
+      "framework": "sklearn",
+      "model_type": "linear",
+      "label": "Lasso",
+      "batch": 512,
+      "params": null,
+      "averageable": true
+    },
+    {
+      "id": "tabular_regression/sklearn/lightgbm_regressor",
+      "category": "tabular_regression",
+      "framework": "sklearn",
+      "model_type": "lightgbm",
+      "label": "LightGBM Regressor",
+      "batch": 512,
+      "params": null,
+      "averageable": true
+    },
+    {
+      "id": "tabular_regression/sklearn/linear_regression",
+      "category": "tabular_regression",
+      "framework": "sklearn",
+      "model_type": "linear",
+      "label": "Linear Regression",
+      "batch": 128,
+      "params": null,
+      "averageable": true
+    },
+    {
+      "id": "tabular_regression/sklearn/mlp",
+      "category": "tabular_regression",
+      "framework": "sklearn",
+      "model_type": "neural_network",
+      "label": "MLP",
+      "batch": 128,
+      "params": null,
+      "averageable": true
+    },
+    {
+      "id": "tabular_regression/sklearn/random_forest",
+      "category": "tabular_regression",
+      "framework": "sklearn",
+      "model_type": "tree",
+      "label": "Random Forest",
+      "batch": 128,
+      "params": null,
+      "averageable": true
+    },
+    {
+      "id": "tabular_regression/sklearn/ridge",
+      "category": "tabular_regression",
+      "framework": "sklearn",
+      "model_type": "linear",
+      "label": "Ridge",
+      "batch": 128,
+      "params": null,
+      "averageable": true
+    },
+    {
+      "id": "tabular_regression/sklearn/svm",
+      "category": "tabular_regression",
+      "framework": "sklearn",
+      "model_type": "svm",
+      "label": "SVM",
+      "batch": 128,
+      "params": null,
+      "averageable": false
+    },
+    {
+      "id": "tabular_regression/sklearn/tweedie_regressor",
+      "category": "tabular_regression",
+      "framework": "sklearn",
+      "model_type": "linear",
+      "label": "Tweedie Regressor",
+      "batch": 4096,
+      "params": null,
+      "averageable": false
+    },
+    {
+      "id": "tabular_regression/sklearn/xgboost_regressor",
+      "category": "tabular_regression",
+      "framework": "sklearn",
+      "model_type": "xgboost",
+      "label": "XGBoost Regressor",
+      "batch": 128,
+      "params": null,
+      "averageable": true
+    },
+    {
+      "id": "text_classification/pytorch/bert_base_uncased",
+      "category": "text_classification",
+      "framework": "pytorch",
+      "model_type": "",
+      "label": "BERT Base Uncased",
+      "batch": 512,
+      "params": 109486085,
+      "averageable": true
+    },
+    {
+      "id": "text_classification/pytorch/bert_base_uncased_scratch",
+      "category": "text_classification",
+      "framework": "pytorch",
+      "model_type": "",
+      "label": "BERT Base Uncased Scratch",
+      "batch": 512,
+      "params": 109486085,
+      "averageable": true
+    },
+    {
+      "id": "text_classification/pytorch/distilbert",
+      "category": "text_classification",
+      "framework": "pytorch",
+      "model_type": "",
+      "label": "DistilBERT",
+      "batch": 512,
+      "params": 66957317,
+      "averageable": true
+    },
+    {
+      "id": "text_classification/pytorch/distilbert_scratch",
+      "category": "text_classification",
+      "framework": "pytorch",
+      "model_type": "",
+      "label": "DistilBERT Scratch",
+      "batch": 512,
+      "params": 66957317,
+      "averageable": true
+    },
+    {
+      "id": "text_classification/pytorch/electra",
+      "category": "text_classification",
+      "framework": "pytorch",
+      "model_type": "",
+      "label": "ELECTRA",
+      "batch": 16,
+      "params": 109486085,
+      "averageable": true
+    },
+    {
+      "id": "text_classification/pytorch/gemma_2",
+      "category": "text_classification",
+      "framework": "pytorch",
+      "model_type": "",
+      "label": "Gemma 2",
+      "batch": 4,
+      "params": 2614353408,
+      "averageable": true
+    },
+    {
+      "id": "text_classification/pytorch/gte_modernbert",
+      "category": "text_classification",
+      "framework": "pytorch",
+      "model_type": "",
+      "label": "GTE ModernBERT",
+      "batch": 4,
+      "params": 149608709,
+      "averageable": true
+    },
+    {
+      "id": "text_classification/pytorch/modernbert",
+      "category": "text_classification",
+      "framework": "pytorch",
+      "model_type": "",
+      "label": "ModernBERT",
+      "batch": 16,
+      "params": 149608709,
+      "averageable": true
+    },
+    {
+      "id": "text_classification/pytorch/qwen2_5_0_5b",
+      "category": "text_classification",
+      "framework": "pytorch",
+      "model_type": "",
+      "label": "Qwen2.5 0.5B",
+      "batch": 8,
+      "params": 494037248,
+      "averageable": true
+    },
+    {
+      "id": "text_classification/pytorch/simple_text",
+      "category": "text_classification",
+      "framework": "pytorch",
+      "model_type": "",
+      "label": "Simple Text",
+      "batch": 512,
+      "params": 3923973,
+      "averageable": true
+    },
+    {
+      "id": "time_series_classification/pytorch/gru",
+      "category": "time_series_classification",
+      "framework": "pytorch",
+      "model_type": "",
+      "label": "GRU",
+      "batch": 512,
+      "params": 160834,
+      "averageable": true
+    },
+    {
+      "id": "time_series_classification/pytorch/lstm",
+      "category": "time_series_classification",
+      "framework": "pytorch",
+      "model_type": "",
+      "label": "LSTM",
+      "batch": 512,
+      "params": 211650,
+      "averageable": true
+    },
+    {
+      "id": "time_series_classification/pytorch/masked_pool_mlp",
+      "category": "time_series_classification",
+      "framework": "pytorch",
+      "model_type": "",
+      "label": "Masked Pool MLP",
+      "batch": 512,
+      "params": 34370,
+      "averageable": true
+    },
+    {
+      "id": "time_series_classification/pytorch/tcn",
+      "category": "time_series_classification",
+      "framework": "pytorch",
+      "model_type": "",
+      "label": "TCN",
+      "batch": 512,
+      "params": 142466,
+      "averageable": true
+    },
+    {
+      "id": "time_series_classification/pytorch/transformer",
+      "category": "time_series_classification",
+      "framework": "pytorch",
+      "model_type": "",
+      "label": "Transformer",
+      "batch": 512,
+      "params": 274626,
+      "averageable": true
+    },
+    {
+      "id": "time_series_forecasting/pytorch/bidirectional_lstm",
+      "category": "time_series_forecasting",
+      "framework": "pytorch",
+      "model_type": "",
+      "label": "Bidirectional LSTM",
+      "batch": 512,
+      "params": 554113,
+      "averageable": true
+    },
+    {
+      "id": "time_series_forecasting/pytorch/gru",
+      "category": "time_series_forecasting",
+      "framework": "pytorch",
+      "model_type": "",
+      "label": "GRU",
+      "batch": 512,
+      "params": 160769,
+      "averageable": true
+    },
+    {
+      "id": "time_series_forecasting/pytorch/itransformer",
+      "category": "time_series_forecasting",
+      "framework": "pytorch",
+      "model_type": "",
+      "label": "iTransformer",
+      "batch": 64,
+      "params": 610584,
+      "averageable": true
+    },
+    {
+      "id": "time_series_forecasting/pytorch/lstm",
+      "category": "time_series_forecasting",
+      "framework": "pytorch",
+      "model_type": "",
+      "label": "LSTM",
+      "batch": 512,
+      "params": 211585,
+      "averageable": true
+    },
+    {
+      "id": "time_series_forecasting/pytorch/patch_tsmixer",
+      "category": "time_series_forecasting",
+      "framework": "pytorch",
+      "model_type": null,
+      "label": "Patch TSMixer",
+      "batch": 64,
+      "params": 84312,
+      "averageable": true
+    },
+    {
+      "id": "time_series_forecasting/pytorch/patch_tst",
+      "category": "time_series_forecasting",
+      "framework": "pytorch",
+      "model_type": "",
+      "label": "Patch TST",
+      "batch": 64,
+      "params": 404120,
+      "averageable": true
+    },
+    {
+      "id": "time_series_forecasting/pytorch/rnn",
+      "category": "time_series_forecasting",
+      "framework": "pytorch",
+      "model_type": "",
+      "label": "RNN",
+      "batch": 512,
+      "params": 59137,
+      "averageable": true
+    },
+    {
+      "id": "time_series_forecasting/pytorch/tcn",
+      "category": "time_series_forecasting",
+      "framework": "pytorch",
+      "model_type": "",
+      "label": "TCN",
+      "batch": 512,
+      "params": 142401,
+      "averageable": true
+    },
+    {
+      "id": "time_series_forecasting/pytorch/tft",
+      "category": "time_series_forecasting",
+      "framework": "pytorch",
+      "model_type": "",
+      "label": "TFT",
+      "batch": 64,
+      "params": 1428312,
+      "averageable": true
+    },
+    {
+      "id": "time_series_forecasting/pytorch/time_mixer",
+      "category": "time_series_forecasting",
+      "framework": "pytorch",
+      "model_type": "",
+      "label": "Time Mixer",
+      "batch": 64,
+      "params": 227661,
+      "averageable": true
+    },
+    {
+      "id": "time_series_forecasting/pytorch/timesfm",
+      "category": "time_series_forecasting",
+      "framework": "pytorch",
+      "model_type": "",
+      "label": "TimesFM",
+      "batch": 16,
+      "params": 498828960,
+      "averageable": true
+    },
+    {
+      "id": "time_series_forecasting/pytorch/transformer",
+      "category": "time_series_forecasting",
+      "framework": "pytorch",
+      "model_type": "",
+      "label": "Transformer",
+      "batch": 512,
+      "params": 274561,
+      "averageable": true
+    },
+    {
+      "id": "time_to_event_prediction/lifelines/cox_ph",
+      "category": "time_to_event_prediction",
+      "framework": "lifelines",
+      "model_type": "",
+      "label": "Cox PH",
+      "batch": 128,
+      "params": null,
+      "averageable": true
+    },
+    {
+      "id": "time_to_event_prediction/lifelines/log_logistic_aft",
+      "category": "time_to_event_prediction",
+      "framework": "lifelines",
+      "model_type": "",
+      "label": "Log Logistic AFT",
+      "batch": 128,
+      "params": null,
+      "averageable": true
+    },
+    {
+      "id": "time_to_event_prediction/lifelines/log_normal_aft",
+      "category": "time_to_event_prediction",
+      "framework": "lifelines",
+      "model_type": "",
+      "label": "Log Normal AFT",
+      "batch": 128,
+      "params": null,
+      "averageable": true
+    },
+    {
+      "id": "time_to_event_prediction/lifelines/weibull_aft",
+      "category": "time_to_event_prediction",
+      "framework": "lifelines",
+      "model_type": "",
+      "label": "Weibull AFT",
+      "batch": 128,
+      "params": null,
+      "averageable": true
+    },
+    {
+      "id": "time_to_event_prediction/pytorch/deephit",
+      "category": "time_to_event_prediction",
+      "framework": "pytorch",
+      "model_type": "",
+      "label": "DeepHit",
+      "batch": 256,
+      "params": 5898,
+      "averageable": true
+    },
+    {
+      "id": "time_to_event_prediction/pytorch/deepsurv",
+      "category": "time_to_event_prediction",
+      "framework": "pytorch",
+      "model_type": "",
+      "label": "DeepSurv",
+      "batch": 128,
+      "params": 2945,
+      "averageable": true
+    },
+    {
+      "id": "time_to_event_prediction/pytorch/dynamic_deephit",
+      "category": "time_to_event_prediction",
+      "framework": "pytorch",
+      "model_type": "",
+      "label": "Dynamic DeepHit",
+      "batch": 128,
+      "params": 19914,
+      "averageable": true
+    },
+    {
+      "id": "time_to_event_prediction/pytorch/multilayer_norm",
+      "category": "time_to_event_prediction",
+      "framework": "pytorch",
+      "model_type": "",
+      "label": "Multilayer Norm",
+      "batch": 128,
+      "params": 10369,
+      "averageable": true
+    },
+    {
+      "id": "time_to_event_prediction/pytorch/simple_linear",
+      "category": "time_to_event_prediction",
+      "framework": "pytorch",
+      "model_type": "",
+      "label": "Simple Linear",
+      "batch": 128,
+      "params": 13,
+      "averageable": true
+    },
+    {
+      "id": "time_to_event_prediction/pytorch/simple_neural",
+      "category": "time_to_event_prediction",
+      "framework": "pytorch",
+      "model_type": "",
+      "label": "Simple Neural",
+      "batch": 128,
+      "params": 2945,
+      "averageable": true
+    },
+    {
+      "id": "time_to_event_prediction/pytorch/surv_trace",
+      "category": "time_to_event_prediction",
+      "framework": "pytorch",
+      "model_type": "",
+      "label": "Surv Trace",
+      "batch": 128,
+      "params": 101770,
+      "averageable": true
+    },
+    {
+      "id": "time_to_event_prediction/scikit_survival/cox_ph",
+      "category": "time_to_event_prediction",
+      "framework": "scikit_survival",
+      "model_type": "",
+      "label": "Cox PH",
+      "batch": 128,
+      "params": null,
+      "averageable": true
+    },
+    {
+      "id": "time_to_event_prediction/scikit_survival/gradient_boosted_survival",
+      "category": "time_to_event_prediction",
+      "framework": "scikit_survival",
+      "model_type": "",
+      "label": "Gradient Boosted Survival",
+      "batch": 128,
+      "params": null,
+      "averageable": true
+    },
+    {
+      "id": "time_to_event_prediction/scikit_survival/random_survival_forest",
+      "category": "time_to_event_prediction",
+      "framework": "scikit_survival",
+      "model_type": "",
+      "label": "Random Survival Forest",
+      "batch": 128,
+      "params": null,
+      "averageable": true
+    },
+    {
+      "id": "token_classification/pytorch/bert_token",
+      "category": "token_classification",
+      "framework": "pytorch",
+      "model_type": "",
+      "label": "BERT Token",
+      "batch": 32,
+      "params": 108898569,
+      "averageable": true
+    },
+    {
+      "id": "token_classification/pytorch/deberta_v3_token",
+      "category": "token_classification",
+      "framework": "pytorch",
+      "model_type": "",
+      "label": "DeBERTa V3 Token",
+      "batch": 16,
+      "params": 183838473,
+      "averageable": true
+    },
+    {
+      "id": "token_classification/pytorch/distil_token",
+      "category": "token_classification",
+      "framework": "pytorch",
+      "model_type": "",
+      "label": "Distil Token",
+      "batch": 64,
+      "params": 66369801,
+      "averageable": true
+    },
+    {
+      "id": "token_classification/pytorch/electra_token",
+      "category": "token_classification",
+      "framework": "pytorch",
+      "model_type": "",
+      "label": "ELECTRA Token",
+      "batch": 32,
+      "params": 108898569,
+      "averageable": true
+    },
+    {
+      "id": "token_classification/pytorch/modernbert_token",
+      "category": "token_classification",
+      "framework": "pytorch",
+      "model_type": "",
+      "label": "ModernBERT Token",
+      "batch": 16,
+      "params": 149611785,
+      "averageable": true
+    },
+    {
+      "id": "token_classification/pytorch/roberta_token",
+      "category": "token_classification",
+      "framework": "pytorch",
+      "model_type": "",
+      "label": "RoBERTa Token",
+      "batch": 32,
+      "params": 124061961,
+      "averageable": true
+    },
+    {
+      "id": "token_classification/pytorch/simple_token",
+      "category": "token_classification",
+      "framework": "pytorch",
+      "model_type": "",
+      "label": "Simple Token",
+      "batch": 32,
+      "params": 6554697,
+      "averageable": true
+    },
+    {
+      "id": "token_classification/pytorch/xlm_roberta_token",
+      "category": "token_classification",
+      "framework": "pytorch",
+      "model_type": "",
+      "label": "XLM RoBERTa Token",
+      "batch": 16,
+      "params": 277459977,
+      "averageable": true
+    }
+  ]
+}
