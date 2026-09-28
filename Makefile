@@ -41,7 +41,7 @@ help:
 	@echo "  setup       pip install the lint + FRAMEWORK requirement sets; installs the pre-push hook"
 	@echo "  install-hooks  (re)install the git pre-push hook that runs 'make check'"
 	@echo
-	@echo "  individual: lint test"
+	@echo "  individual: lint test index"
 	@echo
 	@echo "  CI runs 'pytest tests/' three times, once per framework env:"
 	@echo "  pytorch, sklearn, survival. Locally you have one."
@@ -216,3 +216,11 @@ lint:
 .PHONY: test
 test:
 	$(PYTEST) tests/ -q
+
+# index: rebuild model_zoo/index.v1.json after changing a template's
+# batch_size, architecture or estimator. tests/test_zoo_index.py fails until the
+# rebuilt file is committed. Rows whose framework is not installed here are
+# carried from the committed file; CI recomputes them.
+.PHONY: index
+index:
+	$(PYTHON) tools/build_index.py

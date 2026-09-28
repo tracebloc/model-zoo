@@ -15,6 +15,7 @@ Surface:
 - [ ] Tech-debt / refactor
 - [ ] Docs
 - [ ] Security / hardening
+- [ ] Billing / metering / numerics
 - [ ] Breaking change
 
 ## Test plan

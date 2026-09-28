@@ -1,7 +1,7 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/fr-pass-comment.yml`
-# (blob d8f166432687627c59dad6f09fa7163d17894ca8) folded with the private source repo's own caller of it,
+# (blob 8c30ccc96799f6281ec8d95c73256b9cd9779a3e) folded with the private source repo's own caller of it,
 # `.github/workflows/fr-pass-comment-caller.yml` (blob bc01ef34bf604788e80a0b19d31b8fe7edfaae15), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
@@ -100,7 +100,8 @@ jobs:
     # and 6 of 26 runs one day were the bot reading its own comment):
     #   * Not a bot account -- the handler's own notes arrive under the App's
     #     `[bot]` login, keyed on account type rather than a login so the busiest
-    #     human reviewer is never locked out.
+    #     human reviewer is never locked out. A machine that is a USER gets past
+    #     this filter, on purpose, and is refused out loud in step 2a.
     #   * Not one of our own notes -- the marker the reporting step prepends to
     #     every note; startsWith, so a human who quotes a refusal ("> ...") and
     #     issues the command underneath is still heard.
@@ -122,11 +123,12 @@ jobs:
           private-key: ${{ secrets.RELEASE_TRAIN_APP_PRIVATE_KEY }}
           owner: ${{ github.repository_owner }}
           # LEAST PRIVILEGE, DERIVED FROM THIS JOB'S OWN CALLS ((internal ref)).
-          # Two steps share this token and between them make six calls; this is the
+          # Two steps share this token and between them make seven calls; this is the
           # union, with the permission each one documents:
           #
           #   GET repos/{r}/collaborators/{u}/permission   Metadata read (implicit)
           #   GET repos/{r}/pulls/{n}                      PRs read
+          #   GET repos/{r}/issues/{n}/events              Issues read (PRs read on a PR)
           #   organization().projectV2 + item Status read   projects read
           #   updateProjectV2ItemFieldValue                projects WRITE
           #   POST issues/comments/{id}/reactions          Issues write AND PRs write
@@ -138,9 +140,10 @@ jobs:
           # advanced the card and then died posting the thumb. The installation has
           # granted it since 2026-09-15; the ceiling was this file's. `Metadata` is
           # implicit with any repository permission; if the collaborator read fails
-          # anyway the step falls back to `author_association`, a LOOSER test, so a
-          # "Could not read repository permission" warning is a regression here, not
-          # noise. Nothing reads or writes repository content, so contents drops.
+          # anyway the step refuses as `perm-unknown` ((internal ref) F2 -- it used to
+          # fall back to `author_association`, a LOOSER test), so a "Could not read
+          # repository permission" warning is a regression here, not noise. Nothing
+          # reads or writes repository content, so contents drops.
           permission-issues: write
           permission-pull-requests: write
           permission-organization-projects: write
@@ -204,6 +207,9 @@ jobs:
           # Via the environment, never interpolated into the script: a comment
           # body is attacker-controlled text and must not reach the shell parser.
           COMMENT_BODY: ${{ github.event.comment.body }}
+          # The whole comment object, for the `performed_via_github_app` read (F3):
+          # jq tells an absent key from a null one; an expression cannot.
+          COMMENT_JSON: ${{ toJSON(github.event.comment) }}
           # The item's labels as the event carries them, for the `fr-hold` read.
           LABELS: ${{ toJSON(github.event.issue.labels.*.name) }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
@@ -337,6 +343,64 @@ jobs:
             exit 0
           fi
 
+          # ------------------------------------- 2a. is a person speaking?
+          # selftest:fr-pass-speaker-start
+          # FUNCTIONAL SIGN-OFF IS A PERSON'S ((internal ref), (internal ref) D5 F1/F3).
+          # The job `if` drops Bot-TYPE accounts silently -- that is how the
+          # handler never answers itself -- but a machine can speak as a User:
+          # `tracebloc-review` is a User with write access, so the review session
+          # could type `/fr-pass` and pass every check below it. Two ways a
+          # machine speaks, two refusals:
+          #   * F1, A MACHINE LOGIN. Which logins are machines is declared ONCE,
+          #     in scripts/lib/machine_logins.py, and asked here, never restated.
+          #   * F3, AN APP ACTING AS A PERSON. A cloud session writes through an
+          #     App's user token, so its comment carries the person's login and a
+          #     non-null `performed_via_github_app`. GitHub serves that key on
+          #     every comment, null or not (measured 2026-09-28), so an absent key
+          #     or a comment that is not an object is "cannot tell".
+          # FAIL CLOSED: a classifier that does not answer exactly `human` (no
+          # tools checkout, a Python error, no output) refuses; so does the above.
+          SPEAKER=$(python3 .org-config-tools/scripts/lib/machine_logins.py classify "$ACTOR" 2> /dev/null) || SPEAKER=""
+          case "$SPEAKER" in
+            human) ;;
+            machine)
+              decide machine-account \
+                "🤖 \`/fr-pass\` was **not** applied: @$ACTOR is a machine account, and functional sign-off is a person's." \
+                "" \
+                "Which accounts are machines is declared once, in org-config. A person on the team comments \`/fr-pass\`, or moves the card by hand on the [engineering kanban]($BOARD_URL)."
+              exit 1
+              ;;
+            *)
+              decide speaker-unknown \
+                "⚠️ \`/fr-pass\` was **not** applied: whether @$ACTOR is a person or a machine account could not be read, so the card stays where it is." \
+                "" \
+                "This is a bug in the handler, not something you did. Run log: $RUN_URL"
+              exit 1
+              ;;
+          esac
+          VIA_APP=$(jq -r 'if type == "object" and has("performed_via_github_app") then
+                             (if .performed_via_github_app == null then "none"
+                              else "app:" + ((.performed_via_github_app.slug // .performed_via_github_app.name // "unnamed") | tostring) end)
+                           else "unreadable" end' <<< "$COMMENT_JSON" 2> /dev/null) || VIA_APP="unreadable"
+          case "$VIA_APP" in
+            none) ;;
+            app:*)
+              decide via-app \
+                "🤖 \`/fr-pass\` was **not** applied: this comment was posted through the \`${VIA_APP#app:}\` App on @$ACTOR's behalf, and functional sign-off is a person's own." \
+                "" \
+                "An automated session cannot sign off, whoever it writes as. @$ACTOR comments \`/fr-pass\` themselves, or moves the card by hand on the [engineering kanban]($BOARD_URL)."
+              exit 1
+              ;;
+            *)
+              decide via-app-unknown \
+                "⚠️ \`/fr-pass\` was **not** applied: whether this comment was posted by an App on @$ACTOR's behalf could not be read from the event, so the card stays where it is." \
+                "" \
+                "This is a bug in the handler, not something you did. Run log: $RUN_URL"
+              exit 1
+              ;;
+          esac
+          # selftest:fr-pass-speaker-end
+
           # --------------------------------------------- 2. may they sign off?
           # author_association is not a permission check: a member whose org
           # membership is private reads as CONTRIBUTOR (or NONE) on repos they
@@ -344,22 +408,29 @@ jobs:
           # silently reject a real reviewer. Ask for the actual repository
           # permission, which also states D30's intent — "not a triage/read
           # outside collaborator" — directly instead of approximating it.
+          # selftest:fr-pass-permission-start
           PERM_ERR="$RUNNER_TEMP/fr-pass.perm.err"
           PERM_JSON=$(gh api "repos/$REPO_FULL/collaborators/$ACTOR/permission" 2> "$PERM_ERR") || PERM_JSON=""
           PERM=$(printf '%s' "$PERM_JSON" | jq -r '.permission // empty' 2> /dev/null || true)
           ROLE=$(printf '%s' "$PERM_JSON" | jq -r '.role_name // empty' 2> /dev/null || true)
 
+          # FAIL CLOSED ((internal ref), (internal ref) D5 F2). An unreadable permission
+          # (scope, rate limit, outage, a body with neither field) used to fall
+          # back to author_association -- a looser test, which a machine account
+          # that is an org MEMBER passes. Cannot tell is not a yes.
+          if [ -z "$PERM" ] && [ -z "$ROLE" ]; then
+            echo "::warning::Could not read repository permission for @$ACTOR — refusing (perm-unknown)."
+            sed -n '1,3p' "$PERM_ERR"
+            decide perm-unknown \
+              "⚠️ \`/fr-pass\` was **not** applied: @$ACTOR's permission on \`$REPO_FULL\` could not be read, so whether they may sign off is unknown and the card stays where it is." \
+              "" \
+              "Usually a transient GitHub error: comment \`/fr-pass\` again, or move the card by hand on the [engineering kanban]($BOARD_URL). Run log: $RUN_URL"
+            exit 1
+          fi
+
           AUTHORISED=false
           case "$PERM" in admin | maintain | write) AUTHORISED=true ;; esac
           case "$ROLE" in admin | maintain | write) AUTHORISED=true ;; esac
-
-          if [ -z "$PERM_JSON" ]; then
-            # API unreachable (scope, rate limit, outage). Fall back to the
-            # association rather than reject a legitimate reviewer — and say so.
-            echo "::warning::Could not read repository permission for @$ACTOR — falling back to author_association=$ASSOCIATION"
-            sed -n '1,3p' "$PERM_ERR"
-            case "$ASSOCIATION" in MEMBER | OWNER | COLLABORATOR) AUTHORISED=true ;; esac
-          fi
 
           if [ "$AUTHORISED" != "true" ]; then
             decide not-authorised \
@@ -368,6 +439,7 @@ jobs:
               "Functional sign-off is limited to people who can write to the repository (seen: permission \`${PERM:-unknown}\`, association \`$ASSOCIATION\`). Ask someone on the team to sign off, or move the card by hand on the [engineering kanban]($BOARD_URL)."
             exit 1
           fi
+          # selftest:fr-pass-permission-end
 
           # -------------------------- 3a. is this a (internal ref) promotion?
           # Promotion PRs (`release-train/*`, and hotfix back-merges) are
@@ -443,6 +515,110 @@ jobs:
           fi
           # selftest:fr-hold-end
 
+          # ------------------------------ 3c. did a PERSON release the hold?
+          # selftest:fr-hold-release-start
+          # A HOLD A MACHINE RELEASED STILL STANDS ((internal ref), (internal ref) D10 and
+          # D5 F4). The label's absence above proves only that nobody holds it NOW:
+          # `tracebloc-review` has write access and can remove `fr-hold`, after which
+          # every check passes. So read who released it. The LAST `fr-hold` event
+          # decides, by event id (ids only grow), and a release counts only when a
+          # person made it with their own hand:
+          #   * none, ever                         never held -- go on;
+          #   * `unlabeled` by a human, no App     a person released it -- go on;
+          #   * `unlabeled` by a machine login, or
+          #     through an App on a person's token the hold STANDS, plus an alarm;
+          #   * `labeled`, yet the label is gone   it vanished without a release
+          #     event (the repo label deleted or renamed): cannot tell, refused;
+          #   * the events unreadable, or the read
+          #     at GitHub's cap (below)            cannot tell, refused.
+          # A person who meant the release puts the label back and takes it off again.
+          #
+          # THE CAP (Bugbot on (internal ref)). `GET /issues/{n}/events` serves the
+          # OLDEST `ISSUE_EVENTS_CAP` events of an item however far --paginate walks,
+          # and still exits 0 ((internal ref); the number is declared once, in
+          # scripts/desk-dispatch.py). The newest release -- the one this reads -- is
+          # the first to fall off a busy item's history. So the read counts EVERY event
+          # it was served, and a count at the cap is "cannot tell", never "no release".
+          # This stays a REST read on purpose: the GraphQL timeline, anchored to the
+          # newest end, does not say whether a release went through an App.
+          EVENTS_CAP=$(sed -n 's/^ISSUE_EVENTS_CAP = \([0-9][0-9]*\)$/\1/p' \
+            .org-config-tools/scripts/desk-dispatch.py 2> /dev/null) || EVENTS_CAP=""
+          if [ -z "$EVENTS_CAP" ]; then
+            decide hold-history-unreadable \
+              "⚠️ \`/fr-pass\` was **not** applied: the number of events GitHub serves for an item (\`ISSUE_EVENTS_CAP\` in org-config's \`scripts/desk-dispatch.py\`) could not be read, so a complete label history cannot be told from a cut-off one and the card stays where it is." \
+              "" \
+              "This is a bug in the handler, not something you did. Run log: $RUN_URL"
+            exit 1
+          fi
+          EVENTS_ERR="$RUNNER_TEMP/fr-pass.events.err"
+          if ! EVENT_ROWS=$(gh api --paginate "repos/$REPO_FULL/issues/$NUMBER/events?per_page=100" \
+                --jq '.[] | if (.event == "labeled" or .event == "unlabeled") and .label.name == "fr-hold"
+                      then "\(.id)|\(.event)|\(.actor.login // "")|\(if has("performed_via_github_app") | not then "unreadable"
+                           elif .performed_via_github_app == null then "none"
+                           else "app:" + ((.performed_via_github_app.slug // "unnamed") | tostring) end)"
+                      else "-" end' \
+                2> "$EVENTS_ERR"); then
+            EVENTS_HEAD=$(sed -n '1,3p' "$EVENTS_ERR" | tr -d "$FENCE")
+            decide hold-history-unreadable \
+              "⚠️ \`/fr-pass\` was **not** applied: this item's label history could not be read, so whether a past \`fr-hold\` was released by a person is unknown and the card stays where it is." \
+              "" \
+              "$FENCE" \
+              "$EVENTS_HEAD" \
+              "$FENCE" \
+              "" \
+              "Usually a transient GitHub error: comment \`/fr-pass\` again. Run log: $RUN_URL"
+            exit 1
+          fi
+          EVENTS_READ=$(printf '%s\n' "$EVENT_ROWS" | sed '/^$/d' | wc -l | tr -d ' ')
+          if [ "$EVENTS_READ" -ge "$EVENTS_CAP" ]; then
+            decide hold-history-unreadable \
+              "⚠️ \`/fr-pass\` was **not** applied: GitHub serves only the oldest $EVENTS_CAP events of an item, and this one has at least that many, so its latest \`fr-hold\` release may be among the events it does not serve. Whether a person released the hold cannot be read, so the card stays where it is." \
+              "" \
+              "A person who has checked the item's hold history moves the card on the board by hand. Run log: $RUN_URL"
+            exit 1
+          fi
+          HOLD_EVENTS=$(printf '%s\n' "$EVENT_ROWS" | sed '/^-$/d')
+          LAST_HOLD=$(printf '%s\n' "$HOLD_EVENTS" | sed '/^$/d' | sort -t '|' -k1,1n | tail -n 1)
+          if [ -n "$LAST_HOLD" ]; then
+            IFS='|' read -r _ HOLD_EVENT RELEASED_BY RELEASED_VIA <<< "$LAST_HOLD"
+            RELEASER=""
+            if [ "$HOLD_EVENT" = "unlabeled" ] && [ -n "$RELEASED_BY" ]; then
+              RELEASER=$(python3 .org-config-tools/scripts/lib/machine_logins.py classify "$RELEASED_BY" 2> /dev/null) || RELEASER=""
+            fi
+            case "$HOLD_EVENT|$RELEASER|$RELEASED_VIA" in
+              "unlabeled|human|none") ;;
+              "unlabeled|machine|"* | "unlabeled|human|app:"*)
+                if [ "$RELEASER" = "machine" ]; then
+                  RELEASED_HOW="by the machine account @$RELEASED_BY"
+                else
+                  RELEASED_HOW="through the \`${RELEASED_VIA#app:}\` App on @$RELEASED_BY's behalf"
+                fi
+                # THE ALARM: a run annotation, and the note says it in words.
+                echo "::error title=fr-hold released by a machine::$REPO_FULL#$NUMBER -- the fr-hold label was removed $RELEASED_HOW; the hold stands and the card was not moved."
+                decide hold-released-by-machine \
+                  "🚨 \`/fr-pass\` was **not** applied: this item's \`fr-hold\` was removed $RELEASED_HOW, and a hold a machine releases still stands." \
+                  "" \
+                  "Only a person can release a functional-review hold. If the release was meant, a person puts the \`fr-hold\` label back and removes it themselves, then comments \`/fr-pass\` again. If it was not, put the label back: something automated removed a hold it had no business touching. Run log: $RUN_URL"
+                exit 1
+                ;;
+              "labeled|"*)
+                decide hold-vanished \
+                  "⚠️ \`/fr-pass\` was **not** applied: this item was put on \`fr-hold\` and the label is gone with no removal on record (was the label deleted or renamed?), so nobody can say who released it and the card stays where it is." \
+                  "" \
+                  "A person re-applies \`fr-hold\` and removes it themselves, then comments \`/fr-pass\` again. Run log: $RUN_URL"
+                exit 1
+                ;;
+              *)
+                decide hold-history-unreadable \
+                  "⚠️ \`/fr-pass\` was **not** applied: who released this item's last \`fr-hold\` could not be read (event \`$HOLD_EVENT\`, by \`${RELEASED_BY:-unknown}\`, via \`${RELEASED_VIA:-unknown}\`), so the card stays where it is." \
+                  "" \
+                  "This is a bug in the handler, not something you did. Run log: $RUN_URL"
+                exit 1
+                ;;
+            esac
+          fi
+          # selftest:fr-hold-release-end
+
           # ----------------------------------------- 4. resolve the board item
           REPO_NAME="${REPO_FULL#*/}"
 
@@ -511,6 +687,18 @@ jobs:
             exit 1
           fi
 
+          # THE STAGING COLUMN'S NAME IS RESOLVED ONCE, HERE, before any note names it
+          # ((internal ref)): the notes below say `$STAGING_REVIEW`, the name the logic
+          # uses, so after a board rename they point at a column that exists.
+          # (internal ref) rename shim, inert today: STAGING_REVIEW resolves to "FR on
+          # staging" unless the board has "Staging (human review)"; NEITHER still fails.
+          if printf '%s' "$PROJ" | jq -e '.data.organization.projectV2.field.options[]
+                | select(.name == "Staging (human review)")' > /dev/null; then
+            STAGING_REVIEW="Staging (human review)"
+          else
+            STAGING_REVIEW="FR on staging"
+          fi
+
           # Take whichever content root the query returned, then keep only the
           # items that belong to OUR project.
           NODES=$(printf '%s' "$PROJ" | jq -c --arg n "$PROJECT_NUMBER" '
@@ -532,7 +720,7 @@ jobs:
             decide not-on-project \
               "🔍 \`/fr-pass\` did nothing: this item is not on the [engineering kanban]($BOARD_URL) (project #$PROJECT_NUMBER), so there is no card to advance." \
               "" \
-              "\`add-to-kanban.yml\` normally adds every new issue and PR. If it was missed, add the card, set **FR on staging**, then comment \`/fr-pass\` again. If the tracked work lives on a linked issue rather than this PR, sign off there instead."
+              "\`add-to-kanban.yml\` normally adds every new issue and PR. If it was missed, add the card, set **$STAGING_REVIEW**, then comment \`/fr-pass\` again. If the tracked work lives on a linked issue rather than this PR, sign off there instead."
             exit 1
           fi
 
@@ -551,21 +739,13 @@ jobs:
 
           # The two column names below are hard-coded and this board has been
           # renamed before, so check they exist and fail loudly on the next rename.
-          # (internal ref) rename shim, inert today: STAGING_REVIEW resolves to "FR on
-          # staging" unless the board has "Staging (human review)"; NEITHER still fails.
-          if printf '%s' "$PROJ" | jq -e '.data.organization.projectV2.field.options[]
-                | select(.name == "Staging (human review)")' > /dev/null; then
-            STAGING_REVIEW="Staging (human review)"
-          else
-            STAGING_REVIEW="FR on staging"
-          fi
           for WANT in "$STAGING_REVIEW" "Ready for prod"; do
             if ! printf '%s' "$PROJ" \
               | jq -e --arg s "$WANT" '.data.organization.projectV2.field.options[] | select(.name == $s)' > /dev/null; then
               decide missing-option \
                 "⚠️ \`/fr-pass\` could **not** be applied: project #$PROJECT_NUMBER has no \`Status\` option named **$WANT**, so the card was left alone." \
                 "" \
-                "The board's columns were probably renamed. Update the column names in \`.github/.github/workflows/fr-pass-comment.yml\`. Run log: $RUN_URL"
+                "The board's columns were probably renamed. Update the column names in org-config's \`.github/workflows/fr-pass-comment.yml\`. Run log: $RUN_URL"
               exit 1
             fi
           done
@@ -589,14 +769,14 @@ jobs:
               decide no-status \
                 "🔍 \`/fr-pass\` did nothing: this card is on the board but its \`Status\` is empty, so there is no column to advance from." \
                 "" \
-                "Set it to **FR on staging** on the [engineering kanban]($BOARD_URL) and comment \`/fr-pass\` again."
+                "Set it to **$STAGING_REVIEW** on the [engineering kanban]($BOARD_URL) and comment \`/fr-pass\` again."
               exit 1
               ;;
             *)
               decide wrong-column \
-                "🔍 \`/fr-pass\` did nothing: this card is in **$CURRENT**, and \`/fr-pass\` only advances **FR on staging → Ready for prod** (the one functional-review gate)." \
+                "🔍 \`/fr-pass\` did nothing: this card is in **$CURRENT**, and \`/fr-pass\` only advances **$STAGING_REVIEW → Ready for prod** (the one functional-review gate)." \
                 "" \
-                "Promote it to **FR on staging** first — that happens automatically when the release train pushes to \`staging\`."
+                "Promote it to **$STAGING_REVIEW** first — that happens automatically when the release train pushes to \`staging\`."
               exit 1
               ;;
           esac
