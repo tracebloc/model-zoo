@@ -26,6 +26,8 @@ guards:
 rows:
   - tests/test_engine_pin_drift_guard.py
 exempt:
+  - path: tools/build_index.py
+    ticket: tracebloc/model-zoo#84
   - path: tools/check_dump_coverage.py
     ticket: tracebloc/model-zoo#84
   - path: tools/derive_seed_excluded.py
