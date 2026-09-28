@@ -1,8 +1,8 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/desk-dispatch.yml`
-# (blob ab5eb0eac1892f6d448acdf62ed2e49108e519b6) folded with the private source repo's own caller of it,
-# `.github/workflows/desk-dispatch-caller.yml` (blob 1c8303c08d4b550fac12706a916a022f0a658701), for a PUBLIC repo: GitHub lets a
+# (blob b5f0cbbfe7e920c1a189b0c04ae23b388e3d5876) folded with the private source repo's own caller of it,
+# `.github/workflows/desk-dispatch-caller.yml` (blob 210af38cc9324d8c1d13f89b68f5035a3742848d), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
 # reusable's jobs inline -- the triggers are the caller's; every `inputs.*` is
@@ -69,17 +69,14 @@
 #   review requested from `reviewer`                   -> a review session, IF the
 #                                                          head is green
 #   push to a PR `reviewer` has reviewed / is on       -> a re-review session, IF green
-#   workflow_run completed (a CI workflow): every CI run and commit status on the
+#   workflow_run completed (a CI workflow), or check_suite completed (Cursor
+#     Bugbot's own suite): every CI run and commit status on the
 #     head terminal and green, `reviewer` requested or already on the PR, head
 #     not yet reviewed                                    -> a review session
 #   a run or status still running / any red / mergeable_state dirty
 #                                                       -> skip (the last one to
 #                                                          finish fires; red waits
 #                                                          for the author's fix)
-#   ... the ONLY red is `bugbot / review` and the gate  -> HEAL: re-run THAT gate run
-#       would pass if evaluated now (its threads were      in place, as the App; no
-#       resolved after it ran -- (internal ref))             session; its completion is
-#                                                          the next event
 #   PR opened or marked ready, non-draft, with
 #     `reviewer` already requested (CODEOWNERS)       -> a review session, IF the head
 #                                                          is green
@@ -87,7 +84,7 @@
 #   a held red that is only CANCELLED runs on the live -> re-run each in place, as
 #     head ((internal ref))                              the App, once per run; no
 #                                                          session (`heal_cancelled`)
-#   FIX MODE on (`vars.CRD_FIX_MODE`, the session's     -> a FIX session where a review
+#   FIX MODE on (`vars.CRD_FIX_MODE`, the dispatcher's  -> a FIX session where a review
 #     switch; (internal ref) item 1): a head      would be owed, once per head;
 #     red on a held check, or dirty -- even before any    re-entered when the base moves
 #     CI ran -- the reviewer requested or on the PR       (a red: once a red it met is
@@ -104,20 +101,24 @@
 # reviewer's own PRs are skipped with the reason in the job summary.
 #
 # THE GREEN GATE (Lukas, 2026-09-14). The review account is the most expensive
-# check on a PR, so nothing fires until the head is green; Bugbot is part of the
-# rollup (bugbot-gate) and review latency becomes CI latency, by design. What
-# "green" means is `head_state()` in scripts/desk-dispatch.py, shared with
-# ship-dispatch.py: every CI check run and commit status terminal and none red,
+# check on a PR, so nothing fires until the head is green; Cursor Bugbot's own
+# check is part of the rollup (its pending holds the head wherever it runs) and
+# review latency becomes CI latency, by design. What "green" means is
+# `head_state()` in scripts/desk-dispatch.py, shared with the sweep: every CI
+# check run and commit status terminal and none red,
 # the dispatchers' own `... / dispatch` runs excluded; `mergeable_state` is read
 # for `dirty` only.
 #
-# WHY workflow_run, NOT check_suite. `workflow_run` names the CI workflows a caller
-# follows, so its list is a contract caller-drift can check, and a `check_suite`
-# trigger cannot filter by app. No caller subscribes to `check_suite`, and GitHub
-# starts no workflow for a check suite GitHub Actions created, so the self-trigger
-# loop (internal ref) feared cannot start (its script-side refusal was deleted as
-# unreachable, (internal ref)). Callers MUST send `workflow_run: {workflows:
-# [<every pull-request workflow of that repo>], types: [completed]}` and grant
+# WHY workflow_run, AND check_suite ONLY FOR BUGBOT. `workflow_run` names the CI
+# workflows a caller follows, so its list is a contract caller-drift can check. A
+# `check_suite` trigger cannot filter by app, and callers subscribe to it anyway since
+# the Bugbot gate retired ((internal ref)): Cursor Bugbot finishes after the
+# required checks on about half of all pushes, and its own suite completing is then
+# the only event that carries the green. GitHub starts no workflow for a check suite
+# GitHub Actions created, so the self-trigger loop (internal ref) feared cannot start
+# (its script-side refusal was deleted as unreachable, (internal ref)). Callers MUST
+# send `workflow_run: {workflows: [<every pull-request workflow of that repo>],
+# types: [completed]}` and `check_suite: {types: [completed]}`, and grant
 # `checks: read` + `statuses: read`. There is no ungated degrade any more: every
 # desk caller grants both reads, and a 403 on the head read refuses like any failed
 # read -- a red run, no review ((internal ref)). A pull-request workflow the caller
@@ -138,20 +139,18 @@
 # label older than `stale-minutes` is a dead session's and is stolen.
 #
 # THE PR'S ONE CLAIM ((internal ref) part 2). Once the lock is won, the
-# dispatcher also takes the claim every desk and ship session takes before it works
-# a PR -- `claude-ship:driving-<n>`, a label only one creator gets -- under a token
+# dispatcher also takes the claim every session takes before it works a PR --
+# `claude-ship:driving-<n>`, a label only one creator gets -- under a token
 # it makes up for the session, and writes `claim=<token>` on the PR's payload line.
 # The session adopts it, so nothing takes the PR in the minutes the fired session
 # spends booting. A fire that starts no session gives it back, owner-checked
 # (`take_session_claim` / `release_session_claim` in scripts/desk-dispatch.py).
 #
-# THE OTHER LOCK. `claude-ship:driving` is the AUTHOR's: a review fired while it
-# is held reviews a head the author is replacing (45 % of desk lock windows
-# overlapped a live ship lock and 12 of the 13 that filed no review sat inside
-# that overlap -- (internal ref)). The dispatcher DEFERS on it, held only, capped
-# at `ship-stale-minutes` wherever the label's age is readable ((internal ref) for
-# the unreadable case), takes NO lock while deferring, and re-enters on the
-# caller's `unlabeled` type. Ship never reads the desk's lock, so nothing deadlocks.
+# THE SHIP LOCK IS GONE ((internal ref)). `claude-ship:driving` was the
+# author's session lock, and the dispatcher deferred on it and re-entered on the
+# caller's `unlabeled` type ((internal ref), (internal ref)). The ship dispatcher
+# retired, FIX MODE fires the reviewer to fix instead, and the deferral, the
+# `unlabeled` arm and the `ship-stale-minutes` input went with it.
 #
 # FAIL CLOSED. An unreadable event, an unreadable reviews/events read, an empty
 # fire URL or token when there is work to do, or a fire the routine refuses are
@@ -168,9 +167,7 @@
 # must be promoted before a caller relies on it ((internal ref)). The caller passes
 # `with.fire-url: ${{ vars.DESK_ROUTINE_FIRE_URL }}` and the three named secrets
 # below, and nothing else: `reviewer` is derived from the default, never
-# restated. The pilot repo's caller diverged from the canonical one at
-# (internal ref) (no `unlabeled` type); the canonical caller's header records
-# that window and why no check sees it.
+# restated.
 #
 # THE INVENTORY ROWS for this file flip from `exempt` to `required` on the
 # condition `repo-inventory.yml`'s `desk_dispatch_rollout_pending` anchor states
@@ -190,7 +187,7 @@ name: Desk dispatch
 
 on:
   pull_request:
-    types: [opened, ready_for_review, review_requested, synchronize, unlabeled]
+    types: [opened, ready_for_review, review_requested, synchronize]
   # NO BASE FILTER HERE ((internal ref), (internal ref)): `on:` filters a BASE ref
   # only and a base-ref filter would also drop an emergency hotfix into `main`,
   # so the promotion predicate can only live in the callee's `if:`.
@@ -199,9 +196,8 @@ on:
   # EVERY workflow of THIS repo that runs on a pull-request event -- a completion
   # left off the list that finishes last leaves the review UNFIRED, nothing
   # re-fires ((internal ref), (internal ref)). The set is DERIVED:
-  # `test_the_canonical_caller_is_gated_and_subscribes_to_no_check_suite` reads
-  # this repo's workflow files and reddens on a missing or an extra name. NEVER
-  # `check_suite` for the Actions app: the caller's own run is such a suite.
+  # `test_the_canonical_caller_is_gated_and_hears_bugbots_check_suite` reads
+  # this repo's workflow files and reddens on a missing or an extra name.
   workflow_run:
     # A `workflow_run`'s `branches` filter is on the TRIGGERING run's head branch
     # -- a PR run's feature branch -- so integration branches are IGNORED rather
@@ -209,7 +205,6 @@ on:
     branches-ignore: [develop, staging, main]
     workflows:
       - Add to engineer kanban
-      - Bugbot review gate
       - CI
       - Code quality
       - Commit hygiene
@@ -217,6 +212,15 @@ on:
       - Route kanban Status on closure
       - Set PR card Status on project
       - Verify dumps against engine pin
+    types: [completed]
+  # `check_suite: completed` IS subscribed, for Cursor Bugbot: the `Bugbot gate`
+  # workflow that turned Bugbot's verdict into a completion here is retired
+  # ((internal ref)), and Bugbot finishes after the required checks on
+  # about half of all pushes, so its own check suite completing is then the event
+  # that carries the green. It cannot loop: GitHub starts no workflow for a check
+  # suite that GitHub Actions created, so this workflow never hears its own run
+  # (the loop (internal ref) feared).
+  check_suite:
     types: [completed]
 
 permissions:
@@ -229,7 +233,7 @@ permissions:
 # One group per PR for EVERY event kind: a workflow_run / check_suite event carries
 # the PR under `<event>.pull_requests[0].number`. Keying them differently would let
 # a request and a finishing run on one PR execute in parallel and both read the
-# lock label as free (the defect ship-dispatch.yml had, (internal ref)).
+# lock label as free (the defect the retired ship-dispatch.yml had, (internal ref)).
 concurrency:
   group: desk-dispatch-${{ github.workflow }}-${{ github.event.pull_request.number || github.event.workflow_run.pull_requests[0].number || github.event.check_suite.pull_requests[0].number || github.event.workflow_run.head_sha || github.event.check_suite.head_sha }}
   cancel-in-progress: false
@@ -279,8 +283,8 @@ jobs:
       # another run, so the script holds its slot until ~45 s after this stamp
       # (ABSORB_UNTIL_SECONDS in scripts/desk-dispatch.py) and a burst of N
       # completions costs two billed runs instead of about N/2, dropping nothing
-      # (the caveat for `unlabeled` runs is in desk-dispatch-caller.yml's header,
-      # (internal ref)). First, before the mints; a caller without this step gets no hold.
+      # (the caveat for runs that read nothing is in desk-dispatch-caller.yml's
+      # header, (internal ref)). First, before the mints; a caller without this step gets no hold.
       - name: Note when this job started
         id: started
         run: echo "at=$(date +%s)" >> "$GITHUB_OUTPUT"
@@ -293,20 +297,21 @@ jobs:
           owner: ${{ github.repository_owner }}
           repositories: org-config
           permission-contents: read
-      # SCOPED to the caller repo and to actions: write, for exactly two calls, both an
-      # in-place re-run as the App so the re-run's completion is a `workflow_run` the
-      # caller sees: a STALE `bugbot / review` run ((internal ref); `heal_stale_gate` in
-      # scripts/desk-dispatch.py), and a run behind a CANCELLED required context on the
-      # live head, once per run ((internal ref) item 1, (internal ref);
-      # `heal_cancelled`) -- no session can re-run one, and no other token here may. `continue-on-error`,
+      # SCOPED to the caller repo and to actions: write, for exactly one call: an
+      # in-place re-run, as the App so the re-run's completion is a `workflow_run` the
+      # caller sees, of a run behind a CANCELLED required context on the live head,
+      # once per run ((internal ref) item 1, (internal ref); `heal_cancelled`
+      # in scripts/desk-dispatch.py) -- no session can re-run one, and no other token
+      # here may. (The stale-`bugbot / review` re-run it was first minted for retired
+      # with the Bugbot gate, (internal ref).) `continue-on-error`,
       # DELIBERATELY: a refused mint must not redden every dispatch, and the
-      # script refuses ONLY when it finds a stale red it could have healed. Minted
+      # script refuses ONLY when it finds a cancelled red it could have healed. Minted
       # on EVERY event this dispatcher acts on, the condition naming no action:
       # an action list here would be a second copy of the script's arms (an
       # `opened` event can meet a recorded verdict too, via `decide_ungated`).
-      - name: Mint an actions token for re-running a stale Bugbot gate in place (tolerates a refused mint)
+      - name: Mint an actions token for re-running a cancelled required run in place (tolerates a refused mint)
         id: rerun-token
-        if: github.event_name == 'workflow_run' || github.event_name == 'pull_request'
+        if: github.event_name == 'workflow_run' || github.event_name == 'check_suite' || github.event_name == 'pull_request'
         continue-on-error: true
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
@@ -315,7 +320,7 @@ jobs:
           owner: ${{ github.repository_owner }}
           repositories: ${{ github.event.repository.name }}
           permission-actions: write
-      # A FOURTH scoped mint, for exactly ONE read: the base branch's
+      # A THIRD scoped mint, for exactly ONE read: the base branch's
       # required-status-context list, so a red check that is NOT required stops
       # holding the head while a red required one still does ((internal ref);
       # `gate_required` / `required_contexts` in scripts/desk-dispatch.py) --
@@ -385,13 +390,13 @@ jobs:
           DISPATCH_T0: ${{ steps.started.outputs.at }}
           DESK_RERUN_TOKEN: ${{ steps.rerun-token.outputs.token }}
           DESK_PROTECTION_TOKEN: ${{ steps.protection-token.outputs.token }}
-          # FIX MODE ((internal ref) item 1): the review session's own switch, read
-          # here too, so one variable decides both whether the reviewer pushes and whether
-          # the desk is fired on a red or conflicting head. Unset is off.
+          # FIX MODE ((internal ref) item 1): the DISPATCHER's switch -- whether
+          # the desk is fired on a red or conflicting head. The review SESSION reads its
+          # own `CRD_FIX_MODE` from the review routine's own environment, which no
+          # workflow sets: TWO switches, and turning fix mode on is setting both. Unset is off.
           CRD_FIX_MODE: ${{ vars.CRD_FIX_MODE }}
           DESK_REVIEWER: ${{ 'tracebloc-review' }}
           DESK_FIRE_URL: ${{ (vars.DESK_ROUTINE_FIRE_URL) }}
           DESK_ROUTINE_TOKEN: ${{ secrets.DESK_ROUTINE_TOKEN }}
           DESK_STALE_MINUTES: ${{ 45 }}
-          SHIP_STALE_MINUTES: ${{ 90 }}
         run: python3 .org-config-tools/scripts/desk-dispatch.py
