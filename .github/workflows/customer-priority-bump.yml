@@ -1,7 +1,7 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/customer-priority-bump.yml`
-# (blob 28157e5db2999af915ea0f90d6003bc636cea528) folded with the private source repo's own caller of it,
+# (blob 6ecbc5d00f096d4e976ab631332de89b1403e9de) folded with the private source repo's own caller of it,
 # `.github/workflows/customer-priority-bump-caller.yml` (blob 5335d54604d2c224a8addd47e9c1e2b50774a397), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
@@ -64,7 +64,9 @@ name: Label-driven issue triage
 #                      `Code review` too -- `Done`, `Cancelled`, the post-merge
 #                      columns -- and a card that does not exist yet is added
 #                      ((internal ref)). The `reopened` arm is live in a repo
-#                      once its caller sends that type ((internal ref)).
+#                      once its caller sends that type ((internal ref)). Its
+#                      write waits on the issue's LIVE state, re-read just
+#                      before it: one closed again meanwhile is left alone.
 #                      Then ask the bug-fix sweep for a pass at once, so the
 #                      Ready queue drains sooner than on its cron. The pass
 #                      fires the longest-idle bugs first, so behind a backlog
@@ -157,7 +159,8 @@ jobs:
     permissions: {}
     steps:
       # LEAST PRIVILEGE, DERIVED FROM WHAT THIS RUNS ((internal ref)): one issue's
-      # project items read, one single-select write on an org project -- so
+      # project items read, on a reopen that issue's live `state` read (the
+      # `live-open` gate), one single-select write on an org project -- so
       # `issues: read` plus `organization-projects: write` is the whole requirement
       # (the `bump` mint above is scoped the same way). `repositories:` is NOT narrowed: the org ProjectV2 write needs `owner:`'s
       # org grant, and narrowing is measured for a READ only ((internal ref)).
@@ -639,6 +642,45 @@ jobs:
           if [ "$_write" != "yes" ]; then
             exit 0
           fi
+
+          # ---- 5. a reopen is judged on the issue's LIVE state ---------------
+          # selftest:live-open-start
+          # The `reopened` payload is frozen at the event, and between it and the
+          # write this job reads the board, may add the card and decides. An issue
+          # closed again in that time is one the closure router owns, and a write
+          # here would pull a closed bug back into the pull queue from `Done` or
+          # `Cancelled`. So the state is READ AGAIN, as late as it can be, with
+          # the job's `issues: read` token. `labeled` is not re-read: it is not
+          # the arm that promotes out of a terminal column.
+          #
+          #   open        write, as before.
+          #   closed      hold, a ::notice:: on a green run -- a normal race, and
+          #               the closure router places a closed issue's card.
+          #   unreadable  red, nothing written (rule 3): a state this job could
+          #               not read is no evidence that the issue is open.
+          live_open_gate() {   # $1=owner/repo  $2=issue number  -> open | closed | unreadable:<why>
+            if ! _st=$(gh api "repos/$1/issues/$2" --jq .state 2>&1); then
+              echo "unreadable:${_st//$'\n'/ }"; return
+            fi
+            case "$_st" in
+              open|closed) echo "$_st" ;;
+              "") echo "unreadable:an empty answer" ;;
+              *) echo "unreadable:an unexpected state '${_st//$'\n'/ }'" ;;
+            esac
+          }
+          if [ "${EVENT_KIND:-}" = "reopened" ]; then
+            _live=$(live_open_gate "$REPO_FULL" "$NUMBER")
+            case "$_live" in
+              open) : ;;
+              closed)
+                echo "::notice::issue #${NUMBER} is closed again - leaving its card in '${CURRENT_COL:-<no Status>}'; the closure router places a closed issue's card"
+                exit 0 ;;
+              *)
+                echo "::error::issue #${NUMBER}'s live state is unreadable (${_live#unreadable:}) - a reopen is not written on the webhook's word alone, so nothing was written" >&2
+                exit 1 ;;
+            esac
+          fi
+          # selftest:live-open-end
 
           write_status "$ITEM_ID" || exit 1
           settle_ready "$ITEM_ID" || exit 1
