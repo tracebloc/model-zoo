@@ -265,6 +265,16 @@ jobs:
     needs: engine-pin-drift-guard
     timeout-minutes: 30
     runs-on: ubuntu-latest
+    # `id-token: write` IS SCOPED TO THIS JOB, never the workflow: it is what
+    # lets the credential step below exchange GitHub's OIDC token for the
+    # zoo-weights READ role. The two token-minting jobs above and below
+    # (`fetch-engine-pin`, `fetch-dump-manifest`) and every other job keep the
+    # workflow-level `contents: read` and cannot request an OIDC token at all.
+    # A job-level block REPLACES the workflow-level one, so `contents: read` is
+    # restated here or the checkout loses it.
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       # THE INSTALL RUNS ONLY WHEN THERE IS SOMETHING TO VERIFY. Nothing in this
@@ -296,10 +306,67 @@ jobs:
       # A failure here is a hard error, never a swallowed green (fail-closed).
       - run: pip install -r tools/requirements-engine-pin.txt
         if: hashFiles('manifest.json') != ''
+      # THE BUCKET IS PRIVATE, SO THE FETCH NEEDS CREDENTIALS, and until this
+      # step existed the job had none: no AWS step, no AWS env, no secret, and
+      # no `id-token` permission. Setting TRACEBLOC_ZOO_WEIGHTS_URI alone would
+      # therefore not have armed anything — `aws s3 cp` would have died on
+      # "Unable to locate credentials" the first time a manifest reached the
+      # fetch branch. That is this gate's recurring shape (a precondition the
+      # skip message does not name), so the credential is now a NAMED
+      # precondition of its own, alongside the store URI.
+      #
+      # GitHub OIDC, not a stored key: nothing long-lived to leak or rotate.
+      # The role comes from the repo variable ZOO_WEIGHTS_READ_ROLE_ARN. READ
+      # ONLY on `zoo-weights/*` is sufficient — the fetch is `s3 cp` from the
+      # store into ./dist, and uploads are not this workflow's job.
+      #
+      # WHO GETS CREDENTIALS. This job runs PR-controlled code (the fetch hook
+      # and the verifier are the PR's own copies), and the credentials this
+      # step exports are visible to every later step. So the step runs only on
+      # a push, the schedule, a dispatch, or a pull request whose head is in
+      # THIS repository; a fork's pull request is refused credentials and says
+      # so by name. That is belt and braces rather than the whole boundary, and
+      # it is worth being exact about which is which:
+      #   * GitHub already withholds an OIDC token from a fork's pull_request
+      #     (`id-token: write` is a write permission, and a fork gets a
+      #     read-only token unless the repo opts in to sending write tokens
+      #     to fork PRs), so the `if:` below makes the refusal explicit and
+      #     keeps a fork run on a named SKIP instead of a failed assume;
+      #   * a same-repo PR's author has write access and could edit this file,
+      #     so no condition in it restrains them — that is the same trust this
+      #     workflow already extends to the engine-pin job's App token;
+      #   * the real bound is the role's trust policy, which should admit only
+      #     `repo:tracebloc/model-zoo` subjects, and its read-only scope.
+      # The job split `fetch-engine-pin` uses (a token job that runs no PR code)
+      # is not reused here on purpose: its point is to hand the PR job FILES,
+      # and the files here are only knowable from the manifest this job reads —
+      # and tests/test_dump_fetch_guard.py forbids an artifact download into
+      # this job, because it would land after the install condition above.
+      #
+      # THE CONDITION IS SPELLED TWICE, in the `if:` and in the fetch step's
+      # ZOO_WEIGHTS_TRUSTED_EVENT, and the shell refuses the one disagreement
+      # that matters: every precondition met but no credential step success is
+      # a red, never a fetch attempted without credentials. The test suite
+      # holds the two spellings equal.
+      - name: Assume the zoo-weights read role
+        id: zoo-weights-creds
+        if: >-
+          hashFiles('manifest.json') != ''
+          && vars.TRACEBLOC_ZOO_WEIGHTS_URI != ''
+          && vars.ZOO_WEIGHTS_READ_ROLE_ARN != ''
+          && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ vars.ZOO_WEIGHTS_READ_ROLE_ARN }}
+          aws-region: eu-central-1
+          role-session-name: model-zoo-verify-dumps
       # Obtain the staged dumps. They are NOT committed (served from the
-      # tracebloc model store; hosting is the hosting decision). tools/sync_zoo_weights.py
-      # is the fetch hook (an internal ticket refs) and fetches the
-      # <base>_weights.pkl files into ./dist.
+      # tracebloc model store). The hosting decision is MADE: a private S3
+      # bucket, content-addressed under `zoo-weights/` exactly as
+      # tools/sync_zoo_weights.py lays it out, with users reaching their seeds
+      # through the platform's presigned-URL route rather than the bucket.
+      # tools/sync_zoo_weights.py is the fetch hook (an internal ticket refs)
+      # and fetches the <base>_weights.pkl files into ./dist.
       #
       # Each precondition is reported BY NAME. The previous guard was a single
       # `[ -f manifest.json ] && [ -f tools/sync_zoo_weights.py ]`, which
@@ -307,8 +374,9 @@ jobs:
       # hook itself was not in the repo. It was: the tool existed only as an
       # uncommitted file on one laptop, so `-f` selected the no-op branch on
       # every run and printed a reassuring hosting message, which is why the
-      # gap survived unnoticed (the arming overclaim). A missing tool and an undecided
-      # bucket are different problems and now say so.
+      # gap survived unnoticed (the arming overclaim). A missing tool, a missing
+      # store URI, a missing read role and an untrusted event are different
+      # problems and each says so.
       #
       # Still exit 0 in every skip branch: verify_dumps_against_engine_pin.py
       # owns the fail-closed decision (armed-green on an ABSENT manifest, red on
@@ -337,10 +405,14 @@ jobs:
       # tests/test_dump_fetch_guard.py drives both directions.
       - name: Obtain staged dumps from the model store
         env:
-          # The store URI is the hosting decision, so it is configuration and
-          # not a literal here. Unset resolves to the empty string and selects
-          # the "no store URI" branch below.
+          # The store URI and the role are configuration, not literals here:
+          # the bucket name is not this public repository's to publish. Unset
+          # resolves to the empty string and selects the matching SKIP below.
           TRACEBLOC_ZOO_WEIGHTS_URI: ${{ vars.TRACEBLOC_ZOO_WEIGHTS_URI }}
+          ZOO_WEIGHTS_READ_ROLE_ARN: ${{ vars.ZOO_WEIGHTS_READ_ROLE_ARN }}
+          # `true` / `false`, never empty; anything else is a hard error below.
+          ZOO_WEIGHTS_TRUSTED_EVENT: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+          ZOO_WEIGHTS_CREDENTIALS: ${{ steps.zoo-weights-creds.outcome }}
         run: |
           set -euo pipefail
           mkdir -p dist
@@ -358,13 +430,48 @@ jobs:
             echo "  This is a DEFECT in the repo, not a pending decision — the"
             echo "  hook is committed (the arming overclaim); restore it. The verifier"
             echo "  below will report every declared dump as MISSING."
-          elif [ -z "${TRACEBLOC_ZOO_WEIGHTS_URI:-}" ]; then
-            echo "SKIP (no store URI): manifest.json and the fetch hook are both"
-            echo "  present, but TRACEBLOC_ZOO_WEIGHTS_URI is unset, so there is"
-            echo "  nowhere to fetch from. THIS is the hosting decision —"
-            echo "  the hosting decision. Set the repo variable once the store exists."
           else
-            python3 tools/sync_zoo_weights.py --staging . fetch-all --dest dist
+            case "${ZOO_WEIGHTS_TRUSTED_EVENT:-}" in
+              true|false) ;;
+              *)
+                echo "::error::ZOO_WEIGHTS_TRUSTED_EVENT is '${ZOO_WEIGHTS_TRUSTED_EVENT:-}', not true/false — cannot tell whether this run may hold credentials, so refusing rather than guessing." >&2
+                exit 1
+                ;;
+            esac
+            # Every missing precondition is named, not just the first: an
+            # admin reading one SKIP and fixing it should not discover the
+            # next one only on the following run.
+            missing=0
+            if [ -z "${TRACEBLOC_ZOO_WEIGHTS_URI:-}" ]; then
+              echo "SKIP (no store URI): TRACEBLOC_ZOO_WEIGHTS_URI is unset, so"
+              echo "  there is nowhere to fetch from. This is not an open"
+              echo "  question: the hosting decision is made (a private S3"
+              echo "  bucket, prefix zoo-weights/). What remains is an admin"
+              echo "  setting this repo variable to that prefix."
+              missing=1
+            fi
+            if [ -z "${ZOO_WEIGHTS_READ_ROLE_ARN:-}" ]; then
+              echo "SKIP (no read role): ZOO_WEIGHTS_READ_ROLE_ARN is unset, so"
+              echo "  no AWS credentials can be assumed and the bucket is"
+              echo "  private. What remains is an admin setting this repo"
+              echo "  variable to a READ-ONLY role on zoo-weights/* whose OIDC"
+              echo "  trust admits this repository."
+              missing=1
+            fi
+            if [ "$ZOO_WEIGHTS_TRUSTED_EVENT" != "true" ]; then
+              echo "SKIP (fork pull request): this run's code comes from a"
+              echo "  fork, and no AWS credentials are issued to it. The same"
+              echo "  dumps are verified on the push to develop after merge and"
+              echo "  on the weekday schedule."
+              missing=1
+            fi
+            if [ "$missing" -eq 0 ]; then
+              if [ "${ZOO_WEIGHTS_CREDENTIALS:-}" != "success" ]; then
+                echo "::error::every fetch precondition holds, but the 'Assume the zoo-weights read role' step's outcome is '${ZOO_WEIGHTS_CREDENTIALS:-}', not success. Its if: and this step's preconditions disagree; refusing to fetch a private bucket without credentials." >&2
+                exit 1
+              fi
+              python3 tools/sync_zoo_weights.py --staging . fetch-all --dest dist
+            fi
           fi
       # The gate. Exits non-zero on any dump that cannot strict-load into its
       # template under the engine pin, or any built_with-vs-engine drift.
@@ -586,8 +693,11 @@ jobs:
       # and hosting (the hosting decision) is not what supplies it — a cross-repo read
       # is. Job 4a performs that read; this job only consumes its artifact.
       #
-      # STILL NO `--dumps-dir`: the store's blobs are not reachable from CI
-      # (the hosting decision is open — TRACEBLOC_ZOO_WEIGHTS_URI is unset). The
+      # STILL NO `--dumps-dir`: the store's blobs are not reachable from CI.
+      # The hosting decision is made (a private S3 bucket under zoo-weights/);
+      # what is not done is the upload, which waits on write access to that
+      # bucket, and the two repo variables the verify-dumps job's fetch needs
+      # (TRACEBLOC_ZOO_WEIGHTS_URI, ZOO_WEIGHTS_READ_ROLE_ARN). The
       # manifest is the right inventory to gate on anyway. It is the artifact a
       # PR review can see, and (internal ref) is what happens when it and the
       # store disagree: gate the reviewable side, and the store is reconciled to
