@@ -49,6 +49,7 @@ from __future__ import annotations
 import ast
 import hashlib
 import importlib.util
+import itertools
 import json
 import os
 import re
@@ -67,6 +68,7 @@ STEP_NAME = "Obtain staged dumps from the model store"
 TOOL_REL = Path("tools") / "sync_zoo_weights.py"
 VERIFIER_REL = Path("tools") / "verify_dumps_against_engine_pin.py"
 STORE_URI = "s3://zoo-weights-test-bucket/zoo-weights"
+ROLE_ARN = "arn:aws:iam::000000000000:role/zoo-weights-read-test"
 
 
 # --------------------------------------------------------------------------
@@ -290,7 +292,18 @@ class Checkout:
         mpath.write_text(json.dumps(manifest, indent=2, sort_keys=True))
         return sha
 
-    def run(self, store_uri: str | None = None) -> subprocess.CompletedProcess:
+    def run(
+        self,
+        store_uri: str | None = None,
+        *,
+        role_arn: str | None = ROLE_ARN,
+        trusted: str = "true",
+        credentials: str = "success",
+    ) -> subprocess.CompletedProcess:
+        """Run the step's shell. The keyword defaults are the ARMED state for
+        the three credential preconditions (a role is set, the event is
+        trusted, the credential step succeeded), so a test that is about the
+        store URI or the manifest varies only what it is about."""
         env = {
             "PATH": f"{self.bin}{os.pathsep}{os.environ.get('PATH', '')}",
             "HOME": str(self.root),
@@ -298,6 +311,11 @@ class Checkout:
             # Mirrors the step's `env:` mapping: an unset repo variable arrives
             # as the empty string, never as a missing name.
             "TRACEBLOC_ZOO_WEIGHTS_URI": store_uri or "",
+            "ZOO_WEIGHTS_READ_ROLE_ARN": role_arn or "",
+            # A GitHub expression renders a boolean as `true` / `false`, and a
+            # skipped step's outcome as `skipped`.
+            "ZOO_WEIGHTS_TRUSTED_EVENT": trusted,
+            "ZOO_WEIGHTS_CREDENTIALS": credentials,
         }
         return subprocess.run(
             ["bash", "-c", self.script],
@@ -832,7 +850,8 @@ def test_the_hook_still_fails_closed_on_an_unset_store_uri(
     message = str(excinfo.value)
     assert "TRACEBLOC_ZOO_WEIGHTS_URI" in message, message
     assert "the hosting decision" in message, (
-        f"the exit must name the decision that is missing, not just the var:\n{message}"
+        f"the exit must cite the decision that says where the store is, not just "
+        f"the var:\n{message}"
     )
     # An empty-string URI is the SAME condition, and the one CI actually
     # produces: an unset repo variable arrives as "" through the step's `env:`
@@ -1141,3 +1160,242 @@ def test_the_no_manifest_fetch_branch_invokes_no_python(checkout: Checkout):
     checkout.stage("bert_base_uncased", b"dump-bytes")
     proc = checkout.run(store_uri=STORE_URI)
     assert proc.returncode == 99, f"{proc.stdout}\n{proc.stderr}"
+
+
+# --------------------------------------------------------------------------
+# The bucket is private: credentials are a named precondition too
+# --------------------------------------------------------------------------
+# Until the credential step existed, this job had no AWS step, no AWS env, no
+# secret and no `id-token` permission, so setting TRACEBLOC_ZOO_WEIGHTS_URI
+# would have sent `aws s3 cp` at a private bucket with nothing to sign it --
+# the gate could never have armed, and no skip message said so. Each of the
+# three credential-side preconditions (a store URI, a read role, a trusted
+# event) is now reported by name, every one that is missing and only those,
+# and the one disagreement between the credential step's `if:` and this shell
+# that could fetch without credentials is a red.
+
+CREDS_STEP_NAME = "Assume the zoo-weights read role"
+CREDS_ACTION = "aws-actions/configure-aws-credentials@"
+# The marker each precondition's SKIP line carries, keyed by the precondition.
+# Written out here, not read from the shell, so a shell that renames or drops
+# one reddens instead of agreeing with itself.
+_SKIP_MARKER = {
+    "uri": "SKIP (no store URI)",
+    "role": "SKIP (no read role)",
+    "trust": "SKIP (fork pull request)",
+}
+
+
+def _run_with_missing(checkout: Checkout, missing: frozenset[str]):
+    return checkout.run(
+        store_uri=None if "uri" in missing else STORE_URI,
+        role_arn=None if "role" in missing else ROLE_ARN,
+        trusted="false" if "trust" in missing else "true",
+        # What GitHub would report: the credential step's `if:` fails on any
+        # missing precondition, so its outcome is `skipped`.
+        credentials="skipped" if missing else "success",
+    )
+
+
+_MISSING_SETS = [
+    frozenset(c)
+    for n in range(1, len(_SKIP_MARKER) + 1)
+    for c in itertools.combinations(sorted(_SKIP_MARKER), n)
+]
+
+
+@pytest.mark.parametrize("missing", _MISSING_SETS, ids=lambda m: "+".join(sorted(m)))
+def test_each_missing_credential_precondition_is_named_and_only_it(
+    checkout: Checkout, missing: frozenset[str]
+):
+    """All seven non-empty subsets of {URI, role, trust}: exactly the missing
+    ones are named, none of the present ones is, and the hook is never run."""
+    checkout.install_real_tool()
+    checkout.stage("bert_base_uncased", b"dump-bytes")
+    proc = _run_with_missing(checkout, missing)
+    assert proc.returncode == 0, f"{proc.stdout}\n{proc.stderr}"
+    for key, marker in _SKIP_MARKER.items():
+        if key in missing:
+            assert marker in proc.stdout, f"{key} missing but not named:\n{proc.stdout}"
+        else:
+            assert marker not in proc.stdout, (
+                f"{key} is present but its SKIP was printed:\n{proc.stdout}"
+            )
+    assert "fetched + verified" not in proc.stdout, proc.stdout
+    assert not any((checkout.root / "dist").iterdir()), "fetched with a precondition missing"
+    assert "SKIP (no manifest)" not in proc.stdout
+    assert "SKIP (no sync tool)" not in proc.stdout
+
+
+def test_no_read_role_names_the_variable_and_read_only_scope(checkout: Checkout):
+    checkout.install_real_tool()
+    checkout.stage("bert_base_uncased", b"dump-bytes")
+    proc = checkout.run(store_uri=STORE_URI, role_arn=None, credentials="skipped")
+    assert proc.returncode == 0, proc.stderr
+    assert "ZOO_WEIGHTS_READ_ROLE_ARN" in proc.stdout, proc.stdout
+    assert "READ-ONLY" in proc.stdout, proc.stdout
+
+
+def test_no_skip_message_says_the_hosting_decision_is_open(checkout: Checkout):
+    """The decision is made. A message calling it open sends an admin to wait
+    for a decision instead of setting two variables."""
+    checkout.install_real_tool()
+    checkout.stage("bert_base_uncased", b"dump-bytes")
+    out = checkout.run(store_uri=None, role_arn=None, credentials="skipped").stdout
+    assert "SKIP (no store URI)" in out, out
+    assert "decision is made" in out, out
+    for stale in ("undecided", "decision is open", "open decision", "once the store exists"):
+        assert stale not in out.lower(), f"stale hosting text {stale!r}:\n{out}"
+    # The same stale claim in the workflow's own prose, which is where the
+    # next person reads whether hosting is still pending.
+    text = WORKFLOW.read_text().lower()
+    for stale in ("hosting decision is open", "open decision", "the store exists"):
+        assert stale not in text, f"stale hosting text {stale!r} in {WORKFLOW.name}"
+
+
+def test_all_preconditions_met_without_credentials_is_red(checkout: Checkout):
+    """Every precondition the shell checks holds, but the credential step did
+    not succeed: the `if:` and the shell disagree. Fetching anyway is the
+    original defect (a private bucket, no credentials); skipping would be a
+    green that verified nothing. Red, and the hook is not run."""
+    checkout.install_real_tool()
+    checkout.stage("bert_base_uncased", b"dump-bytes")
+    for outcome in ("skipped", "", "failure"):
+        proc = checkout.run(store_uri=STORE_URI, credentials=outcome)
+        assert proc.returncode != 0, f"outcome={outcome!r}:\n{proc.stdout}"
+        assert CREDS_STEP_NAME in proc.stderr, proc.stderr
+        assert "fetched + verified" not in proc.stdout, proc.stdout
+    # Anchor: the same checkout with the step's success fetches.
+    ok = checkout.run(store_uri=STORE_URI)
+    assert ok.returncode == 0 and "fetched + verified 1 dump(s)" in ok.stdout, ok.stdout
+
+
+def test_an_unreadable_trust_flag_fails_closed(checkout: Checkout):
+    """`true` / `false` is all the expression can render. Anything else means
+    the mapping was dropped or mangled, and "cannot tell whether this run may
+    hold credentials" is a red, never a guess in either direction."""
+    checkout.install_real_tool()
+    checkout.stage("bert_base_uncased", b"dump-bytes")
+    for flag in ("", "True", "yes"):
+        proc = checkout.run(store_uri=STORE_URI, trusted=flag)
+        assert proc.returncode != 0, f"trusted={flag!r}:\n{proc.stdout}"
+        assert "ZOO_WEIGHTS_TRUSTED_EVENT" in proc.stderr, proc.stderr
+        assert "fetched + verified" not in proc.stdout, proc.stdout
+
+
+def _verify_step(needle: str) -> str:
+    matches = [s for s in _verify_job_steps() if needle in s]
+    assert len(matches) == 1, f"expected one {VERIFY_JOB} step with {needle!r}, got {matches}"
+    return matches[0]
+
+
+def _trust_expression_of_fetch_step() -> str:
+    m = re.search(
+        r"^\s+ZOO_WEIGHTS_TRUSTED_EVENT: \$\{\{ (.+) \}\}\s*$",
+        _verify_step(f"- name: {STEP_NAME}"),
+        re.MULTILINE,
+    )
+    assert m, "the fetch step no longer maps ZOO_WEIGHTS_TRUSTED_EVENT from an expression"
+    return m.group(1)
+
+
+def _creds_condition() -> str:
+    """The credential step's `if:`, folded (`>-`) or single-line, as one line."""
+    step = _verify_step(f"- name: {CREDS_STEP_NAME}")
+    lines = step.splitlines()
+    at = next(i for i, ln in enumerate(lines) if ln.strip().startswith("if:"))
+    first = lines[at].strip()[len("if:") :].strip()
+    if first not in (">-", ">", "|", "|-"):
+        return first
+    indent = len(lines[at]) - len(lines[at].lstrip())
+    body = []
+    for ln in lines[at + 1 :]:
+        if ln.strip() and (len(ln) - len(ln.lstrip())) <= indent:
+            break
+        body.append(ln.strip())
+    cond = " ".join(b for b in body if b)
+    assert cond, f"empty folded `if:` on {CREDS_STEP_NAME!r}"
+    return cond
+
+
+def test_the_credential_step_precedes_the_fetch_and_is_pinned():
+    steps = _verify_job_steps()
+    creds_at = [i for i, s in enumerate(steps) if f"- name: {CREDS_STEP_NAME}" in s]
+    fetch_at = [i for i, s in enumerate(steps) if f"- name: {STEP_NAME}" in s]
+    assert len(creds_at) == 1 and len(fetch_at) == 1, (creds_at, fetch_at)
+    assert creds_at[0] < fetch_at[0], (
+        "the credential step runs AFTER the fetch -- the fetch would hit the "
+        "private bucket with no credentials"
+    )
+    creds = steps[creds_at[0]]
+    assert re.search(re.escape(CREDS_ACTION) + r"[0-9a-f]{40} # v\d", creds), (
+        f"{CREDS_ACTION} must be pinned by full commit SHA like every action here:\n{creds}"
+    )
+    assert "role-to-assume: ${{ vars.ZOO_WEIGHTS_READ_ROLE_ARN }}" in creds, creds
+    assert "aws-region: eu-central-1" in creds, creds
+    # No stored key: OIDC only.
+    for key in ("aws-access-key-id", "aws-secret-access-key", "secrets."):
+        assert key not in creds, f"{key!r} in the credential step -- OIDC only:\n{creds}"
+    # The fetch step reads THIS step's outcome, by its id.
+    m = re.search(r"^\s+id: (\S+)\s*$", creds, re.MULTILINE)
+    assert m, f"the credential step has no id:\n{creds}"
+    fetch = steps[fetch_at[0]]
+    assert f"ZOO_WEIGHTS_CREDENTIALS: ${{{{ steps.{m.group(1)}.outcome }}}}" in fetch, fetch
+    assert "ZOO_WEIGHTS_READ_ROLE_ARN: ${{ vars.ZOO_WEIGHTS_READ_ROLE_ARN }}" in fetch, fetch
+
+
+def test_the_credential_step_requires_every_precondition_the_shell_names():
+    """The step's `if:` must name the manifest, both variables and the SAME
+    trust expression the fetch step renders -- two spellings of one rule are
+    held equal here, since GitHub gives no way to share one."""
+    cond = _creds_condition()
+    trust = _trust_expression_of_fetch_step()
+    for needle in (
+        "hashFiles('manifest.json') != ''",
+        "vars.TRACEBLOC_ZOO_WEIGHTS_URI != ''",
+        "vars.ZOO_WEIGHTS_READ_ROLE_ARN != ''",
+        f"({trust})",
+    ):
+        assert needle in cond, f"credential step `if:` lacks {needle!r}: {cond!r}"
+    clauses = [c.strip() for c in cond.split("&&")]
+    assert len(clauses) == 4, f"expected exactly four ANDed preconditions: {clauses}"
+    # And the trust expression is the fork refusal it claims to be: a
+    # pull_request is trusted only when its head is this repository.
+    assert trust == (
+        "github.event_name != 'pull_request' || "
+        "github.event.pull_request.head.repo.full_name == github.repository"
+    ), trust
+
+
+def _job_permissions(job: str) -> str:
+    block = _job_block(job)
+    m = re.search(r"^    permissions:\n((?:      .*\n)+)", block, re.MULTILINE)
+    return m.group(1) if m else ""
+
+
+def test_id_token_write_is_scoped_to_the_verify_job_only():
+    text = WORKFLOW.read_text()
+    top = re.search(r"^permissions:\n((?:  .*\n)+)", text, re.MULTILINE)
+    assert top, "no workflow-level permissions block"
+    assert top.group(1).strip() == "contents: read", (
+        f"workflow-level permissions widened: {top.group(1)!r}"
+    )
+    jobs = re.findall(r"^  ([A-Za-z0-9_-]+):\n    ", text.split("\njobs:\n", 1)[1], re.MULTILINE)
+    assert VERIFY_JOB in jobs and len(jobs) >= 6, jobs
+    with_id_token = [j for j in jobs if "id-token: write" in _job_permissions(j)]
+    assert with_id_token == [VERIFY_JOB], (
+        f"id-token: write must be granted to {VERIFY_JOB} alone, got {with_id_token}"
+    )
+    perms = _job_permissions(VERIFY_JOB)
+    assert "contents: read" in perms, (
+        "a job-level permissions block replaces the workflow's, so the checkout "
+        f"needs contents: read restated:\n{perms}"
+    )
+    assert "write" not in perms.replace("id-token: write", ""), perms
+
+
+def test_the_permission_matcher_sees_a_job_block():
+    """Anchor for the test above: `_job_permissions` finds a planted block and
+    reports none where there is none, so `== [VERIFY_JOB]` is a measurement."""
+    assert "id-token: write" in _job_permissions(VERIFY_JOB)
+    assert _job_permissions("fetch-engine-pin") == ""
