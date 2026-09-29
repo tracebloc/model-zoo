@@ -1,13 +1,18 @@
 """Faster R-CNN with a ResNet backbone. Two-stage detector; strong accuracy, slower than YOLO variants.
 
-Offline variant: the architecture is built without any checkpoint download,
-so the template constructs anywhere, network or not. The pretrained
-ResNet50-FPN tensors are delivered from the tracebloc model store as the
-training seed: upload the matched ``faster_rcnn_resnet_weights.pkl`` sitting
-next to this file via ``upload_model(..., weights=True)``, and the platform
-loads it with ``load_state_dict(strict=True)`` after ``MyModel()`` builds
-this architecture. See ``tools/prep_offline_weights.py`` for producing and
-verifying that matched weight file.
+Offline variant: the architecture is built with ``weights=None``, so nothing
+is fetched from ``download.pytorch.org`` — the egress lockdown blocks it —
+and the template constructs anywhere, network or not. No seed is hosted for
+this template and none can be prepped from torchvision's COCO checkpoint
+(see "Backbone norm" below), so it random-initialises and there is no weight file:
+upload with ``weights=False``::
+
+    user.upload_model("faster_rcnn_resnet", weights=False)
+
+``tools/check_dump_coverage.py`` classifies this file NO_SEED, and the
+statement above is what keeps that classification honest. The dump that
+was once prepped for it is retired in the dump manifest rather than
+deleted, so the decision stays visible.
 
 The backbone is assembled explicitly instead of via the high-level
 ``fasterrcnn_resnet50_fpn(weights=None)`` builder, because that builder keys
@@ -17,8 +22,8 @@ backbone norm off the same flag. Building the backbone directly keeps the three
 trainable stages under explicit control. The norm is no longer the
 checkpoint's — see below.
 
-Backbone norm: GroupNorm, and it is NOT the checkpoint's norm
-----------------------------------------------------------------------------
+Backbone norm: GroupNorm, and it forfeits COCO seeding
+---------------------------------------------------------------------
 This template used to build ``norm_layer=misc_nn_ops.FrozenBatchNorm2d`` to
 reproduce torchvision's checkpoint-path architecture key-exactly. That was
 wrong in the regime the platform actually runs: frozen BN at construction
@@ -35,15 +40,16 @@ no running statistics for the averaging service to ship each federated round
 -- both halves of the constraint that produced frozen BN in the first place.
 
 ⚠️ WHAT THIS COSTS, EXPLICITLY. A torchvision COCO checkpoint's BN running
-statistics have nowhere to go in a GroupNorm tree, so this template can no
-longer strict-load a seed prepped from ``download.pytorch.org`` weights, and
-the prepped-but-unhosted dump named in the header above is invalidated by this
-change. ``tools/prep_offline_weights.py`` fails loudly on the strict load
-rather than producing a mismatched dump, which is the right place for it to
-fail. Whether this template keeps a seed declaration, drops it, or re-sources
-one belongs to the hosting decision / (internal ref) -- not to this file. The trade taken
-here is a real defect on every run today against a hypothetical benefit that
-is blocked.
+statistics have nowhere to go in a GroupNorm tree, so this template cannot
+strict-load a seed prepped from ``download.pytorch.org`` weights: the dump
+prepped for it before the norm change fails with ``KEY_MISMATCH`` under the
+engine pin (unexpected backbone ``running_mean``/``running_var`` keys), and
+``tools/prep_offline_weights.py`` fails loudly on the strict load rather
+than producing a mismatched dump. That is why the declaration above is
+NO_SEED: GroupNorm was chosen over a COCO seed for this template, and
+declaring a seed it cannot load would move the strict-load failure onto
+an edge. Seeding it again needs a checkpoint built with this norm, which
+is a separate decision.
 
 ``_resnet_fpn_extractor`` is torchvision-private API (stable across recent
 releases; this file is verified against torchvision 0.27). If a torchvision
