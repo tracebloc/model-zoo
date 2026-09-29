@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Sync zoo weight dumps between a local staging dir and the tracebloc model
 store — the fetch hook `.github/workflows/verify-dumps-engine-pin.yml` calls
-(hosting is the hosting decision).
+(hosting per the hosting decision: a private S3 bucket, prefix ``zoo-weights/``).
 
 The zoo never ships weight files in git (see CLAUDE.md "Weight file
 convention"); the SDK uploads whatever ``<base>_weights.pkl`` sibling sits next
@@ -26,14 +26,17 @@ is the staging step:
 
 Store location
 --------------
-Deliberately NOT hardcoded — where the dumps live is the open decision on
-the hosting decision. Set it via:
+Deliberately NOT hardcoded. The hosting decision is made (a private S3 bucket,
+prefix ``zoo-weights/``), but the bucket is configuration, not something this
+public source should publish. Set it via:
 
     export TRACEBLOC_ZOO_WEIGHTS_URI="s3://<internal-bucket>/zoo-weights"
 
 Transport is the ``aws`` CLI (no extra Python deps); any s3://-compatible URI
 the CLI can reach works. Requires an already-authenticated session — this tool
-neither reads nor writes credentials.
+neither reads nor writes credentials. In CI that session is a READ-ONLY role
+assumed over GitHub OIDC by the workflow step before the fetch; locally it is
+whatever ``aws`` is already signed in as.
 
 Staging location
 ----------------
@@ -75,8 +78,10 @@ def _store_uri() -> str:
     uri = os.environ.get("TRACEBLOC_ZOO_WEIGHTS_URI", "").rstrip("/")
     if not uri:
         sys.exit(
-            "TRACEBLOC_ZOO_WEIGHTS_URI is not set. The store location is the "
-            "open decision on the hosting decision — set it once confirmed, "
+            "TRACEBLOC_ZOO_WEIGHTS_URI is not set. The store is decided (per "
+            "the hosting decision: a private S3 bucket, prefix zoo-weights/); "
+            "set this to that "
+            "prefix, with credentials that can read it, "
             'e.g.\n  export TRACEBLOC_ZOO_WEIGHTS_URI="s3://<internal-bucket>/zoo-weights"'
         )
     return uri
