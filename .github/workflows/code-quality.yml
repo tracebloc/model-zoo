@@ -1,7 +1,7 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/code-quality.yml`
-# (blob d3f487103020a8de224a8dcac97147c22aeb5bd1) folded with the private source repo's own caller of it,
+# (blob 62941a951feec42bc6f60d5475474f553fae1a5c) folded with the private source repo's own caller of it,
 # `.github/workflows/code-quality-caller.yml` (blob a690dd9342c56a9efc609065bbfc5ff7e18f9131), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
@@ -511,7 +511,16 @@ jobs:
         run: |
           set -euo pipefail
           URL="https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
-          curl -fsSL --tlsv1.2 --connect-timeout 30 --max-time 300 "$URL" -o /tmp/gitleaks.tar.gz
+          # RETRIED HERE, before a red reaches anyone -- (internal ref). The release
+          # download can answer 5xx (measured on the private source repo: `curl: (22)
+          # ... 500`, and a clean PR was parked over it). --retry-all-errors
+          # also covers resets and TLS blips, not only curl's 5xx list (runner curl is
+          # Ubuntu 24.04's 8.5; the flag needs 7.71). The SHA-256 check below still
+          # decides what installs. --max-time is PER ATTEMPT: 4 x 120s + 3 x 5s stays
+          # inside this job's 14 minutes, so a stalled download fails as curl, not as
+          # a platform timeout.
+          curl -fsSL --tlsv1.2 --connect-timeout 30 --max-time 120 \
+            --retry 3 --retry-delay 5 --retry-all-errors "$URL" -o /tmp/gitleaks.tar.gz
           echo "${GITLEAKS_SHA256}  /tmp/gitleaks.tar.gz" | sha256sum -c -
           tar -xzf /tmp/gitleaks.tar.gz -C /tmp gitleaks
           chmod +x /tmp/gitleaks
