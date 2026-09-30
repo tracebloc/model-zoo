@@ -868,15 +868,11 @@ def test_both_jobs_refuse_an_absent_manifest():
 GROUP_NORM_BACKBONE = "norm_layer=_group_norm"
 
 #: GroupNorm templates that STILL declare a seed, known and reported rather than
-#: fixed here. Both are keypoint-detection templates whose staged dumps fail
-#: the engine-pin strict load with KEY_MISMATCH on the backbone's BatchNorm
-#: running statistics, the same defect the three object-detection templates had.
-#: The assertion is an equality, so a new conflict is red and so is fixing one of
-#: these without removing its row.
-KNOWN_GROUP_NORM_SEED_CONFLICTS = {
-    "keypoint_detection/faster_rcnn_sppe",
-    "keypoint_detection/keypoint_rcnn",
-}
+#: fixed. Empty: the two keypoint-detection templates that used to sit here now
+#: declare no seed, the same way the three object-detection templates do. The
+#: assertion is an equality, so any template that comes back to declaring a
+#: seed over a GroupNorm backbone is red. Keep this set empty.
+KNOWN_GROUP_NORM_SEED_CONFLICTS: set = set()
 
 
 def _group_norm_seed_conflicts(zoo):
