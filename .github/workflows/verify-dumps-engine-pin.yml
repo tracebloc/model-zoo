@@ -262,7 +262,10 @@ jobs:
   #    staged dump. Fails closed on any KEY_MISMATCH / BUILD_FAIL / provenance
   #    drift. Runs only after the mirror is confirmed == the engine.
   verify-dumps:
-    needs: engine-pin-drift-guard
+    # `fetch-dump-manifest` (4a, below) is needed for the canonical manifest,
+    # which this job now consumes as well as `dump-coverage` does — see the
+    # download step for why that is safe in a job that runs PR code.
+    needs: [engine-pin-drift-guard, fetch-dump-manifest]
     timeout-minutes: 30
     runs-on: ubuntu-latest
     # `id-token: write` IS SCOPED TO THIS JOB, never the workflow: it is what
@@ -277,27 +280,55 @@ jobs:
       id-token: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      # THE INSTALL RUNS ONLY WHEN THERE IS SOMETHING TO VERIFY. Nothing in this
-      # job puts a manifest.json in the checkout (the fetch step below says why),
-      # so every run to date took the verifier's "nothing to verify" branch --
-      # after spending ~2 minutes on setup-python plus installing the engine's
-      # pinned stack, which that branch never imports: the verifier is
-      # stdlib-only until it has a dump to build a template for, and the fetch
-      # step's skip branches are plain shell. So the two install steps are
-      # conditional on the manifest being present, and skipped otherwise; on
-      # the skip path the two tools run under the runner's own python3, which
-      # their no-manifest branches need nothing more than.
+      # THE CANONICAL MANIFEST, AND IT MUST ARRIVE FIRST. Until this step
+      # existed nothing in this job put a manifest.json in the checkout, so
+      # every run took the "no manifest" branch by construction (the arming
+      # overclaim). It is 4a's `dump-manifest` artifact — backend's
+      # tools/offline_weights/manifest.json, the same file `dump-coverage`
+      # gates on — landed at ./manifest.json, which is where the fetch hook
+      # (`--staging .`) and the verifier (its `--manifest` default) both read.
+      #
+      # ORDER IS THE WHOLE CONSTRAINT. The install and credential steps below
+      # are conditioned on `hashFiles('manifest.json')`, and `hashFiles` sees
+      # only what is in the checkout when each condition is evaluated. A
+      # download placed beside the fetch step — after the installs — would
+      # leave them skipped while the manifest then exists, and the verifier
+      # would die on `import torch` under the runner's bare python3.
+      # tests/test_dump_fetch_guard.py used to forbid any download into this
+      # job for exactly that reason; it now pins the narrower rule that makes
+      # one safe: exactly one producer of the file, this one, ahead of every
+      # step whose condition reads it.
+      #
+      # WHY AN ARTIFACT IN A PR-CODE JOB IS FINE HERE. The artifact is written
+      # by 4a, which runs NO PR-controlled code, and it is the manifest alone —
+      # never `_backend/.git`, never the token. This job only READS it. The
+      # token boundary 4a exists for is unchanged: no backend credential ever
+      # enters this job, exactly as for `dump-coverage`.
+      - name: Download the dump manifest
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: dump-manifest
+          path: .
+      # THE INSTALL RUNS ONLY WHEN THE DUMPS WILL BE FETCHED. Its condition is
+      # the credential step's, verbatim (tests/test_dump_fetch_guard.py holds
+      # the three equal): with a manifest now always present, a condition on
+      # the manifest alone would spend ~2 minutes on setup-python plus the
+      # engine's pinned stack on every run while the store variables are unset,
+      # for a verifier that then loads nothing. On that path the fetch step
+      # names what is missing and the verifier runs in its `--dumps-not-fetched`
+      # mode, which is stdlib-only by test — it parses the manifest and resolves
+      # every live entry to its template, and imports nothing the install
+      # provides.
       #
       # The condition decides ONLY whether to install. It makes no pass/fail
       # judgement and gates neither of the two steps that do: the fetch step
-      # and the verifier still run on every path and still own the verdict
-      # (armed-green on an ABSENT manifest, red on a present one they cannot
-      # account for), exactly as before. With a manifest present every step
-      # runs unchanged. tests/test_dump_fetch_guard.py asserts both halves --
-      # which steps carry the condition and which must not, and that the
-      # no-manifest path imports nothing the install provides.
+      # and the verifier still run on every path and still own the verdict.
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
-        if: hashFiles('manifest.json') != ''
+        if: >-
+          hashFiles('manifest.json') != ''
+          && vars.TRACEBLOC_ZOO_WEIGHTS_URI != ''
+          && vars.ZOO_WEIGHTS_READ_ROLE_ARN != ''
+          && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
         with:
           python-version: "3.11"
           cache: pip
@@ -305,7 +336,11 @@ jobs:
       # Install the engine's pinned stack (guard above proved it == the engine).
       # A failure here is a hard error, never a swallowed green (fail-closed).
       - run: pip install -r tools/requirements-engine-pin.txt
-        if: hashFiles('manifest.json') != ''
+        if: >-
+          hashFiles('manifest.json') != ''
+          && vars.TRACEBLOC_ZOO_WEIGHTS_URI != ''
+          && vars.ZOO_WEIGHTS_READ_ROLE_ARN != ''
+          && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
       # THE BUCKET IS PRIVATE, SO THE FETCH NEEDS CREDENTIALS, and until this
       # step existed the job had none: no AWS step, no AWS env, no secret, and
       # no `id-token` permission. Setting TRACEBLOC_ZOO_WEIGHTS_URI alone would
@@ -339,9 +374,7 @@ jobs:
       #     `repo:tracebloc/model-zoo` subjects, and its read-only scope.
       # The job split `fetch-engine-pin` uses (a token job that runs no PR code)
       # is not reused here on purpose: its point is to hand the PR job FILES,
-      # and the files here are only knowable from the manifest this job reads —
-      # and tests/test_dump_fetch_guard.py forbids an artifact download into
-      # this job, because it would land after the install condition above.
+      # and the files here are only knowable from the manifest this job reads.
       #
       # THE CONDITION IS SPELLED TWICE, in the `if:` and in the fetch step's
       # ZOO_WEIGHTS_TRUSTED_EVENT, and the shell refuses the one disagreement
@@ -366,7 +399,8 @@ jobs:
       # tools/sync_zoo_weights.py lays it out, with users reaching their seeds
       # through the platform's presigned-URL route rather than the bucket.
       # tools/sync_zoo_weights.py is the fetch hook (an internal ticket refs)
-      # and fetches the <base>_weights.pkl files into ./dist.
+      # and fetches the live entries' <base>_weights.pkl files into ./dist;
+      # entries marked `"status": "retired"` are not fetched.
       #
       # Each precondition is reported BY NAME. The previous guard was a single
       # `[ -f manifest.json ] && [ -f tools/sync_zoo_weights.py ]`, which
@@ -379,31 +413,26 @@ jobs:
       # problems and each says so.
       #
       # Still exit 0 in every skip branch: verify_dumps_against_engine_pin.py
-      # owns the fail-closed decision (armed-green on an ABSENT manifest, red on
-      # a manifest present with dumps it cannot account for), and duplicating
-      # that judgement here is how the two drift apart.
+      # owns the fail-closed decision, and duplicating that judgement here is
+      # how the two drift apart. What this step hands the verifier instead is
+      # the REASON, as the `not_fetched` output: set on every credential-side
+      # skip, it puts the verifier in `--dumps-not-fetched` mode (parse and
+      # resolve, load nothing, say SKIP). Unset — a fetch that ran, or the
+      # no-sync-tool defect — the verifier sweeps dist/ and reports every
+      # absent dump MISSING.
       #
-      # WHICH BRANCH IS TAKEN TODAY, and it is the first one: nothing in THIS
-      # job puts a manifest.json in the checkout. The manifest lives in
-      # `backend` and reaches CI as the `dump-manifest` artifact minted by job
-      # 4a — which only `dump-coverage` (4b) consumes. Wiring 4a's artifact in
-      # here is NOT a free arming, and the schema divergence cuts BOTH ways —
-      # measured, not reasoned about:
-      #
-      #   * an `entries`-keyed manifest (the shape sync_zoo_weights.py writes,
-      #     and the only shape its `fetch-all` can consume) fetches fine, and
-      #     then verify_dumps_against_engine_pin.py exits 2 on its "no `dumps`
-      #     list" fail-closed branch — red on a schema mismatch, not a bad dump;
-      #   * a `dumps`-keyed manifest (the shape the verifier reads) never gets
-      #     that far: `fetch-all` exits 1 with "declares no 'entries'", so THIS
-      #     step reddens first and no dump is ever fetched.
-      #
-      # So no single-key manifest can take this job green. Arming it needs a
-      # manifest carrying BOTH keys, or the schemas reconciled — which is
-      # the schema reconciliation's call, not this workflow's. Both tools' messages now name
-      # that precondition instead of implying a manifest is all that is missing;
-      # tests/test_dump_fetch_guard.py drives both directions.
+      # ONE SCHEMA ACROSS BOTH TOOLS (the schema reconciliation). This step
+      # and the verifier used to read the same manifest.json under different
+      # keys, and no single-key manifest could take the job green: an
+      # `entries`-keyed manifest fetched and then the verifier exited 2 on
+      # "no `dumps` list"; a `dumps`-keyed one reddened `fetch-all` first.
+      # Both sync_zoo_weights and verify_dumps_against_engine_pin now read the
+      # canonical `entries` dict, the verifier refuses a `dumps` list by name,
+      # and tests/test_dump_fetch_guard.py drives one schema-2 manifest
+      # (live, retired and category-carrying entries) through both, in job
+      # order.
       - name: Obtain staged dumps from the model store
+        id: fetch-dumps
         env:
           # The store URI and the role are configuration, not literals here:
           # the bucket name is not this public repository's to publish. Unset
@@ -418,12 +447,12 @@ jobs:
           mkdir -p dist
           if [ ! -f manifest.json ]; then
             echo "SKIP (no manifest): no manifest.json in this checkout, so no"
-            echo "  dumps are declared for verification here. This branch is"
-            echo "  STRUCTURAL, not incidental: no step in this job puts one"
-            echo "  here. The manifest lives in backend under tools/offline_weights"
-            echo "  and reaches CI as the dump-manifest artifact, which only the"
-            echo "  dump-coverage job consumes. Until this job consumes it too,"
-            echo "  this skip is taken on every run (see the arming overclaim)."
+            echo "  dumps are declared for verification here. In CI this is a"
+            echo "  FAULT, not a pending state: the job's first step downloads"
+            echo "  the dump-manifest artifact (backend tools/offline_weights) to"
+            echo "  this path, so its absence means that download did not land"
+            echo "  here. The verifier below runs with --require-manifest and"
+            echo "  reddens on it (see the arming overclaim)."
           elif [ ! -f tools/sync_zoo_weights.py ]; then
             echo "SKIP (no sync tool): manifest.json declares dumps, but the"
             echo "  fetch hook tools/sync_zoo_weights.py is NOT in this checkout."
@@ -441,14 +470,14 @@ jobs:
             # Every missing precondition is named, not just the first: an
             # admin reading one SKIP and fixing it should not discover the
             # next one only on the following run.
-            missing=0
+            missing=""
             if [ -z "${TRACEBLOC_ZOO_WEIGHTS_URI:-}" ]; then
               echo "SKIP (no store URI): TRACEBLOC_ZOO_WEIGHTS_URI is unset, so"
               echo "  there is nowhere to fetch from. This is not an open"
               echo "  question: the hosting decision is made (a private S3"
               echo "  bucket, prefix zoo-weights/). What remains is an admin"
               echo "  setting this repo variable to that prefix."
-              missing=1
+              missing="${missing:+$missing; }no store URI (TRACEBLOC_ZOO_WEIGHTS_URI unset)"
             fi
             if [ -z "${ZOO_WEIGHTS_READ_ROLE_ARN:-}" ]; then
               echo "SKIP (no read role): ZOO_WEIGHTS_READ_ROLE_ARN is unset, so"
@@ -456,26 +485,46 @@ jobs:
               echo "  private. What remains is an admin setting this repo"
               echo "  variable to a READ-ONLY role on zoo-weights/* whose OIDC"
               echo "  trust admits this repository."
-              missing=1
+              missing="${missing:+$missing; }no read role (ZOO_WEIGHTS_READ_ROLE_ARN unset)"
             fi
             if [ "$ZOO_WEIGHTS_TRUSTED_EVENT" != "true" ]; then
               echo "SKIP (fork pull request): this run's code comes from a"
               echo "  fork, and no AWS credentials are issued to it. The same"
               echo "  dumps are verified on the push to develop after merge and"
               echo "  on the weekday schedule."
-              missing=1
+              missing="${missing:+$missing; }fork pull request (no credentials issued)"
             fi
-            if [ "$missing" -eq 0 ]; then
+            if [ -z "$missing" ]; then
               if [ "${ZOO_WEIGHTS_CREDENTIALS:-}" != "success" ]; then
                 echo "::error::every fetch precondition holds, but the 'Assume the zoo-weights read role' step's outcome is '${ZOO_WEIGHTS_CREDENTIALS:-}', not success. Its if: and this step's preconditions disagree; refusing to fetch a private bucket without credentials." >&2
                 exit 1
               fi
               python3 tools/sync_zoo_weights.py --staging . fetch-all --dest dist
+            else
+              echo "not_fetched=$missing" >> "$GITHUB_OUTPUT"
             fi
           fi
-      # The gate. Exits non-zero on any dump that cannot strict-load into its
-      # template under the engine pin, or any built_with-vs-engine drift.
-      - run: python3 tools/verify_dumps_against_engine_pin.py
+      # The gate. Exits non-zero on any live dump that cannot strict-load into
+      # its template under the engine pin, any built_with-vs-engine drift, any
+      # live entry that maps to no template, or a manifest that is not the
+      # canonical shape. `--require-manifest` because the first step always
+      # supplies one: an absent manifest here is a fault, not "nothing to do".
+      #
+      # On a named skip (`not_fetched` set) it still parses the manifest and
+      # resolves every live entry — red on a structural defect — but loads
+      # nothing and prints SKIP (dumps not fetched) with the reason, which is
+      # today's state while the two store variables are unset.
+      - name: Verify the dumps against the engine pin
+        env:
+          DUMPS_NOT_FETCHED: ${{ steps.fetch-dumps.outputs.not_fetched }}
+        run: |
+          set -euo pipefail
+          if [ -n "${DUMPS_NOT_FETCHED:-}" ]; then
+            python3 tools/verify_dumps_against_engine_pin.py --require-manifest \
+              --dumps-not-fetched "$DUMPS_NOT_FETCHED"
+          else
+            python3 tools/verify_dumps_against_engine_pin.py --require-manifest
+          fi
 
   # 3) SEED_EXCLUDED_PREFIXES must keep agreeing with what the template BUILDS.
   #
@@ -663,7 +712,10 @@ jobs:
         with:
           name: dump-manifest
           # Only manifest.json — never _backend/.git — crosses to the
-          # PR-controlled job.
+          # PR-controlled jobs. There are TWO consumers: `dump-coverage` (4b)
+          # and `verify-dumps` (2), which lands it at ./manifest.json for the
+          # fetch hook and the verifier. A single file, so the archive holds
+          # `manifest.json` at its root.
           path: _backend/tools/offline_weights/manifest.json
           if-no-files-found: error
           retention-days: 1

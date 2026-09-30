@@ -117,9 +117,20 @@ def build_index(zoo: Path) -> Dict[str, List[Tuple[str, Path]]]:
 
 
 def resolve(
-    index: Dict[str, List[Tuple[str, Path]]], dump_dir: str
+    index: Dict[str, List[Tuple[str, Path]]],
+    dump_dir: str,
+    recorded: Optional[str] = None,
 ) -> Tuple[str, Path]:
     """The `(category, path)` a dump directory belongs to.
+
+    ``recorded`` is the category a manifest entry RECORDS for itself (the
+    manifest's optional per-entry ``category`` key, (internal ref)). It is the
+    strongest evidence there is — the dump's own record of what it was built
+    for — so it selects the category when the name alone cannot. It never
+    OVERRIDES the name, though: a name this module already files under one
+    category (a prefix, or a `DUMP_DIR_CATEGORY` entry) that records another
+    is two claims disagreeing, and the dump is refused rather than one of them
+    being believed.
 
     Raises `AmbiguousTemplate` rather than guessing — see the module docstring.
     """
@@ -128,6 +139,19 @@ def resolve(
         if dump_dir.startswith(prefix):
             stem, category = dump_dir[len(prefix) :], prefixed_category
             break
+
+    if recorded is not None:
+        if not isinstance(recorded, str) or not recorded:
+            raise AmbiguousTemplate(
+                f"{dump_dir}: records category {recorded!r}, which is not a "
+                "category name"
+            )
+        if category is not None and category != recorded:
+            raise AmbiguousTemplate(
+                f"{dump_dir}: records category {recorded}, but its name files it "
+                f"under {category}. Two claims disagree; refusing to pick one"
+            )
+        category = recorded
 
     candidates = index.get(stem, [])
     if not candidates:

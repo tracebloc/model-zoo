@@ -225,25 +225,14 @@ def _status_of(record: object) -> Optional[str]:
 def manifest_names(declared: Dict) -> Inventory:
     """Dump names from a manifest, split by status, plus any shape warning.
 
-    TWO SHAPES BOTH CALL THEMSELVES SCHEMA 2, and this is the first tool to read
-    a real one:
-
-      * ``verify_dumps_against_engine_pin.py``'s docstring documents
-        ``{"dumps": [{"name": ..., "sha256": ...}]}`` — a LIST of records — and
-        its parser reads ``manifest["dumps"]``;
-      * the manifest actually staged alongside the 52 dumps (the hosting decision) uses
-        ``{"prefix": ..., "entries": {"<name>": {"file", "sha256",
-        "size_bytes"}}}`` — a DICT keyed by name.
-
-    Nothing caught it because the CI gate is still an armed no-op until the
-    seeds are hosted, so it has never been pointed at the staged manifest. It
-    would not have failed silently — that gate fail-closes on a missing
-    ``dumps`` key — but it WOULD go red on the day of the upload, for a reason
-    that reads like a broken manifest rather than a schema disagreement.
-
-    Both are read here so this tool is usable today, and the divergence is
-    reported rather than absorbed: whichever shape gets hosted, the two tools
-    have to agree on it before the upload.
+    THE CANONICAL SHAPE IS THE ``entries`` DICT —
+    ``{"prefix": ..., "entries": {"<name>": {"file", "sha256", "size_bytes",
+    ...}}}``, backend's manifest and the one ``sync_zoo_weights.py`` writes and
+    ``verify_dumps_against_engine_pin.py`` reads (the schema reconciliation).
+    The ``dumps`` LIST shape is still read here, because this tool's own tests
+    and any hand-written inventory may use it, but it is WARNED about: nothing
+    writes it, and the verifier refuses it by name, so a manifest in that shape
+    passes this gate and then reddens the other.
 
     ``status`` IS READ IN BOTH SHAPES, not just the one the manifest happens to
     use today. The `entries` dict is what (internal ref) marks retired, but wiring
@@ -255,15 +244,14 @@ def manifest_names(declared: Dict) -> Inventory:
     warning: Optional[str]
     if isinstance(declared.get("dumps"), list):
         records = {entry["name"]: entry for entry in declared["dumps"]}
-        warning = None
+        warning = (
+            "manifest uses the `dumps` list shape. The canonical schema-2 "
+            "manifest is keyed `entries`, and verify_dumps_against_engine_pin.py "
+            "refuses a `dumps` list by name (the schema reconciliation)."
+        )
     elif isinstance(declared.get("entries"), dict):
         records = dict(declared["entries"])
-        warning = (
-            "manifest uses the `entries` dict shape; "
-            "verify_dumps_against_engine_pin.py parses the `dumps` list shape. "
-            "Both are labelled schema 2 — settle this before hosting "
-            "(the hosting decision)."
-        )
+        warning = None
     else:
         return Inventory(
             names=set(),
