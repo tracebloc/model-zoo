@@ -1,7 +1,7 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/desk-dispatch.yml`
-# (blob b5f0cbbfe7e920c1a189b0c04ae23b388e3d5876) folded with the private source repo's own caller of it,
+# (blob 0d19b30694ad50422cf1468f77418172ea892edf) folded with the private source repo's own caller of it,
 # `.github/workflows/desk-dispatch-caller.yml` (blob adb8c063d98eb394118f010f8bc46bcfada4e43f), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
@@ -178,8 +178,11 @@
 # and reads the head's check runs and commit statuses for the gate
 # (`pull-requests: write`, `issues: write`, `checks: read`, `statuses: read`, on
 # `contents: read`) -- GRANTED BY THE CALLER, never declared here. The App token
-# is minted ONLY to read this private repo's checker (`permission-contents: read`
-# on the private source repo); the routine token and fire URL come from the caller.
+# every run mints is ONLY to read this private repo's checker (`permission-contents:
+# read` on the private source repo); the two others -- the heal's `actions: write`, the
+# protection read's `administration: read` -- are minted only after the PRE-CHECK
+# says this run can fire ((internal ref), the step below). The routine
+# token and fire URL come from the caller.
 #
 # NO `paths:` FILTER may ever be added by a caller; NO `cancel-in-progress` here
 # (reusable-no-cancel: a cancelled corpse on an unchanged sha reddens the rollup).
@@ -298,60 +301,6 @@ jobs:
           owner: ${{ github.repository_owner }}
           repositories: org-config
           permission-contents: read
-      # SCOPED to the caller repo and to actions: write, for exactly one call: an
-      # in-place re-run, as the App so the re-run's completion is a `workflow_run` the
-      # caller sees, of a run behind a CANCELLED required context on the live head,
-      # once per run ((internal ref) item 1, (internal ref); `heal_cancelled`
-      # in scripts/desk-dispatch.py) -- no session can re-run one, and no other token
-      # here may. (The stale-`bugbot / review` re-run it was first minted for retired
-      # with the Bugbot gate, (internal ref).) `continue-on-error`,
-      # DELIBERATELY: a refused mint must not redden every dispatch, and the
-      # script refuses ONLY when it finds a cancelled red it could have healed. Minted
-      # on EVERY event this dispatcher acts on, the condition naming no action:
-      # an action list here would be a second copy of the script's arms (an
-      # `opened` event can meet a recorded verdict too, via `decide_ungated`).
-      - name: Mint an actions token for re-running a cancelled required run in place (tolerates a refused mint)
-        id: rerun-token
-        if: github.event_name == 'workflow_run' || github.event_name == 'check_suite' || github.event_name == 'pull_request'
-        continue-on-error: true
-        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
-        with:
-          app-id: ${{ secrets.RELEASE_TRAIN_APP_ID }}
-          private-key: ${{ secrets.RELEASE_TRAIN_APP_PRIVATE_KEY }}
-          owner: ${{ github.repository_owner }}
-          repositories: ${{ github.event.repository.name }}
-          permission-actions: write
-      # A THIRD scoped mint, for exactly ONE read: the base branch's
-      # required-status-context list, so a red check that is NOT required stops
-      # holding the head while a red required one still does ((internal ref);
-      # `gate_required` / `required_contexts` in scripts/desk-dispatch.py) --
-      # this repo's own fleet audits report on OTHER repos' live state, so one
-      # repo drifting anywhere turned an inventory PR here red and the desk
-      # stopped reviewing the PR that fixes the drift.
-      #
-      # SCOPED TO THE CALLER'S OWN REPO, AND READ-ONLY, and that narrowness is
-      # the whole justification: an org-wide `actions: write` mint on the sweep
-      # was proposed and closed unmerged, and `administration: write` is the
-      # grant that could change protection. NO NEW ORG GRANT IS NEEDED: another
-      # workflow already mints `permission-administration: read` from the same
-      # App and reads a protection list byte-identical to an admin read (its run
-      # is named on the PR that wired this, not here -- this file is delivered to
-      # PUBLIC repos). A SEPARATE MINT, so a permission the installation stops
-      # holding degrades this one feature instead of taking the dispatcher down;
-      # `continue-on-error`, DELIBERATELY, for the same reason: a refused mint
-      # leaves the token EMPTY and `gate_required` returns None without calling,
-      # so every red holds the head -- the fail-CLOSED direction (rule 3). NO
-      # `if:` CONDITION: both caller triggers reach a `gate_required` call.
-      - name: Mint a protection-read token for the base branch's required contexts (tolerates a refused mint)
-        id: protection-token
-        continue-on-error: true
-        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
-        with:
-          app-id: ${{ secrets.RELEASE_TRAIN_APP_ID }}
-          private-key: ${{ secrets.RELEASE_TRAIN_APP_PRIVATE_KEY }}
-          owner: ${{ github.repository_owner }}
-          repositories: ${{ github.event.repository.name }}
-          permission-administration: read
       # THE TOOLS REF ((internal ref) D4, (internal ref)): `job.workflow_sha` is the commit
       # of THIS reusable file, so the scripts below are the ones it was reviewed
       # with; `tools-ref` overrides it for a test. An EMPTY ref would check out the
@@ -385,7 +334,86 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: '3.12'
+      # THE PRE-CHECK ((internal ref)): the SAME script, on the job's own
+      # token only, before the two App mints below. It stops the run -- `go=false`,
+      # after the same concurrency hold `main` takes -- only on a verdict the
+      # protection read cannot change: an event that acts on nothing (not a
+      # completion, no open PR, a draft / bot / promotion PR, an older push, an event
+      # no reviewer arm owns), or a head still running a check that holds it however
+      # the base is protected. Anything else, and anything it cannot tell, is `go`.
+      # Each mint's revoke and each protection read is a call on the App
+      # installation's bucket, which the fleet drained on 2026-09-29; a run the
+      # pre-check stops spends one (the the private source repo mint's revoke above, which the
+      # checkout needs) instead of about five. `continue-on-error` and the `!=
+      # 'false'` below make a crashed or silent pre-check `go`: this step can save a
+      # run, never lose one. The decision is `precheck` in scripts/desk-dispatch.py,
+      # which calls `main`'s own functions -- none of it lives in this file.
+      - name: Pre-check on the job's own token whether this run can fire at all
+        id: precheck
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DISPATCH_T0: ${{ steps.started.outputs.at }}
+          DESK_REVIEWER: ${{ 'tracebloc-review' }}
+        run: python3 .org-config-tools/scripts/desk-dispatch.py --precheck
+      # SCOPED to the caller repo and to actions: write, for exactly one call: an
+      # in-place re-run, as the App so the re-run's completion is a `workflow_run` the
+      # caller sees, of a run behind a CANCELLED required context on the live head,
+      # once per run ((internal ref) item 1, (internal ref); `heal_cancelled`
+      # in scripts/desk-dispatch.py) -- no session can re-run one, and no other token
+      # here may. (The stale-`bugbot / review` re-run it was first minted for retired
+      # with the Bugbot gate, (internal ref).) `continue-on-error`,
+      # DELIBERATELY: a refused mint must not redden every dispatch, and the
+      # script refuses ONLY when it finds a cancelled red it could have healed. Minted
+      # on EVERY event this dispatcher acts on, the condition naming no action:
+      # an action list here would be a second copy of the script's arms (an
+      # `opened` event can meet a recorded verdict too, via `decide_ungated`).
+      - name: Mint an actions token for re-running a cancelled required run in place (tolerates a refused mint)
+        id: rerun-token
+        if: steps.precheck.outputs.go != 'false' && (github.event_name == 'workflow_run' || github.event_name == 'check_suite' || github.event_name == 'pull_request')
+        continue-on-error: true
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.RELEASE_TRAIN_APP_ID }}
+          private-key: ${{ secrets.RELEASE_TRAIN_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-actions: write
+      # A THIRD scoped mint, for exactly ONE read: the base branch's
+      # required-status-context list, so a red check that is NOT required stops
+      # holding the head while a red required one still does ((internal ref);
+      # `gate_required` / `required_contexts` in scripts/desk-dispatch.py) --
+      # this repo's own fleet audits report on OTHER repos' live state, so one
+      # repo drifting anywhere turned an inventory PR here red and the desk
+      # stopped reviewing the PR that fixes the drift.
+      #
+      # SCOPED TO THE CALLER'S OWN REPO, AND READ-ONLY, and that narrowness is
+      # the whole justification: an org-wide `actions: write` mint on the sweep
+      # was proposed and closed unmerged, and `administration: write` is the
+      # grant that could change protection. NO NEW ORG GRANT IS NEEDED: another
+      # workflow already mints `permission-administration: read` from the same
+      # App and reads a protection list byte-identical to an admin read (its run
+      # is named on the PR that wired this, not here -- this file is delivered to
+      # PUBLIC repos). A SEPARATE MINT, so a permission the installation stops
+      # holding degrades this one feature instead of taking the dispatcher down;
+      # `continue-on-error`, DELIBERATELY, for the same reason: a refused mint
+      # leaves the token EMPTY and `gate_required` returns None without calling,
+      # so every red holds the head -- the fail-CLOSED direction (rule 3). Its ONE
+      # `if:` is the pre-check's: every caller trigger that gets past it reaches a
+      # `gate_required` call.
+      - name: Mint a protection-read token for the base branch's required contexts (tolerates a refused mint)
+        id: protection-token
+        if: steps.precheck.outputs.go != 'false'
+        continue-on-error: true
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.RELEASE_TRAIN_APP_ID }}
+          private-key: ${{ secrets.RELEASE_TRAIN_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-administration: read
       - name: Decide, lock, fire
+        if: steps.precheck.outputs.go != 'false'
         env:
           GH_TOKEN: ${{ github.token }}
           DISPATCH_T0: ${{ steps.started.outputs.at }}
