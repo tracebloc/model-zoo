@@ -2,14 +2,25 @@
 
 Offline variant: the architecture is built with ``weights=None`` throughout, so
 nothing is fetched from ``download.pytorch.org`` — the (internal ref) egress lockdown
-blocks it — and the template constructs anywhere, network or not. No seed is
-hosted for this template yet, so it random-initialises and there is
-no weight file — upload with ``weights=False``::
+blocks it — and the template constructs anywhere, network or not. The pretrained
+backbone is delivered from the tracebloc model store as the training seed:
+upload the matched ``faster_rcnn_swin_t_weights.pkl`` sitting next to
+this file via ``weights=True``, and the platform loads it after
+``MyModel()`` has built this architecture::
 
-    user.upload_model("faster_rcnn_swin_t", weights=False)
+    user.upload_model("faster_rcnn_swin_t", weights=True)
 
-Until a dump is staged, ``tools/check_dump_coverage.py`` classifies this file
-NO_SEED and the statement above is what keeps that classification honest.
+The seed's pretrained content is the BACKBONE ALONE (internal ref). No
+checkpoint exists for this detector as a whole, so every tensor under
+``backbone.body.`` is torchvision's ImageNet ``swin_t`` checkpoint, re-keyed by
+the remap recorded below, and the FPN, the RPN and the ROI box head — which no
+checkpoint has — travel in the dump at this template's own fresh
+initialisation. The keys under ``SEED_EXCLUDED_PREFIXES`` below are stripped
+from the dump by ``tools/seed_contract.py strip``, so the class head
+initialises fresh from whatever ``output_classes`` the linked dataset decides
+and ONE dump serves every class count — checked by
+``tools/verify_backbone_seeds.py``, which builds this template at a count no
+dump was ever made at.
 
 ⚠️ Swin's stages emit NHWC, and the FPN assumes NCHW
 ----------------------------------------------------
@@ -18,7 +29,7 @@ other template in this family.
 
 ``torchvision.models.swin_t().features`` returns tensors shaped
 ``(N, H, W, C)`` — channels last — because the shifted-window blocks operate on
-a token grid. Measured under torchvision 0.26.0 on a 256px input, the stage
+a token grid. Measured under the engine pin on a 256px input, the stage
 outputs are ``(1, 64, 64, 96)``, ``(1, 32, 32, 192)``, ``(1, 16, 16, 384)``,
 ``(1, 8, 8, 768)``. Both ``IntermediateLayerGetter`` and
 ``FeaturePyramidNetwork`` read channels from **dim 1**, which in that layout is
@@ -65,15 +76,17 @@ Unlike ConvNeXt, Swin-T's ``state_dict`` is not all parameters: it carries 12
 and a seed must carry them — which is why the seed contract is derived by shape
 diff rather than by "everything that trains".
 
-A future hosted seed needs a key remap, not a rebuild
------------------------------------------------------
+The hosted seed is a key remap, not a rebuild
+---------------------------------------------
 ``BackboneWithFPN`` nests the backbone under ``body`` and re-keys the kept
 stages by their ``return_layers`` values, so a torchvision ImageNet
 checkpoint's ``features.1.*`` lands here as ``backbone.body.1.*``: a prefix
-rename with shapes untouched. Mechanical work for whoever hosts the seed
-, recorded here so it is not rediscovered.
+rename with shapes untouched. The seed's prep applies exactly this rename from
+a committed recipe (internal ref), and refuses a checkpoint key it cannot
+place, a shape that differs, or a backbone key left without a source — so a
+partly-seeded backbone cannot be written.
 
-Verified against torchvision 0.26.0 (the engine pin, ``tools/requirements-engine-pin.txt``).
+Verified against the engine pin (``tools/requirements-engine-pin.txt``).
 """
 from collections import OrderedDict
 

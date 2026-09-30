@@ -2,14 +2,25 @@
 
 Offline variant: the architecture is built with ``weights=None`` throughout, so
 nothing is fetched from ``download.pytorch.org`` — the (internal ref) egress lockdown
-blocks it — and the template constructs anywhere, network or not. No seed is
-hosted for this template yet, so it random-initialises and there is
-no weight file — upload with ``weights=False``::
+blocks it — and the template constructs anywhere, network or not. The pretrained
+backbone is delivered from the tracebloc model store as the training seed:
+upload the matched ``faster_rcnn_convnext_small_weights.pkl`` sitting next to
+this file via ``weights=True``, and the platform loads it after
+``MyModel()`` has built this architecture::
 
-    user.upload_model("faster_rcnn_convnext_small", weights=False)
+    user.upload_model("faster_rcnn_convnext_small", weights=True)
 
-Until a dump is staged, ``tools/check_dump_coverage.py`` classifies this file
-NO_SEED and the statement above is what keeps that classification honest.
+The seed's pretrained content is the BACKBONE ALONE (internal ref). No
+checkpoint exists for this detector as a whole, so every tensor under
+``backbone.body.`` is torchvision's ImageNet ``convnext_small`` checkpoint, re-
+keyed by the remap recorded below, and the FPN, the RPN and the ROI box head —
+which no checkpoint has — travel in the dump at this template's own fresh
+initialisation. The keys under ``SEED_EXCLUDED_PREFIXES`` below are stripped
+from the dump by ``tools/seed_contract.py strip``, so the class head
+initialises fresh from whatever ``output_classes`` the linked dataset decides
+and ONE dump serves every class count — checked by
+``tools/verify_backbone_seeds.py``, which builds this template at a count no
+dump was ever made at.
 
 Why the backbone is assembled by hand
 -------------------------------------
@@ -29,8 +40,8 @@ buffer divergence to reproduce. ConvNeXt-Small has zero buffers in its
 Which stages feed the pyramid
 -----------------------------
 ``convnext_small().features`` is eight modules: a patch-embed stem, then four
-stages each preceded by a downsample. Measured under torchvision 0.26.0 (the
-engine pin) on a 256px input, the stage outputs are::
+stages each preceded by a downsample. Measured under the engine pin
+(``tools/requirements-engine-pin.txt``) on a 256px input, the stage outputs are::
 
     features.1 ->  96ch @ stride  4
     features.3 -> 192ch @ stride  8
@@ -42,16 +53,17 @@ off the architecture rather than assumed. Faster R-CNN takes all four plus
 ``LastLevelMaxPool``, giving the five pyramid levels its default
 ``AnchorGenerator`` is built for.
 
-A future hosted seed needs a key remap, not a rebuild
------------------------------------------------------
+The hosted seed is a key remap, not a rebuild
+---------------------------------------------
 ``BackboneWithFPN`` nests the backbone under ``body``, and
 ``IntermediateLayerGetter`` re-keys the kept stages by their ``return_layers``
 values. So a torchvision ImageNet checkpoint's ``features.1.*`` lands here as
-``backbone.body.1.*``: a prefix rename, with shapes untouched. That is
-mechanical work for whoever hosts the seed and is recorded here
-so it is not rediscovered.
+``backbone.body.1.*``: a prefix rename, with shapes untouched. The seed's prep
+applies exactly this rename from a committed recipe (internal ref), and refuses
+a checkpoint key it cannot place, a shape that differs, or a backbone key left
+without a source — so a partly-seeded backbone cannot be written.
 
-Verified against torchvision 0.26.0 (the engine pin, ``tools/requirements-engine-pin.txt``).
+Verified against the engine pin (``tools/requirements-engine-pin.txt``).
 """
 from torchvision.models import convnext_small
 from torchvision.models.detection.backbone_utils import BackboneWithFPN
@@ -89,8 +101,8 @@ def MyModel(num_classes=output_classes):
 
     # weights=None: architecture only, no download (the internal ref egress lockdown
     # blocks download.pytorch.org). ConvNeXt's ImageNet weights are the only
-    # thing this argument would fetch; the detector heads are random-init
-    # either way.
+    # thing this argument would fetch, and they arrive as the hosted seed
+    # instead; the detector heads have no pretrained source either way.
     backbone = convnext_small(weights=None)
 
     # C2..C5 at strides 4/8/16/32 (see the module docstring), re-keyed 0..3 for
