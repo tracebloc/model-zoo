@@ -190,6 +190,124 @@ _WHEEL_INDEX = re.compile(r"--index-url\s+https://download\.pytorch\.org/whl/")
 _GREPS_A_TORCH_PIN = re.compile(r"grep\b[^\n]*\btorch[^\n]*==")
 _DERIVES_FROM = re.compile(r"^ARG\s+REQUIREMENTS_FILE=(\S+)", re.MULTILINE)
 
+#: THE SECOND WAY A BASE NAMES ITS SOURCE: A BIND MOUNT. The torch + CUDA
+#: parent (`Dockerfile.base.torch.gpu`) takes no `REQUIREMENTS_FILE` build-arg;
+#: it mounts its requirements file straight into the RUN that greps it:
+#:
+#:     --mount=type=bind,source=use_cases/requirements_torch_cuda.txt,target=...
+#:
+#: Read as a real `--mount` spec -- split on commas into `key=value`, `type`
+#: must be `bind`, `source` or its BuildKit alias `src` -- rather than as one
+#: regex over a fixed option order, because BuildKit does not fix the order.
+#: Only a source whose BASENAME is `requirements*.txt` counts: the same
+#: Dockerfile also bind-mounts a signing key, a script and a JSON file, and
+#: none of those is where a pin comes from. The directory is NOT restricted to
+#: `use_cases/`, on purpose: a requirements file mounted from anywhere else is
+#: still the file the image installs from, so it is captured and then refused
+#: below as "not a pinning file in the scanned set", rather than being ignored
+#: and refused under a vaguer message.
+_MOUNT_SPEC = re.compile(r"--mount=(\S+)")
+_REQUIREMENTS_BASENAME = re.compile(r"(?:^|/)requirements[^/]*\.txt$")
+
+
+def _bind_mounted_requirements(text: str) -> list[str]:
+    """Every distinct requirements file `text` bind-mounts, sorted."""
+    found: set[str] = set()
+    for spec in _MOUNT_SPEC.findall(text):
+        opts = dict(
+            part.split("=", 1) for part in spec.rstrip(",").split(",") if "=" in part
+        )
+        if opts.get("type") != "bind":
+            continue
+        source = opts.get("source", opts.get("src", ""))
+        if _REQUIREMENTS_BASENAME.search(source):
+            found.add(source)
+    return sorted(found)
+
+
+def _derive_target(text: str) -> tuple[str, str]:
+    """The requirements file a deriving candidate takes its pin from.
+
+    Returns `(target, problem)`. `target` is "" whenever it cannot be named
+    unambiguously, and `problem` then says why, so no caller can mistake an
+    ambiguous file for one that names a target.
+
+    TWO NAMINGS ARE ONE CLAIM, SO THEY MUST AGREE. A file that declares
+    `ARG REQUIREMENTS_FILE=a` and bind-mounts `b` names two sources for one
+    image, and which of them the grep reads depends on RUN lines this tool does
+    not interpret. Picking either is the guess this gate refuses to make, so
+    the pair must be equal or it is a refusal; the same goes for two different
+    bind-mounted requirements files.
+    """
+    m = _DERIVES_FROM.search(text)
+    arg = m.group(1) if m else ""
+    binds = _bind_mounted_requirements(text)
+    if len(binds) > 1:
+        return "", (
+            "bind-mounts more than one requirements file ("
+            + ", ".join(binds)
+            + "), so which one it installs from cannot be identified."
+        )
+    bind = binds[0] if binds else ""
+    if arg and bind and arg != bind:
+        return "", (
+            f"names REQUIREMENTS_FILE={arg} but bind-mounts {bind}. The two "
+            "must agree: which of them the image installs from is not "
+            "something this gate will guess."
+        )
+    target = arg or bind
+    if not target:
+        return "", (
+            "names no REQUIREMENTS_FILE and bind-mounts no requirements file, "
+            "so the file it actually installs from cannot be identified."
+        )
+    return target, ""
+
+
+#: THE THIRD SHAPE: A FAMILY BUILT `FROM` A PARENT IMAGE PASSED IN BY DIGEST.
+#: The GPU families can build `FROM ${TORCH_GPU_PARENT}`, a build-arg the
+#: workflow fills with a digest, and install their own `REQUIREMENTS_FILE`
+#: under `pip freeze` of that parent as constraints:
+#:
+#:     pip freeze > /tmp/parent-constraints.txt; \
+#:     pip install ... -c /tmp/parent-constraints.txt -r /tmp/requirements.txt
+#:
+#: Such a file carries no pin and no wheel index; its torch is the parent's.
+#: WHICH parent is not in the file (a workflow resolves the digest), so the
+#: parent cannot be followed. What CAN be derived is this: under the parent's
+#: freeze as constraints, a torch pin in the family's own requirements file
+#: must equal the torch already installed or the build fails. So the family's
+#: torch version IS its requirements file's torch pin, whatever the parent was
+#: -- provided that file pins torch at all, which is checked, not assumed.
+_FROM_BUILD_ARG = re.compile(r"^FROM\s+\$\{?(\w+)\}?(?:\s|$)", re.MULTILINE)
+_FREEZE_TO = re.compile(r"pip\s+freeze\s*>\s*([^\s;]+)")
+_TORCH_PIN = "torch"
+
+
+def _derives_by_wheel_index(text: str) -> bool:
+    return bool(_WHEEL_INDEX.search(text) and _GREPS_A_TORCH_PIN.search(text))
+
+
+def _inherits_from_build_arg_parent(text: str) -> bool:
+    """`FROM` a declared build-arg AND an install under that parent's freeze.
+
+    Whether the ARG has a default does not matter to what is derived: the
+    freeze-as-constraints install is what ties the family's torch to its own
+    requirements file, whichever image the ARG resolves to.
+    """
+    parent_is_arg = any(
+        re.search(rf"^ARG\s+{re.escape(name)}(?:=\S*)?\s*$", text, re.MULTILINE)
+        for name in _FROM_BUILD_ARG.findall(text)
+    )
+    if not parent_is_arg:
+        return False
+    return any(
+        re.search(
+            rf"pip\s+install\b[^\n]*-c\s+{re.escape(frozen)}\s[^\n]*-r\s", text
+        )
+        for frozen in _FREEZE_TO.findall(text)
+    )
+
 
 def classify_engine_candidates(
     candidates: dict[str, str],
@@ -205,7 +323,11 @@ def classify_engine_candidates(
     is why an UNCLASSIFIED candidate is an error rather than an omission.
 
     Returns `(pinning, deriving, unclassified)` where `deriving` maps each
-    deriving file to the candidate it takes its pin FROM.
+    deriving file to the candidate it takes its pin FROM -- named by a
+    `REQUIREMENTS_FILE` build-arg or a bind mount (`_derive_target`), and ""
+    when that cannot be named unambiguously. A family built FROM a build-arg
+    parent (`_inherits_from_build_arg_parent`) derives too, from its own
+    requirements file; `assert_engine_pin_coverage` holds it to pinning torch.
     """
     pinning: list[str] = []
     deriving: dict[str, str] = {}
@@ -214,9 +336,8 @@ def classify_engine_candidates(
         text = candidates[rel]
         if _exact_pins_in(text):
             pinning.append(rel)
-        elif _WHEEL_INDEX.search(text) and _GREPS_A_TORCH_PIN.search(text):
-            m = _DERIVES_FROM.search(text)
-            deriving[rel] = m.group(1) if m else ""
+        elif _derives_by_wheel_index(text) or _inherits_from_build_arg_parent(text):
+            deriving[rel] = _derive_target(text)[0]
         else:
             unclassified.append(rel)
     return pinning, deriving, unclassified
@@ -235,10 +356,11 @@ def assert_engine_pin_coverage(
       * NO deriving source at all, which means the wheel-index idiom stopped
         being recognised — the set quietly emptying out is indistinguishable
         from an engine that stopped using it, and only one of those is fine;
-      * a deriving source whose `REQUIREMENTS_FILE` target is not itself a
-        pinning candidate. That is the strongest of the four: it makes the
-        file each GPU base greps STRUCTURALLY REQUIRED to be in the scan, and
-        `Dockerfile.base.cv.gpu` derives from
+      * a deriving source whose target -- its `REQUIREMENTS_FILE` build-arg
+        or its bind-mounted requirements file -- is not itself a pinning
+        candidate, or cannot be named at all. That is the strongest of the
+        four: it makes the file each GPU base greps STRUCTURALLY REQUIRED to
+        be in the scan, and `Dockerfile.base.cv.gpu` derives from
         `use_cases/requirements_vision_cv_cuda.txt` — precisely the file
         (internal ref) is about. Under the old two-file list that target was
         not even fetched.
@@ -261,7 +383,11 @@ def assert_engine_pin_coverage(
             "NO engine file carries an exact pin, so the engine's side would "
             "be empty and agree with every mirror vacuously."
         )
-    if not deriving:
+    # THE WHEEL-INDEX IDIOM IS WHAT THIS COUNTS, not the deriving set as a
+    # whole: a family that inherits from a build-arg parent is only sound
+    # because SOME base installs torch from the wheel index, so families alone
+    # must not satisfy it.
+    if not any(_derives_by_wheel_index(candidates[rel]) for rel in deriving):
         problems.append(
             "NO engine file derives its pin from another any more. Either the "
             "engine dropped the wheel-index bases — update the expectation "
@@ -271,16 +397,23 @@ def assert_engine_pin_coverage(
         )
     for rel, target in sorted(deriving.items()):
         if not target:
-            problems.append(
-                f"{rel} derives its pin but names no REQUIREMENTS_FILE, so the "
-                "file it actually installs from cannot be identified."
-            )
+            why = _derive_target(candidates[rel])[1]
+            problems.append(f"{rel} derives its pin but {why}")
         elif target not in pinning:
             problems.append(
                 f"{rel} derives its torch pin from {target}, which is NOT a "
                 "pinning file in the scanned set. The version that base image "
                 "actually installs therefore comes from outside this gate's "
                 "scan, which is (internal ref) exactly."
+            )
+        elif not _derives_by_wheel_index(candidates[rel]) and _TORCH_PIN not in (
+            _exact_pins_in(candidates[target])
+        ):
+            problems.append(
+                f"{rel} builds FROM a parent image passed in as a build-arg and "
+                f"installs {target} under the parent's own freeze, but {target} "
+                "pins no torch. Its torch is then the unnamed parent's alone, "
+                "and which parent that is cannot be read from this file."
             )
     if problems:
         raise EnginePinError(

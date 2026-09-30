@@ -45,17 +45,25 @@ verifier sweeps). Override per-run with ``--staging``, or per-environment with
 ``TRACEBLOC_ZOO_WEIGHTS_STAGING``. Nothing here assumes a path outside the
 checkout.
 
-Known gap, not addressed here
------------------------------
-The manifest this tool WRITES (``{"entries": {name: {file, sha256,
-size_bytes}}}``) is not the shape ``verify_dumps_against_engine_pin.py`` READS
-(``{"dumps": [{name, template, weights, sha256}]}``) — and ``_build_env``
-records four of the five provenance keys that verifier reconciles (no
-``torchvision``). Both are properties of the manifest's schema and provenance
-block, which is the subject of the schema reconciliation; reconciling them is that
-ticket's call, so this file records the divergence rather than picking a side.
-Until it is reconciled, ``manifest`` is a staging aid — CI's fetch path
-(``fetch-all``) only needs ``entries``.
+One manifest schema
+-------------------
+The manifest this tool writes and fetches from is the canonical one — schema
+2, keyed ``entries`` (``{name: {file, sha256, size_bytes, built_with?, status?,
+category?}}``), the shape backend's ``tools/offline_weights/manifest.json``
+carries — and ``verify_dumps_against_engine_pin.py`` now reads exactly that
+shape (the schema reconciliation). Two per-entry keys matter here:
+
+  * ``"status": "retired"`` — the dump is kept on purpose for a template that
+    no longer ships. ``fetch-all`` does not fetch it (the verifier does not
+    verify it), and a status nobody defined is refused rather than guessed;
+  * ``category`` — not read here (the fetch is keyed on the entry name); the
+    verifier uses it to pick between templates sharing a stem.
+
+``manifest`` rebuilds entries from the staging dir alone, so it records neither
+key; the canonical manifest is backend's, and this subcommand is a staging aid.
+
+``_build_env`` records all five provenance keys the verifier reconciles,
+``torchvision`` included, so a manifest this tool writes is not red-by-omission.
 """
 
 import argparse
@@ -120,7 +128,9 @@ def _build_env() -> dict:
     that checkable later instead of discoverable only on the edge.
     """
     env = {}
-    for name in ("torch", "transformers", "timm", "peft"):
+    # The verifier's `_PROVENANCE_KEYS`, in full: a block missing one of them
+    # is a partial block, which that gate (rightly) reads as drift.
+    for name in ("torch", "torchvision", "transformers", "timm", "peft"):
         try:
             env[name] = __import__(name).__version__
         except Exception:
@@ -213,6 +223,38 @@ def cmd_fetch(staging: str, template: str, dest: str) -> None:
     _fetch_one(store, template, meta, dest)
 
 
+#: The one status an entry may declare; absent means live. Kept equal to
+#: check_dump_coverage.KNOWN_STATUSES by a test rather than imported: this hook
+#: is also run by hand, from a staging dir, outside this checkout's tools/.
+RETIRED = "retired"
+
+
+def _split_by_status(entries: dict) -> tuple:
+    """``([(name, meta), ...] live, [name, ...] retired)``, sorted by name.
+
+    A status that is not ``retired`` exits rather than being read as live: a
+    typo'd ``retried`` fetched as a live dump would then fail the verifier as a
+    template-less dump, a long way from the actual mistake.
+    """
+    live, retired = [], []
+    for name, meta in sorted(entries.items()):
+        status = meta.get("status") if isinstance(meta, dict) else None
+        # Same reading as check_dump_coverage._status_of: only a STRING is a
+        # declared status; anything else declares none, i.e. live.
+        if not isinstance(status, str):
+            status = None
+        if status is None:
+            live.append((name, meta))
+        elif status == RETIRED:
+            retired.append(name)
+        else:
+            sys.exit(
+                f"manifest entry {name!r} declares status {status!r}; the only "
+                f"status defined is {RETIRED!r} (absent means live)"
+            )
+    return live, retired
+
+
 def cmd_fetch_all(staging: str, dest: str) -> None:
     """Fetch every dump the manifest declares — CI's entry point.
 
@@ -229,10 +271,22 @@ def cmd_fetch_all(staging: str, dest: str) -> None:
             "'entries' — nothing to fetch (a manifest that names no dumps "
             "protects nothing)"
         )
+    live, retired = _split_by_status(entries)
+    if retired:
+        print(
+            f"NOT FETCHED: {len(retired)} retired entr(ies) — kept in the store "
+            f"on purpose, not gated: {', '.join(retired)}"
+        )
+    if not live:
+        sys.exit(
+            f"manifest at {os.path.join(staging, 'manifest.json')} declares no "
+            f"LIVE entries ({len(retired)} retired) — nothing to fetch, and a "
+            "manifest whose every dump is retired protects nothing"
+        )
     os.makedirs(dest, exist_ok=True)
-    for tpl, meta in sorted(entries.items()):
+    for tpl, meta in live:
         _fetch_one(store, tpl, meta, dest)
-    print(f"fetched + verified {len(entries)} dump(s) from {store} into {dest}")
+    print(f"fetched + verified {len(live)} dump(s) from {store} into {dest}")
 
 
 def main() -> None:
