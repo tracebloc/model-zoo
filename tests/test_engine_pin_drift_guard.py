@@ -1902,3 +1902,241 @@ def test_THE_NEGATIVE_STEP_ASSERTION_IS_NOT_REDDENED_BY_PROSE():
     assert forbidden not in _guard_step_code(), (
         "the real step passes a hand-listed --engine path again"
     )
+
+
+# --------------------------------------------------------------------------
+# THE TORCH + CUDA PARENT NAMES ITS SOURCE BY BIND MOUNT, not by build-arg.
+# `Dockerfile.base.torch.gpu` greps its pins out of a requirements file it
+# mounts into the RUN, so a reader that only knew `ARG REQUIREMENTS_FILE=`
+# saw a deriving base with no target and refused -- correctly, since it would
+# not guess, but on every PR. These fixtures are the real shapes, cut down:
+# the parent's key mount and script mount stay in, because a reader that took
+# ANY bind source as the target would be wrong on exactly them.
+# --------------------------------------------------------------------------
+TORCH_GPU_PARENT = "Dockerfile.base.torch.gpu"
+TORCH_GPU_REQUIREMENTS = "use_cases/requirements_torch_cuda.txt"
+
+_TORCH_GPU_PARENT_DOCKERFILE = """FROM nvcr.io/nvidia/cuda:12.8.0-base-ubuntu24.04
+RUN --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \\
+    --mount=type=bind,source=docker/keys/deadsnakes-ppa.asc,target=/mnt/deadsnakes-ppa.asc \\
+    apt-get update
+RUN --mount=type=cache,target=/root/.cache/pip \\
+    --mount=type=bind,source=%s,target=/mnt/parent/requirements.txt \\
+    set -e; \\
+    grep -E '^torch==' /mnt/parent/requirements.txt > /tmp/torch-pins.txt; \\
+    grep -E '^torchvision==' /mnt/parent/requirements.txt >> /tmp/torch-pins.txt; \\
+    pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cu129 \\
+      -r /tmp/torch-pins.txt
+RUN --mount=type=bind,source=scripts/gpu_generations.py,target=/tmp/gpu_generations.py \\
+    python /tmp/gpu_generations.py check-build-arg
+"""
+
+#: A GPU family built FROM the parent by digest: no pin, no wheel index, its
+#: own requirements file installed under the parent's `pip freeze`.
+_FAMILY_ON_PARENT_DOCKERFILE = """ARG TORCH_GPU_PARENT
+FROM ${TORCH_GPU_PARENT}
+ARG TORCH_GPU_PARENT
+LABEL io.tracebloc.engine.torch-parent="${TORCH_GPU_PARENT}"
+ARG REQUIREMENTS_FILE=%s
+COPY ${REQUIREMENTS_FILE} /tmp/requirements.txt
+RUN --mount=type=cache,target=/root/.cache/pip \\
+    set -e; \\
+    pip freeze > /tmp/parent-constraints.txt; \\
+    pip install --no-cache-dir -c /tmp/parent-constraints.txt -r /tmp/requirements.txt; \\
+    pip uninstall -y triton
+"""
+
+
+def _cuda_requirements_text() -> str:
+    """A requirements file pinning the SAME torch/torchvision as the rest of
+    the synthetic engine, so the merge sees no disagreement between sources."""
+    pins = _engine_pins_for(TOOLS_MIRROR)
+    return "".join(f"{p}=={pins[p]}\n" for p in _CUDA_PINS if p in pins)
+
+
+def _with_torch_gpu_parent(source: str = TORCH_GPU_REQUIREMENTS) -> dict[str, str]:
+    candidates = dict(_engine_like_candidates())
+    candidates[TORCH_GPU_REQUIREMENTS] = _cuda_requirements_text()
+    candidates[TORCH_GPU_PARENT] = _TORCH_GPU_PARENT_DOCKERFILE % source
+    return candidates
+
+
+def _refusal(mod, candidates: dict[str, str]) -> str:
+    try:
+        mod.assert_engine_pin_coverage(candidates)
+    except mod.EnginePinError as exc:
+        return str(exc)
+    raise AssertionError("the coverage assertion accepted a search space it must refuse")
+
+
+def test_THE_TORCH_GPU_PARENT_DERIVES_FROM_ITS_BIND_MOUNTED_REQUIREMENTS_FILE():
+    mod = _checker_module()
+    candidates = _with_torch_gpu_parent()
+    pinning, deriving, unclassified = mod.classify_engine_candidates(candidates)
+    assert not unclassified, unclassified
+    assert deriving[TORCH_GPU_PARENT] == TORCH_GPU_REQUIREMENTS, deriving
+    assert TORCH_GPU_REQUIREMENTS in pinning, pinning
+    # The key and the script are bind-mounted too; neither is a target.
+    assert mod._bind_mounted_requirements(candidates[TORCH_GPU_PARENT]) == [
+        TORCH_GPU_REQUIREMENTS
+    ]
+    pinning, deriving = mod.assert_engine_pin_coverage(candidates)
+    assert deriving[TORCH_GPU_PARENT] == TORCH_GPU_REQUIREMENTS, deriving
+
+
+def test_THE_TORCH_GPU_PARENT_PASSES_END_TO_END(tmp_path):
+    """Through the CLI and `--engine-root`, which is what the workflow runs."""
+    engine = tmp_path / "_engine_pin"
+    _write_engine_pin(engine, _engine_pins_for(TOOLS_MIRROR))
+    (engine / TORCH_GPU_REQUIREMENTS).write_text(_cuda_requirements_text())
+    (engine / TORCH_GPU_PARENT).write_text(
+        _TORCH_GPU_PARENT_DOCKERFILE % TORCH_GPU_REQUIREMENTS
+    )
+    proc = _run_checker(TOOLS_MIRROR, engine)
+    assert proc.returncode == 0, proc.stderr
+    assert "derives one   : 4 of 12" in proc.stdout, proc.stdout
+    assert f"{TORCH_GPU_PARENT} <- {TORCH_GPU_REQUIREMENTS}" in proc.stdout
+
+
+def test_A_BIND_MOUNT_IS_READ_IN_ANY_OPTION_ORDER_AND_UNDER_THE_SRC_ALIAS():
+    mod = _checker_module()
+    text = _TORCH_GPU_PARENT_DOCKERFILE % TORCH_GPU_REQUIREMENTS
+    anchor = f"--mount=type=bind,source={TORCH_GPU_REQUIREMENTS},target=/mnt/parent/requirements.txt"
+    assert anchor in text, "the fixture no longer carries the mount this test rewrites"
+    for spec in (
+        f"--mount=target=/mnt/parent/requirements.txt,type=bind,source={TORCH_GPU_REQUIREMENTS}",
+        f"--mount=type=bind,src={TORCH_GPU_REQUIREMENTS},target=/mnt/parent/requirements.txt",
+    ):
+        assert mod._derive_target(text.replace(anchor, spec)) == (
+            TORCH_GPU_REQUIREMENTS,
+            "",
+        ), spec
+    # A cache mount naming a requirements-looking path is not a bind source.
+    cache = f"--mount=type=cache,source={TORCH_GPU_REQUIREMENTS},target=/x"
+    assert mod._bind_mounted_requirements(text.replace(anchor, cache)) == []
+
+
+def test_A_BIND_MOUNTED_SOURCE_OUTSIDE_THE_SCANNED_SET_IS_STILL_REFUSED():
+    mod = _checker_module()
+    mod.assert_engine_pin_coverage(_with_torch_gpu_parent())  # passing baseline
+    for outside in (
+        "vendor/requirements_torch_cuda.txt",
+        "use_cases/requirements_torch_cuda_absent.txt",
+    ):
+        candidates = _with_torch_gpu_parent(outside)
+        assert outside in candidates[TORCH_GPU_PARENT], "the mutation did not apply"
+        msg = _refusal(mod, candidates)
+        assert (
+            f"{TORCH_GPU_PARENT} derives its torch pin from {outside}, which is "
+            "NOT a pinning file in the scanned set"
+        ) in msg, msg
+
+
+def test_AN_ARG_AND_A_BIND_MOUNT_THAT_DISAGREE_ARE_REFUSED():
+    mod = _checker_module()
+    candidates = _with_torch_gpu_parent()
+    first_run = "RUN --mount=type=cache,target=/root/.cache/pip"
+    assert first_run in candidates[TORCH_GPU_PARENT]
+    candidates[TORCH_GPU_PARENT] = candidates[TORCH_GPU_PARENT].replace(
+        first_run, f"ARG REQUIREMENTS_FILE=use_cases/requirements_cuda.txt\n{first_run}"
+    )
+    assert "ARG REQUIREMENTS_FILE=" in candidates[TORCH_GPU_PARENT]
+    _, deriving, _ = mod.classify_engine_candidates(candidates)
+    assert deriving[TORCH_GPU_PARENT] == "", deriving
+    msg = _refusal(mod, candidates)
+    assert (
+        f"{TORCH_GPU_PARENT} derives its pin but names "
+        "REQUIREMENTS_FILE=use_cases/requirements_cuda.txt but bind-mounts "
+        f"{TORCH_GPU_REQUIREMENTS}. The two must agree"
+    ) in msg, msg
+
+
+def test_AN_ARG_AND_A_BIND_MOUNT_THAT_AGREE_PASS():
+    mod = _checker_module()
+    candidates = _with_torch_gpu_parent()
+    first_run = "RUN --mount=type=cache,target=/root/.cache/pip"
+    candidates[TORCH_GPU_PARENT] = candidates[TORCH_GPU_PARENT].replace(
+        first_run, f"ARG REQUIREMENTS_FILE={TORCH_GPU_REQUIREMENTS}\n{first_run}"
+    )
+    assert "ARG REQUIREMENTS_FILE=" in candidates[TORCH_GPU_PARENT]
+    _, deriving = mod.assert_engine_pin_coverage(candidates)
+    assert deriving[TORCH_GPU_PARENT] == TORCH_GPU_REQUIREMENTS, deriving
+
+
+def test_TWO_BIND_MOUNTED_REQUIREMENTS_FILES_ARE_REFUSED():
+    mod = _checker_module()
+    candidates = _with_torch_gpu_parent()
+    extra = "    --mount=type=bind,source=use_cases/requirements_cuda.txt,target=/mnt/b.txt \\\n"
+    anchor = "    set -e; \\\n"
+    assert anchor in candidates[TORCH_GPU_PARENT]
+    candidates[TORCH_GPU_PARENT] = candidates[TORCH_GPU_PARENT].replace(
+        anchor, extra + anchor, 1
+    )
+    msg = _refusal(mod, candidates)
+    assert "bind-mounts more than one requirements file" in msg, msg
+    assert "use_cases/requirements_cuda.txt" in msg and TORCH_GPU_REQUIREMENTS in msg
+
+
+# --------------------------------------------------------------------------
+# THE NEXT ENGINE STEP: GPU FAMILIES BUILT FROM THE PARENT BY DIGEST. They
+# stop grepping `torch==` and drop the wheel index, so under the two-signal
+# rule alone all three would become UNCLASSIFIED and the gate red again. The
+# parent they build from is not named in the file, but their torch is still
+# derivable: installed under the parent's freeze, it must equal their own
+# requirements file's torch pin or the build fails.
+# --------------------------------------------------------------------------
+def _families_on_parent() -> dict[str, str]:
+    candidates = _with_torch_gpu_parent()
+    for rel, target in _ENGINE_GPU_DERIVES_FROM.items():
+        candidates[rel] = _FAMILY_ON_PARENT_DOCKERFILE % target
+    return candidates
+
+
+def test_A_FAMILY_BUILT_FROM_A_BUILD_ARG_PARENT_DERIVES_FROM_ITS_OWN_REQUIREMENTS():
+    mod = _checker_module()
+    candidates = _families_on_parent()
+    pinning, deriving, unclassified = mod.classify_engine_candidates(candidates)
+    assert not unclassified, unclassified
+    assert len(deriving) == 4, deriving
+    for rel, target in _ENGINE_GPU_DERIVES_FROM.items():
+        assert deriving[rel] == target, (rel, deriving)
+    _, deriving = mod.assert_engine_pin_coverage(candidates)
+    assert deriving[TORCH_GPU_PARENT] == TORCH_GPU_REQUIREMENTS
+
+
+def test_A_FAMILY_WITHOUT_THE_PARENT_FREEZE_IS_NOT_CLASSIFIED():
+    """Either signal alone must not make a file derive."""
+    mod = _checker_module()
+    for anchor, repl in (
+        ("-c /tmp/parent-constraints.txt ", ""),
+        ("FROM ${TORCH_GPU_PARENT}", "FROM python:3.11-slim"),
+    ):
+        candidates = _families_on_parent()
+        before = candidates["Dockerfile.base.gpu"]
+        candidates["Dockerfile.base.gpu"] = before.replace(anchor, repl, 1)
+        assert candidates["Dockerfile.base.gpu"] != before, anchor
+        _, _, unclassified = mod.classify_engine_candidates(candidates)
+        assert unclassified == ["Dockerfile.base.gpu"], (anchor, unclassified)
+
+
+def test_A_FAMILY_WHOSE_REQUIREMENTS_PIN_NO_TORCH_IS_REFUSED():
+    mod = _checker_module()
+    candidates = _families_on_parent()
+    mod.assert_engine_pin_coverage(candidates)  # passing baseline
+    plain = "use_cases/requirements.txt"
+    assert "torch" not in mod._exact_pins_in(candidates[plain])
+    candidates["Dockerfile.base.gpu"] = _FAMILY_ON_PARENT_DOCKERFILE % plain
+    msg = _refusal(mod, candidates)
+    assert f"installs {plain} under the parent's own freeze, but {plain} pins no torch" in msg, msg
+
+
+def test_FAMILIES_ALONE_DO_NOT_SATISFY_THE_WHEEL_INDEX_COUNT():
+    """Families are sound only because a base installs torch from the wheel
+    index; with the parent gone, they must not keep the gate green."""
+    mod = _checker_module()
+    candidates = _families_on_parent()
+    del candidates[TORCH_GPU_PARENT]
+    _, deriving, unclassified = mod.classify_engine_candidates(candidates)
+    assert len(deriving) == 3 and not unclassified, (deriving, unclassified)
+    msg = _refusal(mod, candidates)
+    assert "NO engine file derives its pin from another" in msg, msg

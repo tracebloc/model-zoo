@@ -27,7 +27,9 @@ def bbox_iou(box1, box2):
 
 
 class Custom_loss(nn.Module):
-    def __init__(self, num_classes=10, num_boxes=2):
+    # num_classes must match output_classes in model.py: the engine and the
+    # SDK's configure_loss build this with no arguments.
+    def __init__(self, num_classes=3, num_boxes=2):
         super().__init__()
         self.C = num_classes
         self.B = num_boxes

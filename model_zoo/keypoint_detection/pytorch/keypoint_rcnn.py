@@ -1,13 +1,18 @@
 """Keypoint R-CNN (Meta, ICCV 2017). Mask R-CNN architecture with a keypoint head — top-down multi-person pose via a two-stage detector. Reference torchvision-native baseline for multi-person keypoint detection.
 
-Offline variant: the architecture is built without any checkpoint download,
-so the template constructs anywhere, network or not. The pretrained
-ResNet50-FPN tensors are delivered from the tracebloc model store as the
-training seed: upload the matched ``keypoint_rcnn_weights.pkl`` sitting next
-to this file via ``upload_model(..., weights=True)``, and the platform loads
-it with ``load_state_dict(strict=True)`` after ``MyModel()`` builds this
-architecture. See ``tools/prep_offline_weights.py`` for producing and
-verifying that matched weight file.
+Offline variant: the architecture is built with ``weights=None``, so nothing
+is fetched from ``download.pytorch.org`` — the egress lockdown blocks it —
+and the template constructs anywhere, network or not. No seed is hosted for
+this template and none can be prepped from torchvision's COCO checkpoint
+(see "Backbone norm" below), so it random-initialises and there is no weight file:
+upload with ``weights=False``::
+
+    user.upload_model("keypoint_rcnn", weights=False)
+
+``tools/check_dump_coverage.py`` classifies this file NO_SEED, and the
+statement above is what keeps that classification honest. The dump that
+was once prepped for it is retired in the dump manifest rather than
+deleted, so the decision stays visible.
 
 The backbone is assembled explicitly instead of via the high-level
 ``keypointrcnn_resnet50_fpn(weights=None)`` builder, because that builder
@@ -19,8 +24,8 @@ detector and the stock 17-keypoint COCO head (replaced below, as before).
 The norm is no longer the checkpoint's — see below. Verified against
 torchvision 0.27.
 
-Backbone norm: GroupNorm, and it is NOT the checkpoint's norm
-----------------------------------------------------------------------------
+Backbone norm: GroupNorm, and it forfeits COCO seeding
+---------------------------------------------------------------------
 This template used to build ``norm_layer=misc_nn_ops.FrozenBatchNorm2d`` to
 reproduce torchvision's checkpoint-path architecture key-exactly. That was
 wrong in the regime the platform actually runs: frozen BN at construction
@@ -41,18 +46,17 @@ This is the same conversion (internal ref) applied to twelve OD templates; the
 two keypoint templates carrying the identical line were outside that PR's
 directory scan.
 
-⚠️ WHAT THIS COSTS, EXPLICITLY, AND IT COSTS MORE HERE THAN ON OD. A
-torchvision COCO checkpoint's BN running statistics have nowhere to go in a
-GroupNorm tree, so this template can no longer strict-load a seed prepped from
-``download.pytorch.org`` weights. Unlike the OD twelve -- where no seed was
-ever staged (an internal ticket is blocked on the store decision in the hosting decision) --
-``keypoint_rcnn_weights.pkl`` IS a live entry in the backend dump manifest, so
-this change invalidates a dump that exists and must be re-prepped.
-``tools/prep_offline_weights.py`` fails loudly on the strict load rather than
-producing a mismatched dump, which is the right place for it to fail. The
-re-prep itself lives in ``backend``, not here. The trade taken is a real
-defect on every from-scratch run today against a seed path whose store is
-still undecided.
+⚠️ WHAT THIS COSTS, EXPLICITLY. A torchvision COCO checkpoint's BN running
+statistics have nowhere to go in a GroupNorm tree, so this template cannot
+strict-load a seed prepped from ``download.pytorch.org`` weights: the dump
+prepped for it before the norm change fails with ``KEY_MISMATCH`` under the
+engine pin (unexpected backbone ``running_mean``/``running_var`` keys), and
+``tools/prep_offline_weights.py`` fails loudly on the strict load rather
+than producing a mismatched dump. That is why the declaration above is
+NO_SEED: GroupNorm was chosen over a COCO seed for this template, and
+declaring a seed it cannot load would move the strict-load failure onto
+an edge. Seeding it again needs a checkpoint built with this norm, which
+is a separate decision.
 
 Parameter arithmetic, for any published count: frozen BN holds weight/bias as
 BUFFERS and GroupNorm holds them as PARAMETERS, so this is +53,120 parameters
