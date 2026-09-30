@@ -851,3 +851,61 @@ def test_both_jobs_refuse_an_absent_manifest():
     for job in (FETCH_JOB, "dump-coverage"):
         block = _job_block(job)
         assert "test -s" in block or "test -f" in block, job
+
+
+# --- a seed declaration the backbone norm cannot load -----------------------
+#
+# `classify()` reads prose, so it cannot tell a true seed declaration from a
+# false one: a template may name its `<stem>_weights.pkl` while building a
+# GroupNorm backbone that a torchvision COCO checkpoint (BatchNorm running
+# statistics) can never strict-load. Nothing else compares those two facts, and
+# flipping a GroupNorm template to EXPECTS_SEED leaves every other test green.
+#
+# The GroupNorm footprint is the one every such template in this tree carries:
+# its backbone is built with `norm_layer=_group_norm`. A GroupNorm reached some
+# other way is invisible to this check; that is its known blind spot.
+
+GROUP_NORM_BACKBONE = "norm_layer=_group_norm"
+
+#: GroupNorm templates that STILL declare a seed, known and reported rather than
+#: fixed here. Both are keypoint-detection templates whose staged dumps fail
+#: the engine-pin strict load with KEY_MISMATCH on the backbone's BatchNorm
+#: running statistics, the same defect the three object-detection templates had.
+#: The assertion is an equality, so a new conflict is red and so is fixing one of
+#: these without removing its row.
+KNOWN_GROUP_NORM_SEED_CONFLICTS = {
+    "keypoint_detection/faster_rcnn_sppe",
+    "keypoint_detection/keypoint_rcnn",
+}
+
+
+def _group_norm_seed_conflicts(zoo):
+    tool = _tool()
+    conflicts = set()
+    for key, record in tool.survey(zoo).items():
+        if record["status"] != tool.EXPECTS_SEED:
+            continue
+        category, stem = key.split("/", 1)
+        (path,) = (zoo / "model_zoo" / category).glob(f"**/{stem}.py")
+        if GROUP_NORM_BACKBONE in path.read_text(encoding="utf-8"):
+            conflicts.add(key)
+    return conflicts
+
+
+def test_no_group_norm_backbone_declares_a_seed_it_cannot_load():
+    conflicts = _group_norm_seed_conflicts(ROOT)
+    assert conflicts == KNOWN_GROUP_NORM_SEED_CONFLICTS, (
+        "templates building a GroupNorm backbone that declare a hosted seed: "
+        f"new {sorted(conflicts - KNOWN_GROUP_NORM_SEED_CONFLICTS)}, "
+        f"no longer conflicting {sorted(KNOWN_GROUP_NORM_SEED_CONFLICTS - conflicts)}. "
+        "A torchvision COCO checkpoint's BatchNorm running statistics cannot "
+        "strict-load into a GroupNorm tree: declare no seed (weights=False, no "
+        "weight file), or drop the row once the conflict is resolved"
+    )
+
+
+def test_the_group_norm_check_sees_a_seed_declaring_group_norm_template(tmp_path):
+    """The check itself, on a synthetic template, so it is seen to fire."""
+    source = SEED_EXPECTING + "backbone = resnet50(norm_layer=_group_norm)\n"
+    zoo = _zoo(tmp_path, {"object_detection/fcos": source})
+    assert _group_norm_seed_conflicts(zoo) == {"object_detection/fcos"}
