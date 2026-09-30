@@ -238,7 +238,7 @@ class YOLOv8YOLOv5Compatible(nn.Module):
         x = x.permute(0,2,3,1).contiguous()
         return x
 
-def MyModel(num_classes=10, num_boxes=2):
+def MyModel(num_classes=output_classes, num_boxes=2):
     depth = [1,2,2]
     width = [3,32,64,128,256,512]
     return YOLOv8YOLOv5Compatible(width, depth, num_classes, num_boxes)

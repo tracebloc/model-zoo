@@ -838,7 +838,7 @@
       "model_type": "yolo",
       "label": "YOLO V8",
       "batch": 64,
-      "params": 9022132,
+      "params": 9021229,
       "averageable": true
     },
     {

@@ -38,12 +38,12 @@ seed loading. (internal ref) took that decision: all twelve moved to GroupNorm,
 
 What the decision cost is recorded in each template's own docstring rather than
 here: a torchvision COCO checkpoint's BN running statistics have nowhere to go
-in a GroupNorm tree, so the three templates that DECLARE a seed
+in a GroupNorm tree, so the three templates that used to DECLARE a seed
 (``faster_rcnn_resnet``, ``fcos``, ``retinanet``) can no longer be seeded from
 ``download.pytorch.org`` weights, and the two mobilenet templates lose the
 key-exactness they were assembled by hand to preserve. No OD seed is hosted
-(the hosting decision), so nothing in service broke; the declaration versus the
-regenerable dump is an internal ticket's to settle.
+(the hosting decision), so nothing in service broke. Those three now declare
+no seed, and the dumps prepped for them are retired in the dump manifest.
 
 With the list empty, every template goes through the single strong branch of
 ``test_norm_layers_normalise_a_from_scratch_build``: every norm module must

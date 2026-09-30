@@ -553,7 +553,11 @@ def test_the_seeding_column_covers_the_roster_and_reports_nothing_seeded() -> No
     And the (internal ref) fact stated as a property: no OD seed is hosted, the sweep
     loads no weights, so every row is "scratch". A template that declares a
     seed is a DIFFERENT row from one that is random-init by design — (internal ref) asks
-    (internal ref) to say which, so the two phrasings must stay distinguishable.
+    (internal ref) to say which, so each row's phrasing must match the survey's
+    verdict for that template. Checked row by row against the survey rather
+    than as "both phrasings occur": whether any OD template declares a seed at a
+    given moment is a fact about the roster, and it goes to zero whenever the
+    last seed-declaring template is flipped to NO_SEED.
     """
     index = sweep_mod.seeding_index()
     stems = {p.stem for p in sweep_mod.family_templates()}
@@ -562,10 +566,31 @@ def test_the_seeding_column_covers_the_roster_and_reports_nothing_seeded() -> No
     assert all(v.startswith("scratch") for v in index.values()), index
     declared = {k for k, v in index.items() if "seed declared" in v}
     by_design = {k for k, v in index.items() if "by design" in v}
-    assert declared and by_design, (
-        f"the two seeding states collapsed into one phrasing: {sorted(set(index.values()))}"
-    )
     assert not declared & by_design
+    survey = {
+        key.partition("/")[2]: record["status"]
+        for key, record in sweep_mod.dump_survey(sweep_mod.REPO_ROOT).items()
+        if key.startswith("object_detection/")
+    }
+    assert declared == {k for k, v in survey.items() if v == sweep_mod.EXPECTS_SEED}
+    assert by_design == {k for k, v in survey.items() if v == sweep_mod.NO_SEED}
+
+
+def test_the_two_seeding_phrasings_stay_distinguishable(monkeypatch) -> None:
+    """The distinction itself, on a survey that holds both states, so it does
+    not depend on the real roster happening to contain a seed-declaring row."""
+    monkeypatch.setattr(
+        sweep_mod,
+        "dump_survey",
+        lambda root: {
+            "object_detection/seeded": {"status": sweep_mod.EXPECTS_SEED},
+            "object_detection/scratch": {"status": sweep_mod.NO_SEED},
+        },
+    )
+    index = sweep_mod.seeding_index()
+    assert index["seeded"] != index["scratch"], index
+    assert "seed declared" in index["seeded"]
+    assert "by design" in index["scratch"]
 
 
 def test_the_markdown_report_is_per_template_and_names_what_ran() -> None:
