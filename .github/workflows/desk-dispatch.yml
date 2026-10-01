@@ -2,7 +2,7 @@
 #
 # Self-contained copy of the reusable workflow `.github/workflows/desk-dispatch.yml`
 # (blob cd982bac1408272d3d305de74f4137f19284b711) folded with the private source repo's own caller of it,
-# `.github/workflows/desk-dispatch-caller.yml` (blob f2982dd2c52558b1289b9a0d0dbe58c60e192a5f), for a PUBLIC repo: GitHub lets a
+# `.github/workflows/desk-dispatch-caller.yml` (blob 796afe7a0abc1eb73c19614ed99607764f50c698), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
 # reusable's jobs inline -- the triggers are the caller's; every `inputs.*` is
@@ -240,6 +240,18 @@ on:
   # (the loop (internal ref) feared).
   check_suite:
     types: [completed]
+  # `issue_comment: created` IS subscribed, for the desk's STAND-DOWN
+  # ((internal ref) item 3): a desk that stands down on a red it judges a
+  # flake asks, in its comment, for that job to be re-run, and the comment's own
+  # creation is the only event that carries the ask -- without this trigger the
+  # callee's re-run arm never runs ((internal ref) waited about seven hours for
+  # a re-run by hand). The callee's JOB `if:` passes only a created comment on a
+  # pull request, by the review account, starting `STAND-DOWN `; every other
+  # comment is a SKIPPED job, which starts no runner. `created` alone: an edit asks
+  # for nothing, so a wider list would be a run per edit for nothing, and
+  # desk-dispatch-selftest drives every listed type through that filter.
+  issue_comment:
+    types: [created]
 
 permissions:
   contents: read
