@@ -1,8 +1,8 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/desk-dispatch.yml`
-# (blob 0d19b30694ad50422cf1468f77418172ea892edf) folded with the private source repo's own caller of it,
-# `.github/workflows/desk-dispatch-caller.yml` (blob adb8c063d98eb394118f010f8bc46bcfada4e43f), for a PUBLIC repo: GitHub lets a
+# (blob cd982bac1408272d3d305de74f4137f19284b711) folded with the private source repo's own caller of it,
+# `.github/workflows/desk-dispatch-caller.yml` (blob f2982dd2c52558b1289b9a0d0dbe58c60e192a5f), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
 # reusable's jobs inline -- the triggers are the caller's; every `inputs.*` is
@@ -152,6 +152,20 @@
 # retired, FIX MODE fires the reviewer to fix instead, and the deferral, the
 # `unlabeled` arm and the `ship-stale-minutes` input went with it.
 #
+# THE LOCK'S RELEASE ((internal ref)). The session approves while its own
+# lock is on the PR, and the merge backstop merges nothing under a session label, so
+# an approved head nothing armed becomes mergeable when the session takes its labels
+# off -- and the sweep's next pass is 15-40 minutes away. `pull_request: unlabeled`,
+# from `reviewer`, on a `claude-` label (dispatch-sweep.py's SESSION_LABEL_PREFIX) is
+# that moment: the job then runs the MERGE steps and nothing else -- no pre-check, no
+# heal mint, no Decide, so it can fire no session and take no lock -- and
+# `desk-dispatch.py --merge-backstop` asks the sweep's own `merge_one`, which merges
+# only when `merge_blocker` answers None. Its write mint is `contents: write`, scoped
+# to the caller repo, and only while `vars.SWEEP_MERGE_BACKSTOP` is `on` IN THE CALLER
+# REPO'S CONTEXT (a reusable reads the caller's variables); unset, the step writes a
+# WOULD MERGE line and merges nothing. Any other `unlabeled` skips the job. A caller
+# sends the type only once it lists it (the canonical caller first, then the fleet).
+#
 # FAIL CLOSED. An unreadable event, an unreadable reviews/events read, an empty
 # fire URL or token when there is work to do, or a fire the routine refuses are
 # refusals (red job, message names the input), never a silent skip (CLAUDE.md
@@ -165,9 +179,9 @@
 # THE CANONICAL CALLER is `desk-dispatch-caller.yml` beside this file
 # ((internal ref)); a caller calls `@main`, so any edit here a caller depends on
 # must be promoted before a caller relies on it ((internal ref)). The caller passes
-# `with.fire-url: ${{ vars.DESK_ROUTINE_FIRE_URL }}` and the three named secrets
-# below, and nothing else: `reviewer` is derived from the default, never
-# restated.
+# `with.fire-url: ${{ vars.DESK_ROUTINE_FIRE_URL }}`, `with.fire-url-failover:
+# ${{ vars.DESK_ROUTINE_FIRE_URL_2 }}` and the four named secrets below, and nothing
+# else: `reviewer` is derived from the default, never restated.
 #
 # THE INVENTORY ROWS for this file flip from `exempt` to `required` on the
 # condition `repo-inventory.yml`'s `desk_dispatch_rollout_pending` anchor states
@@ -190,7 +204,7 @@ name: Desk dispatch
 
 on:
   pull_request:
-    types: [opened, ready_for_review, review_requested, synchronize]
+    types: [opened, ready_for_review, review_requested, synchronize, unlabeled]
   # NO BASE FILTER HERE ((internal ref), (internal ref)): `on:` filters a BASE ref
   # only and a base-ref filter would also drop an emergency hotfix into `main`,
   # so the promotion predicate can only live in the callee's `if:`.
@@ -238,8 +252,29 @@ permissions:
 # the PR under `<event>.pull_requests[0].number`. Keying them differently would let
 # a request and a finishing run on one PR execute in parallel and both read the
 # lock label as free (the defect the retired ship-dispatch.yml had, (internal ref)).
+#
+# AN `unlabeled` NEVER SHARES THE REVIEW GROUP ((internal ref)): GitHub cancels
+# the PENDING run of a group whenever a new one queues ((internal ref)), so a label
+# coming off would supersede a pending review. A `claude-` label coming off queues in
+# `release-<pr>`, where the newest pending run reads the newest labels; every other
+# `unlabeled` gets a group of its own run and supersedes nothing. The key does not ask
+# the SENDER -- the self-contained render proves its top-level `concurrency:` equal to
+# this text, before any `inputs.*` is resolved -- so someone else's `claude-` removal
+# shares the group and is skipped by the job's `if:`; it can supersede a PENDING
+# release only inside the ~minute that release waits, and the sweep's pass is still the
+# backstop there. The selftest evaluates this key against the job's `if:`.
+#
+# A STAND-DOWN COMMENT GETS A GROUP OF ITS OWN ((internal ref) item 3):
+# `comment-<id>`, never a PR number or a sha. An `issue_comment` payload carries
+# none of the keys above, so without its own arm every comment in the repo would
+# share one group `desk-dispatch-<workflow>-` -- and a group is applied BEFORE the
+# job's `if:`, keeping ONE pending run per group, so an unrelated comment could
+# replace a pending desk run and a review would never fire. The arm sits after
+# `pull_request.number`, which a comment's payload never carries (it has `issue`),
+# so every PR event keeps its number. desk-dispatch-selftest derives the group for
+# every subscribed event and holds the two apart.
 concurrency:
-  group: desk-dispatch-${{ github.workflow }}-${{ github.event.pull_request.number || github.event.workflow_run.pull_requests[0].number || github.event.check_suite.pull_requests[0].number || github.event.workflow_run.head_sha || github.event.check_suite.head_sha }}
+  group: desk-dispatch-${{ github.workflow }}-${{ github.event.action == 'unlabeled' && (startsWith(github.event.label.name, 'claude-') && format('release-{0}', github.event.pull_request.number) || format('noop-{0}', github.run_id)) || github.event.pull_request.number || github.event_name == 'issue_comment' && format('comment-{0}', github.event.comment.id) || github.event.workflow_run.pull_requests[0].number || github.event.check_suite.pull_requests[0].number || github.event.workflow_run.head_sha || github.event.check_suite.head_sha }}
   cancel-in-progress: false
 
 # NO `permissions:` BLOCK IN THIS REUSABLE, DELIBERATELY -- see the header. (A
@@ -269,6 +304,19 @@ jobs:
     # `assert_promotion_guard` evaluates THIS expression over every (head, base)
     # of its matrix against the real `is_promo`. An event shape carrying neither
     # ref yields nulls and the job RUNS: a wasted minute beats an unreviewed PR.
+    #
+    # A COMMENT RUNS ONLY AS THE DESK'S STAND-DOWN ((internal ref) item 3):
+    # created (an edit could rewrite the line), on a PR, by the reviewer, starting
+    # `STAND-DOWN `. Every other comment is a SKIPPED job, which costs no runner;
+    # the script checks each of the four again (`stand_down_rerun_ask`). A skipped
+    # comment run attaches to the default branch's commit, not a PR's head, so it
+    # stays out of every PR's check rollup (measured on the PR that wired this).
+    # callershape `assert_promotion_guard` evaluates this half as well.
+    #
+    # THE SECOND CLAUSE ((internal ref)): an `unlabeled` runs the job only as
+    # the reviewer's release of a `claude-` label; any other label coming off, or any
+    # other sender, skips it before a runner starts. The concurrency key above asks the
+    # label only, and the selftest holds every release this admits to its group.
     if: >-
       !((startsWith(github.event.pull_request.head.ref
       || github.event.workflow_run.head_branch
@@ -280,6 +328,14 @@ jobs:
       github.event.pull_request.base.ref
       || github.event.workflow_run.pull_requests[0].base.ref
       || github.event.check_suite.pull_requests[0].base.ref))
+      && (github.event.action != 'unlabeled'
+      || (github.event.sender.login == 'tracebloc-review'
+      && startsWith(github.event.label.name, 'claude-')))
+      && (github.event_name != 'issue_comment'
+      || (github.event.action == 'created'
+      && github.event.issue.pull_request
+      && github.event.comment.user.login == 'tracebloc-review'
+      && startsWith(github.event.comment.body, 'STAND-DOWN ')))
     steps:
       # WHEN THIS JOB STARTED, for the hold the dispatcher takes on a no-op
       # ((internal ref) D6 lever 1): a job bills a rounded-up minute, and a "still in
@@ -350,6 +406,7 @@ jobs:
       # which calls `main`'s own functions -- none of it lives in this file.
       - name: Pre-check on the job's own token whether this run can fire at all
         id: precheck
+        if: github.event.action != 'unlabeled'
         continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
@@ -361,7 +418,9 @@ jobs:
       # caller sees, of a run behind a CANCELLED required context on the live head,
       # once per run ((internal ref) item 1, (internal ref); `heal_cancelled`
       # in scripts/desk-dispatch.py) -- no session can re-run one, and no other token
-      # here may. (The stale-`bugbot / review` re-run it was first minted for retired
+      # here may. The same token, for the same one call, re-runs the failed jobs of
+      # the run a desk stand-down names (`rerun_after_stand_down`, (internal ref)):
+      # no new grant. (The stale-`bugbot / review` re-run it was first minted for retired
       # with the Bugbot gate, (internal ref).) `continue-on-error`,
       # DELIBERATELY: a refused mint must not redden every dispatch, and the
       # script refuses ONLY when it finds a cancelled red it could have healed. Minted
@@ -370,7 +429,7 @@ jobs:
       # `opened` event can meet a recorded verdict too, via `decide_ungated`).
       - name: Mint an actions token for re-running a cancelled required run in place (tolerates a refused mint)
         id: rerun-token
-        if: steps.precheck.outputs.go != 'false' && (github.event_name == 'workflow_run' || github.event_name == 'check_suite' || github.event_name == 'pull_request')
+        if: github.event.action != 'unlabeled' && steps.precheck.outputs.go != 'false' && (github.event_name == 'workflow_run' || github.event_name == 'check_suite' || github.event_name == 'pull_request' || github.event_name == 'issue_comment')
         continue-on-error: true
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
@@ -401,9 +460,23 @@ jobs:
       # so every red holds the head -- the fail-CLOSED direction (rule 3). Its ONE
       # `if:` is the pre-check's: every caller trigger that gets past it reaches a
       # `gate_required` call.
+      # THE RELEASE'S PRE-CHECK ((internal ref)): `merge_one` on the job's own
+      # token, before the two mints below. It says `go` only when every merge condition
+      # but the base's required contexts holds, so a release after a change request, a
+      # stand-down or a fix mints nothing; like the review pre-check it never refuses,
+      # and a crashed or silent one is `go` (`!= 'false'`).
+      - name: Pre-check on the job's own token whether the released PR can merge
+        id: merge-precheck
+        if: github.event.action == 'unlabeled'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DESK_REVIEWER: ${{ 'tracebloc-review' }}
+          SWEEP_MERGE_EXCLUDE: ${{ vars.SWEEP_MERGE_EXCLUDE }}
+        run: python3 .org-config-tools/scripts/desk-dispatch.py --merge-precheck
       - name: Mint a protection-read token for the base branch's required contexts (tolerates a refused mint)
         id: protection-token
-        if: steps.precheck.outputs.go != 'false'
+        if: steps.precheck.outputs.go != 'false' && steps.merge-precheck.outputs.go != 'false'
         continue-on-error: true
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
@@ -412,8 +485,36 @@ jobs:
           owner: ${{ github.repository_owner }}
           repositories: ${{ github.event.repository.name }}
           permission-administration: read
+      # THE RELEASE'S MERGE MINT: `contents: write` -- the one grant GitHub serves
+      # `PUT pulls/{n}/merge` on -- scoped to the caller repo, and only while the switch
+      # is the word `merge_backstop_on` merges on, read in the CALLER's variables. Off,
+      # this step is skipped and no token in this job can merge. A merge made as the
+      # App starts the base's push workflows (a `GITHUB_TOKEN` merge would not). No
+      # `workflows: write`: a PR that changes .github/workflows/ stays NOT MERGED.
+      - name: Mint the merge backstop's contents-write token (a release, while the switch is on)
+        id: merge-token
+        if: github.event.action == 'unlabeled' && vars.SWEEP_MERGE_BACKSTOP == 'on' && steps.merge-precheck.outputs.go != 'false'
+        continue-on-error: true
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.RELEASE_TRAIN_APP_ID }}
+          private-key: ${{ secrets.RELEASE_TRAIN_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-contents: write
+      # NO FIRE URL AND NO ROUTINE TOKEN reach this step: it merges or it does not.
+      - name: Merge the released PR if the backstop would
+        if: github.event.action == 'unlabeled' && steps.merge-precheck.outputs.go != 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DESK_REVIEWER: ${{ 'tracebloc-review' }}
+          DESK_PROTECTION_TOKEN: ${{ steps.protection-token.outputs.token }}
+          SWEEP_MERGE_BACKSTOP: ${{ vars.SWEEP_MERGE_BACKSTOP }}
+          SWEEP_MERGE_TOKEN: ${{ steps.merge-token.outputs.token }}
+          SWEEP_MERGE_EXCLUDE: ${{ vars.SWEEP_MERGE_EXCLUDE }}
+        run: python3 .org-config-tools/scripts/desk-dispatch.py --merge-backstop
       - name: Decide, lock, fire
-        if: steps.precheck.outputs.go != 'false'
+        if: github.event.action != 'unlabeled' && steps.precheck.outputs.go != 'false'
         env:
           GH_TOKEN: ${{ github.token }}
           DISPATCH_T0: ${{ steps.started.outputs.at }}
@@ -427,5 +528,11 @@ jobs:
           DESK_REVIEWER: ${{ 'tracebloc-review' }}
           DESK_FIRE_URL: ${{ (vars.DESK_ROUTINE_FIRE_URL) }}
           DESK_ROUTINE_TOKEN: ${{ secrets.DESK_ROUTINE_TOKEN }}
+          # THE OTHER DESK ROUTINE ((internal ref); `FIRE_ROUTINES` in
+          # scripts/desk-dispatch.py): both lines, or neither, under ONE condition, so a
+          # URL never meets the other routine's token. A caller that passes neither
+          # fires one routine, as before. desk-dispatch-selftest holds the shape.
+          DESK_FIRE_URL_FAILOVER: ${{ ((vars.DESK_ROUTINE_FIRE_URL_2) != '' && secrets.DESK_ROUTINE_TOKEN_2 != '') && (vars.DESK_ROUTINE_FIRE_URL_2) || '' }}
+          DESK_ROUTINE_TOKEN_FAILOVER: ${{ ((vars.DESK_ROUTINE_FIRE_URL_2) != '' && secrets.DESK_ROUTINE_TOKEN_2 != '') && secrets.DESK_ROUTINE_TOKEN_2 || '' }}
           DESK_STALE_MINUTES: ${{ 45 }}
         run: python3 .org-config-tools/scripts/desk-dispatch.py
