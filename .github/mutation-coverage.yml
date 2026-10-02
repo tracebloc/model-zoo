@@ -25,14 +25,13 @@ guards:
   - tools/*.py
 rows:
   - tests/test_engine_pin_drift_guard.py
+  - tests/test_ingest_category_contract_rows.py
 exempt:
   - path: tools/build_index.py
     ticket: tracebloc/model-zoo#84
   - path: tools/check_dump_coverage.py
     ticket: tracebloc/model-zoo#84
   - path: tools/derive_seed_excluded.py
-    ticket: tracebloc/model-zoo#84
-  - path: tools/ingest_category_contract.py
     ticket: tracebloc/model-zoo#84
   - path: tools/od_acceptance_sweep.py
     ticket: tracebloc/model-zoo#84
