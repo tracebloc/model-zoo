@@ -1,7 +1,7 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/code-quality.yml`
-# (blob 62941a951feec42bc6f60d5475474f553fae1a5c) folded with the private source repo's own caller of it,
+# (blob b9a2899562fc34f50897750bd1b6c80fe083929b) folded with the private source repo's own caller of it,
 # `.github/workflows/code-quality-caller.yml` (blob a690dd9342c56a9efc609065bbfc5ff7e18f9131), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
@@ -540,7 +540,39 @@ jobs:
             echo "Applying baseline: $BASELINE"
             set -- "$@" --baseline-path "$BASELINE"
           fi
-          # A .gitleaks.toml at the repo root is picked up automatically.
+          # THE FLEET ALLOWLIST ((internal ref)). `generic-api-key` keys on the
+          # IDENTIFIER, so `glyphToken = "--primitive-neutral-700"` reads as a leaked
+          # credential; (internal ref) paid ~3 commits per occurrence, four times,
+          # because the range scan keeps matching the commit that introduced it. A
+          # CSS custom-property NAME is a value shape no credential takes, so it is
+          # allowlisted for that one rule, as the SECRET (not the line), here once
+          # for every caller rather than in each repo.
+          #
+          # APPENDED TO THE REPO'S OWN CONFIG, NOT `[extend] path =` it: measured on
+          # gitleaks 8.30.1, a config that extends another by path DROPS the extended
+          # file's `[[allowlists]]`, so that composition would silently un-suppress
+          # every repo's own allowlist. A repo on the deprecated single `[allowlist]`
+          # table cannot take a `[[allowlists]]` entry beside it (gitleaks refuses to
+          # load the pair), so its config is used unchanged -- the stricter outcome:
+          # the fleet entry is missing there, nothing that fires today goes quiet.
+          FLEET_ALLOWLIST=$(cat <<'TOML'
+          [[allowlists]]
+          description = "fleet: a CSS custom-property name is a value shape, never a credential"
+          targetRules = ["generic-api-key"]
+          regexTarget = "secret"
+          regexes = ['''^--[a-z][a-z0-9]*(-[a-z0-9]+)+$''']
+          TOML
+          )
+          if [ ! -f .gitleaks.toml ]; then
+            printf '[extend]\nuseDefault = true\n\n%s\n' "$FLEET_ALLOWLIST" > /tmp/gitleaks-config.toml
+            set -- "$@" --config /tmp/gitleaks-config.toml
+          elif grep -Eq '^[[:space:]]*\[allowlist\][[:space:]]*(#.*)?$' .gitleaks.toml; then
+            echo "::notice file=.gitleaks.toml::This config uses the deprecated single [allowlist] table, which gitleaks will not load beside an [[allowlists]] entry, so the fleet allowlist is not applied here. Rewrite it as [[allowlists]] to pick it up."
+          else
+            { cat .gitleaks.toml; printf '\n\n%s\n' "$FLEET_ALLOWLIST"; } > /tmp/gitleaks-config.toml
+            set -- "$@" --config /tmp/gitleaks-config.toml
+          fi
+          # A .gitleaks.toml at the repo root is otherwise picked up automatically.
 
           # EVERY invocation below is `gitleaks git` — commit-scoped — and the
           # per-repo baselines DEPEND on that: baseline fingerprints embed the
