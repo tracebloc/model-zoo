@@ -550,3 +550,146 @@ def test_the_cli_sweeps_a_canonical_manifest(tmp_path):
     assert proc.returncode == 0, proc.stdout + proc.stderr
     assert "All 1 live dump(s) verify" in proc.stdout, proc.stdout
     assert "NOT GATED: 1 retired" in proc.stdout, proc.stdout
+
+
+# --- the backbone-seed contract over HOSTED bytes (model-zoo#135) ------------
+#
+# A template that declares SEED_EXCLUDED_PREFIXES promises its hosted seed
+# carries the backbone alone. The prod `ssdlite_mobilenet` / `ssd_vgg16` seeds
+# still carried their COCO class heads, so any `output_classes != 12` upload was
+# refused on a size mismatch — and this gate strict-loaded them at the default
+# class count, where a dump WITH the head is the only one that passes. So the
+# gate certified exactly the defect, and would have refused the fix (a stripped
+# seed). These pin both directions.
+
+HEADED_TEMPLATE = """\
+from torch import nn
+
+SEED_EXCLUDED_PREFIXES = ("fc.",)
+
+framework = "pytorch"
+main_class = "MyModel"
+
+
+class MyModel(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.body = nn.Linear(4, 4)
+        self.fc = nn.Linear(4, 3)
+"""
+
+
+class _HeadedRef(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.body = nn.Linear(4, 4)
+        self.fc = nn.Linear(4, 3)
+
+
+def _headed_zoo(tmp_path, dumps_by_name):
+    dumps = tmp_path / "dist"
+    dumps.mkdir()
+    tdir = _template_dir(tmp_path)
+    for name, state in dumps_by_name.items():
+        (tdir / f"{name}.py").write_text(HEADED_TEMPLATE)
+        torch.save(state, dumps / f"{name}_weights.pkl")
+    return dumps
+
+
+def _backbone_only():
+    return {k: v for k, v in _HeadedRef().state_dict().items() if not k.startswith("fc.")}
+
+
+def test_a_hosted_seed_that_still_carries_its_declared_head_is_red(tmp_path):
+    """The #135 defect: the full dump strict-loads at the default class count,
+    so the old gate said OK. It is a seed that fits ONE class count."""
+    mod = _tool()
+    dumps = _headed_zoo(tmp_path, {"headed": _HeadedRef().state_dict()})
+    rc, report = _run(mod, tmp_path, dumps, {"headed": _entry(dumps, "headed")})
+    assert rc == 1
+    assert _cats(report) == {"headed": mod.HEAD_PRESENT}
+    (result,) = report["results"]
+    assert "fc.weight" in result["detail"] and "fc.bias" in result["detail"]
+
+
+def test_a_backbone_only_seed_verifies(tmp_path):
+    """The fix: the stripped seed is what the contract asks for. The old gate's
+    strict load refused it (missing fc.*), so it could never be published."""
+    mod = _tool()
+    dumps = _headed_zoo(tmp_path, {"stripped": _backbone_only()})
+    rc, report = _run(mod, tmp_path, dumps, {"stripped": _entry(dumps, "stripped")})
+    assert _cats(report) == {"stripped": mod.OK}
+    assert rc == 0
+
+
+def test_a_backbone_seed_missing_an_undeclared_key_is_red(tmp_path):
+    """Only the DECLARED head may be missing; a backbone key that is absent
+    would silently keep its random init."""
+    mod = _tool()
+    state = _backbone_only()
+    del state["body.bias"]
+    dumps = _headed_zoo(tmp_path, {"holed": state})
+    rc, report = _run(mod, tmp_path, dumps, {"holed": _entry(dumps, "holed")})
+    assert rc == 1
+    assert _cats(report) == {"holed": mod.KEY_MISMATCH}
+    assert "body.bias" in report["results"][0]["detail"]
+
+
+def test_an_unexpected_key_is_red_for_a_headed_template(tmp_path):
+    """Relaxing strict for the head must not relax it for a key the model does
+    not have — that is a dump for a different model."""
+    mod = _tool()
+    state = _backbone_only()
+    state["stray.weight"] = torch.zeros(1)
+    dumps = _headed_zoo(tmp_path, {"stray": state})
+    rc, report = _run(mod, tmp_path, dumps, {"stray": _entry(dumps, "stray")})
+    assert rc == 1
+    assert _cats(report) == {"stray": mod.KEY_MISMATCH}
+    assert "stray.weight" in report["results"][0]["detail"]
+
+
+def test_an_empty_declared_prefix_does_not_excuse_every_missing_key(tmp_path):
+    """`("",)` would match every key with startswith; it is dropped, so the
+    template is checked as if it declared nothing (strict)."""
+    mod = _tool()
+    dumps = tmp_path / "dist"
+    dumps.mkdir()
+    (_template_dir(tmp_path) / "empty.py").write_text(
+        HEADED_TEMPLATE.replace('("fc.",)', '("",)')
+    )
+    torch.save(_backbone_only(), dumps / "empty_weights.pkl")
+    rc, report = _run(mod, tmp_path, dumps, {"empty": _entry(dumps, "empty")})
+    assert rc == 1
+    assert _cats(report) == {"empty": mod.KEY_MISMATCH}
+
+
+def test_the_real_ssdlite_mobilenet_seed_contract(tmp_path):
+    """End to end on the template #135 was found on: its full state_dict (the
+    shape prod served) is HEAD_PRESENT, and the `seed_contract.py strip`
+    subtraction of its declared 12 keys is OK."""
+    pytest.importorskip("torchvision")
+    mod = _tool()
+    src = ROOT / "model_zoo" / "object_detection" / "pytorch" / "ssdlite_mobilenet.py"
+    tdir = _template_dir(tmp_path, "object_detection")
+    (tdir / "ssdlite_mobilenet.py").write_text(src.read_text())
+    full = mod._build_ship(str(tdir / "ssdlite_mobilenet.py")).state_dict()
+    dumps = tmp_path / "dist"
+    dumps.mkdir()
+    torch.save(full, dumps / "ssdlite_mobilenet_weights.pkl")
+    rc, report = _run(
+        mod, tmp_path, dumps, {"ssdlite_mobilenet": _entry(dumps, "ssdlite_mobilenet")}
+    )
+    assert _cats(report) == {"ssdlite_mobilenet": mod.HEAD_PRESENT}
+    assert rc == 1
+
+    _, seed_index = mod._siblings()
+    prefixes = seed_index.read_prefixes(src)
+    stripped = {k: v for k, v in full.items() if not k.startswith(prefixes)}
+    assert len(full) - len(stripped) == 12
+    torch.save(stripped, dumps / "ssdlite_mobilenet_weights.pkl")
+    rc, report = _run(
+        mod, tmp_path, dumps, {"ssdlite_mobilenet": _entry(dumps, "ssdlite_mobilenet")},
+        name="stripped.json",
+    )
+    assert _cats(report) == {"ssdlite_mobilenet": mod.OK}
+    assert rc == 0
