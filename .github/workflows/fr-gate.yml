@@ -1,7 +1,7 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/fr-gate.yml`
-# (blob 622cd7a1d42562edb320f8559edf751f59aca57d) folded with the private source repo's own caller of it,
+# (blob dad6a8087513716445ae26f77b4d2d0cc4c5b5b7) folded with the private source repo's own caller of it,
 # `.github/workflows/fr-gate-caller.yml` (blob b7ba334ded9a4ed457942c76614a7b01f35226f9), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
@@ -142,8 +142,9 @@ jobs:
       # the release train needs the same walk to cut the prod hop at the FR
       # frontier, and a second copy would be the drift rule 9 forbids -- so the
       # script is checked out of this PRIVATE repo with a read-only App token,
-      # supplied by every caller's `secrets: inherit`; `persist-credentials: false`
-      # because the walk reads with the wider App token minted further below.
+      # minted from the (internal ref) App's id and key (RELEASE_TRAIN_APP_*);
+      # `persist-credentials: false` because the walk reads with the wider App
+      # token minted further below.
       - name: Mint a read-only token for org-config (private; the caller's own token cannot read it)
         id: org-config-token
         if: steps.target.outputs.required != '' && steps.skip.outputs.skip != 'true'
