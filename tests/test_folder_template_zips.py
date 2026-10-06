@@ -87,7 +87,13 @@ def zoo(tmp_path: pathlib.Path) -> pathlib.Path:
     root = tmp_path / "model_zoo"
     source = MODEL_ROOT / "object_detection" / "pytorch"
     target = root / "object_detection" / "pytorch"
-    shutil.copytree(source / "yolo_v8", target / "yolo_v8")
+    # A test that imported the template earlier in the session leaves a
+    # __pycache__ in the checkout; the copy is of the sources only.
+    shutil.copytree(
+        source / "yolo_v8",
+        target / "yolo_v8",
+        ignore=shutil.ignore_patterns("__pycache__"),
+    )
     shutil.copy2(source / "faster_rcnn_resnet.py", target / "faster_rcnn_resnet.py")
     assert build_folder_zips.write_all(root) == [target / "yolo_v8.zip"]
     assert build_folder_zips.problems(root) == []
@@ -139,7 +145,7 @@ def test_row_a_one_file_template_gets_no_zip(zoo: pathlib.Path) -> None:
 def test_row_the_zip_skips_caches_and_non_py_files(zoo: pathlib.Path) -> None:
     folder = zoo / "object_detection" / "pytorch" / "yolo_v8"
     clean = build_folder_zips.build(folder)
-    (folder / "__pycache__").mkdir()
+    (folder / "__pycache__").mkdir(exist_ok=True)
     (folder / "__pycache__" / "model.cpython-311.pyc").write_bytes(b"\0")
     (folder / "README.txt").write_text("notes")
     assert (folder / "__pycache__").is_dir()
