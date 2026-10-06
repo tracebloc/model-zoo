@@ -21,6 +21,11 @@ Each row::
                  unique -- mlp.py and cox_ph.py exist under two frameworks in one
                  task, and packaged templates are all called model.py -- so the
                  path is the only id that is.
+    upload       the file under model_zoo/ to pass to ``upload_model``: the
+                 template's own ``.py``, or for a packaged template
+                 (``<name>/model.py``) the flat ``<name>.zip`` beside its folder
+                 (``tools/build_folder_zips.py``), e.g.
+                 "object_detection/pytorch/yolo_v8.zip".
     category     the declared ``category`` (the task).
     framework    the declared ``framework``.
     model_type   the declared ``model_type``, or null when the template has none.
@@ -336,6 +341,19 @@ def discover(root: pathlib.Path = MODEL_ROOT) -> list[tuple[pathlib.Path, dict]]
     return found
 
 
+def upload_path(rel: pathlib.PurePosixPath) -> str:
+    """The file under model_zoo/ a user passes to ``upload_model``.
+
+    A one-file template is uploaded as itself. A folder template
+    (``<category>/<framework>/<name>/model.py``) is uploaded as the flat zip
+    ``tools/build_folder_zips.py`` builds next to its folder,
+    ``<category>/<framework>/<name>.zip``: its ``model.py`` alone lacks the
+    ``loss.py`` the upload needs."""
+    if len(rel.parts) == 4:
+        return str(rel.parent.with_name(rel.parent.name + ".zip"))
+    return str(rel)
+
+
 def static_row(path: pathlib.Path, consts: dict) -> dict:
     """Everything the AST can say. Raises ValueError on a template the index
     cannot describe, naming the file and the field."""
@@ -358,6 +376,7 @@ def static_row(path: pathlib.Path, consts: dict) -> dict:
         )
     return {
         "id": str(rel.with_suffix("")),
+        "upload": upload_path(rel),
         "category": consts["category"],
         "framework": framework,
         "model_type": model_type,

@@ -1,0 +1,30 @@
+{
+  "version": "1",
+  "description": "The top-level packages an uploaded model file may import. The backend's upload scan (Bandit plugin TBT001) refuses an upload whose file imports any other top-level name -- standard library included (typing, copy, os, ...) -- unless the name is a sibling file of the same upload. A template is a single file, so for the zoo this list is exact. Read by tests/test_upload_import_allowlist.py.",
+  "generated_from": {
+    "repo": "backend",
+    "path": "bandit_tracebloc_model_validation/bandit_plugins/import_names.py",
+    "symbol": "ALLOWED_PYTHON_PACKAGE_IMPORTS",
+    "ref": "a91c404bb29a0d29a884e5e469de0b9b04ced252",
+    "branch": "main",
+    "date": "2026-10-06"
+  },
+  "allowed_top_level_packages": [
+    "catboost",
+    "collections",
+    "interpret",
+    "lifelines",
+    "lightgbm",
+    "math",
+    "peft",
+    "pycox",
+    "pytorch_forecasting",
+    "sklearn",
+    "sksurv",
+    "timm",
+    "torch",
+    "torchvision",
+    "transformers",
+    "xgboost"
+  ]
+}
