@@ -9,7 +9,7 @@ those facts has to carry the index change with it.
 
 Each CI job recomputes the rows its framework can build and carries the rest
 from the committed file (see the builder's docstring). The static fields --
-id, category, framework, model_type, label, batch -- and the set of templates
+id, upload, category, framework, model_type, label, batch -- and the set of templates
 are checked in every job.
 """
 
@@ -67,7 +67,7 @@ def test_the_index_has_one_row_per_template_with_every_field() -> None:
     ids = [row["id"] for row in index["templates"]]
     assert ids == sorted(ids) and len(ids) == len(set(ids))
     assert len(ids) == len(build_index.discover())
-    fields = {"id", "category", "framework", "model_type", "label", "batch"}
+    fields = {"id", "upload", "category", "framework", "model_type", "label", "batch"}
     for row in index["templates"]:
         assert set(row) == fields | {"params", "averageable"}, row["id"]
         assert isinstance(row["averageable"], bool), row["id"]
@@ -128,3 +128,17 @@ def test_sdk_scratch_copies_are_not_templates(tmp_path: pathlib.Path) -> None:
     scratch.parent.mkdir()
     scratch.write_text(template)
     assert [path for path, _ in build_index.discover(tmp_path)] == [real]
+
+
+def test_every_upload_path_is_a_committed_file() -> None:
+    # ``upload`` is what a user who cloned the zoo passes to ``upload_model``.
+    # A folder template's is its zip (tools/build_folder_zips.py), and a row
+    # pointing at a file the clone does not have is the failure this field
+    # exists to prevent.
+    index = json.loads(build_index.INDEX_PATH.read_text())
+    missing = [
+        row["upload"]
+        for row in index["templates"]
+        if not (build_index.MODEL_ROOT / row["upload"]).is_file()
+    ]
+    assert not missing, f"upload paths with no file under model_zoo/: {missing}"
