@@ -336,7 +336,6 @@ arXiv:2108.07755) for the task-aligned metric both assigners use. Architecture
 re-implemented from those specifications; no upstream code is vendored.
 """
 
-import copy
 import math
 
 import torch
@@ -1057,34 +1056,60 @@ class YOLOv10Head(nn.Module):
         self.box_hidden = max(16, in_channels[0] // 4, reg_max * 4)
         self.cls_hidden = max(in_channels[0], min(num_classes, 100))
 
-        self.box_convs = nn.ModuleList()
-        self.box_preds = nn.ModuleList()
-        self.cls_convs = nn.ModuleList()
-        self.cls_preds = nn.ModuleList()
+        one2many = self._build_branch(in_channels)
+        (self.box_convs, self.box_preds, self.cls_convs, self.cls_preds) = one2many
+
+        # The one2one branch: an independent copy of both towers and both
+        # predictors, as upstream's `copy.deepcopy(self.cv2)` /
+        # `copy.deepcopy(self.cv3)` makes it. The two branches must start from
+        # IDENTICAL weights -- upstream's initialisation, and it matters: the
+        # two heads are supervised with different assignments from the same
+        # features, so starting them apart adds a difference the design does
+        # not intend.
+        #
+        # NOT `copy.deepcopy`: `copy` is not on the backend's upload import
+        # allowlist (TBT001), so a template importing it is refused at upload.
+        # The equivalent is a second construction with the same shapes and the
+        # one2many weights loaded into it. It is built under `fork_rng` so the
+        # throwaway initialisation draws nothing from the global generator --
+        # deepcopy drew nothing either, so every layer built after the head
+        # initialises exactly as it did before. tests/test_upload_import_allowlist.py
+        # holds the import half; tests/test_yolov10_s.py the parameter count.
+        with torch.random.fork_rng(devices=[]):
+            one2one = self._build_branch(in_channels)
+        for copy_of, source in zip(one2one, one2many):
+            copy_of.load_state_dict(source.state_dict())
+        (
+            self.one2one_box_convs,
+            self.one2one_box_preds,
+            self.one2one_cls_convs,
+            self.one2one_cls_preds,
+        ) = one2one
+
+        self._init_prediction_biases()
+
+    def _build_branch(self, in_channels):
+        """One branch's towers and predictors: ``(box_convs, box_preds, cls_convs, cls_preds)``.
+
+        Built level by level, box tower first, in that order, so the
+        initialisation draws from the generator in the same sequence the
+        one2many branch always has.
+        """
+        box_convs = nn.ModuleList()
+        box_preds = nn.ModuleList()
+        cls_convs = nn.ModuleList()
+        cls_preds = nn.ModuleList()
         for channels in in_channels:
-            self.box_convs.append(
+            box_convs.append(
                 nn.Sequential(
                     ConvNormAct(channels, self.box_hidden, 3, stride=1),
                     ConvNormAct(self.box_hidden, self.box_hidden, 3, stride=1),
                 )
             )
-            self.box_preds.append(nn.Conv2d(self.box_hidden, 4 * reg_max, 1))
-            self.cls_convs.append(self._class_tower(channels))
-            self.cls_preds.append(nn.Conv2d(self.cls_hidden, num_classes, 1))
-
-        # The one2one branch: an independent copy of both towers and both
-        # predictors, exactly as upstream's `copy.deepcopy(self.cv2)` /
-        # `copy.deepcopy(self.cv3)`. deepcopy rather than a second construction
-        # so the two branches start from IDENTICAL weights -- upstream's
-        # initialisation, and it matters: the two heads are supervised with
-        # different assignments from the same features, so starting them apart
-        # adds a difference the design does not intend.
-        self.one2one_box_convs = copy.deepcopy(self.box_convs)
-        self.one2one_box_preds = copy.deepcopy(self.box_preds)
-        self.one2one_cls_convs = copy.deepcopy(self.cls_convs)
-        self.one2one_cls_preds = copy.deepcopy(self.cls_preds)
-
-        self._init_prediction_biases()
+            box_preds.append(nn.Conv2d(self.box_hidden, 4 * self.reg_max, 1))
+            cls_convs.append(self._class_tower(channels))
+            cls_preds.append(nn.Conv2d(self.cls_hidden, self.num_classes, 1))
+        return box_convs, box_preds, cls_convs, cls_preds
 
     def _class_tower(self, channels):
         """YOLOv10's lightweight class tower: two depthwise-separable pairs.

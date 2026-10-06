@@ -1,0 +1,10 @@
+# The `sdk-upload` CI job (ci.yml): the engine-pinned PyTorch set, plus the
+# tracebloc SDK at a RELEASED version, so tests/test_sdk_upload_from_clone.py
+# runs the upload checks a user's `pip install tracebloc` runs.
+#
+# Pinned exactly, and bumped by hand when a release changes what upload_model
+# checks. The SDK's own torch/torchvision caps match the engine's pins (it
+# validates on the minor the training images run), so this resolves against
+# pytorch.txt without overriding it.
+-r pytorch.txt
+tracebloc[pytorch]==1.2.44

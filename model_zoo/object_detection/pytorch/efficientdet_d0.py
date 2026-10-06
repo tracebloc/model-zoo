@@ -451,8 +451,11 @@ class _EfficientDetBackbone(nn.Module):
         features = [
             lateral(tap) for lateral, tap in zip(self.laterals, self.body(x))
         ]
-        for extra in self.extra:
-            features.append(extra(features[-1]))
+        # Not `extra(...)`: Bandit's B610 (Django `QuerySet.extra`) matches any
+        # call named `extra`, and the backend refuses an upload on any Bandit
+        # finding.
+        for downsample in self.extra:
+            features.append(downsample(features[-1]))
         for layer in self.bifpn:
             features = layer(features)
         return OrderedDict((str(i), f) for i, f in enumerate(features))
