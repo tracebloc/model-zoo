@@ -82,7 +82,6 @@ decode bug would otherwise hide behind a well-formed empty result.
 Verified against torch 2.11.0 / torchvision 0.26.0 (the engine pin,
 ``tools/requirements-engine-pin.txt``).
 """
-from typing import List
 
 import torch
 from torch import nn
@@ -420,7 +419,7 @@ class _CascadeRoIHeads(nn.Module):
             raise ValueError("cascade_rcnn: targets are required in training mode")
 
         losses = {}
-        stage_scores: List[torch.Tensor] = []
+        stage_scores: list[torch.Tensor] = []
         current = proposals
 
         for stage_index, stage in enumerate(self.stages):

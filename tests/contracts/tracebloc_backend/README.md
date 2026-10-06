@@ -76,3 +76,38 @@ the JSON, reconcile any template declaration the change strands, and commit the
 lot in one PR. Narrowing the set is a **breaking** change for this repo (a value
 a template still declares stops being storable), which is what the `version`
 field is for.
+
+---
+
+# Vendored contract: `upload_import_allowlist.v1.json`
+
+The top-level packages an uploaded model file may import: `ALLOWED_PYTHON_PACKAGE_IMPORTS`
+in the backend's upload-scan Bandit plugin (TBT001).
+
+- **Upstream:** `backend` — `bandit_tracebloc_model_validation/bandit_plugins/import_names.py`
+- **Pinned ref:** `a91c404bb29a0d29a884e5e469de0b9b04ced252` (`main`, 2026-10-06; `develop` identical)
+- **Why it exists:** the scan refuses an upload whose file imports any other top-level name,
+  **standard library included**. `from typing import List` or `import copy` is enough. Nothing in
+  this repo checked it, so `cascade_rcnn.py`, `sparse_rcnn.py` and `yolov10_s.py` shipped and could
+  not be uploaded.
+
+`tests/test_upload_import_allowlist.py` reads this file. It is stdlib only and runs in every CI
+framework job.
+
+## Refreshing this copy
+
+```bash
+sha=$(gh api repos/tracebloc/backend/commits/main --jq .sha)
+gh api "repos/tracebloc/backend/contents/bandit_tracebloc_model_validation/bandit_plugins/import_names.py?ref=$sha" \
+  -H "Accept: application/vnd.github.raw" > /tmp/import_names.py
+python3 - "$sha" <<'PY'
+import ast, sys
+tree = ast.parse(open("/tmp/import_names.py").read())
+value = next(n.value for n in tree.body if isinstance(n, ast.Assign)
+             and any(getattr(t, "id", "") == "ALLOWED_PYTHON_PACKAGE_IMPORTS" for t in n.targets))
+print(sys.argv[1]); print(sorted(ast.literal_eval(value)))
+PY
+```
+
+Then update `allowed_top_level_packages` and `generated_from.ref`. Pin `main` (what prod runs),
+not `develop`: a name that is only on `develop` is still refused by prod.
