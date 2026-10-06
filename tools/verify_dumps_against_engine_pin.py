@@ -22,8 +22,15 @@ engine's ``use_cases/requirements.txt`` — see the CI workflow
     same resolution every other seed tool uses — honouring the entry's recorded
     ``category`` when it carries one);
   * builds that template in THIS interpreter — i.e. what the edge builds — and
-    strict-loads the staged dump into it, categorising the result OK /
-    KEY_MISMATCH / BUILD_FAIL exactly as the edge would experience it; and
+    loads the staged dump into it under the backbone-seed contract the edge's
+    cycle-0 seed load applies (strict, except that keys under the template's
+    ``SEED_EXCLUDED_PREFIXES`` may be missing), categorising the result OK /
+    KEY_MISMATCH / BUILD_FAIL exactly as the edge would experience it;
+  * refuses a dump that still CARRIES a declared head key (HEAD_PRESENT,
+    model-zoo#135): such a seed loads only at the class count it was built
+    at, so every other ``output_classes`` is refused on a size mismatch. A
+    template with no ``SEED_EXCLUDED_PREFIXES`` is checked strict, as before;
+    and
   * checks provenance: the ``built_with`` block describing the entry must match
     the versions actually installed here (the engine's pin). A drift — e.g. the
     engine bumps ``transformers`` — turns the gate red loudly instead of
@@ -76,7 +83,8 @@ Per-entry semantics, each one the backend gates' (``check_provenance``,
 
 Fail-closed contract
 ---------------------
-The process exits non-zero on ANY of: a live dump that does not strict-load, a
+The process exits non-zero on ANY of: a live dump that does not load under the
+seed contract, a live dump that still carries its declared head, a
 ``built_with`` value that disagrees with the installed engine pin, a live entry
 whose bytes are absent, a sha256 that does not match, a live entry that maps to
 no template (or to more than one), or a manifest that is not the canonical
@@ -167,6 +175,13 @@ RETIRED_ENTRY = "RETIRED"
 # dump that WOULD have verified — down with it. Reported loudly, never folded into
 # OK, so the coverage gap is visible.
 SKIPPED_RAM = "SKIPPED_RAM"
+# The dump still carries keys its template declares in SEED_EXCLUDED_PREFIXES
+# (model-zoo#135). The template promises a backbone-only seed, so the head must
+# have been stripped (`seed_contract.py strip`) before publishing; a dump that
+# kept it fits ONE class count, and any other `output_classes` is refused with a
+# size mismatch. It loads cleanly at the default count, which is why the old
+# strict-load gate certified it, so it is its own verdict rather than OK.
+HEAD_PRESENT = "HEAD_PRESENT"
 # Not a failure, and not a pass: --dumps-not-fetched. The entry resolved to its
 # template; nothing was loaded.
 NOT_FETCHED = "NOT_FETCHED"
@@ -380,6 +395,41 @@ def plan(manifest: dict, repo_root: Path) -> list[dict]:
     return planned
 
 
+def declared_head(template_path: Path) -> tuple[str, ...]:
+    """The template's ``SEED_EXCLUDED_PREFIXES``, read with ``ast``.
+
+    Normalised the way the engine's cycle-0 seed load normalises
+    it: an empty prefix matches every key with ``startswith``, so it is dropped
+    rather than honoured — otherwise ``("",)`` would excuse every missing key.
+    """
+    _, seeds = _siblings()
+    return tuple(p for p in (seeds.read_prefixes(Path(template_path)) or ()) if p)
+
+
+def seed_contract_problem(model, state_dict: dict, head: tuple[str, ...]) -> str | None:
+    """The engine's cycle-0 seed load, or why it would refuse (None == loads).
+
+    The same three rules as ``verify_backbone_seeds.check`` and the engine:
+    an unexpected key is fatal, a missing key is fatal unless it is under the
+    declared head, and a shape mismatch raises. With no declared head this is
+    exactly ``strict=True``.
+    """
+    loaded = model.load_state_dict(state_dict, strict=False)  # raises on shape
+    if loaded.unexpected_keys:
+        return (
+            f"{len(loaded.unexpected_keys)} unexpected key(s), e.g. "
+            f"{loaded.unexpected_keys[:3]} — this dump does not belong to this model"
+        )
+    undeclared = [k for k in loaded.missing_keys if not k.startswith(head)]
+    if undeclared:
+        return (
+            f"{len(undeclared)} missing key(s) the template does not declare in "
+            f"SEED_EXCLUDED_PREFIXES, e.g. {undeclared[:3]} — they would keep "
+            "their random init"
+        )
+    return None
+
+
 def _verify_one(entry: dict, dumps_dir: Path, repo_root: Path) -> dict:
     """Load-verify one PLANNED live entry. Returns it with a ``category``."""
     import torch
@@ -416,10 +466,32 @@ def _verify_one(entry: dict, dumps_dir: Path, repo_root: Path) -> dict:
 
     try:
         state_dict = torch.load(weights_path, weights_only=True)
-        model.load_state_dict(state_dict, strict=True)
-    except Exception as exc:  # noqa: BLE001 — strict-load failure == edge abort
+    except Exception as exc:  # noqa: BLE001 — an unreadable dump == edge abort
         result["category"] = KEY_MISMATCH
         result["detail"] = f"{type(exc).__name__}: {exc}"
+        return result
+
+    head = declared_head(repo_root / entry["template"])
+    carried = sorted(k for k in state_dict if head and k.startswith(head))
+    if carried:
+        result["category"] = HEAD_PRESENT
+        result["detail"] = (
+            f"{len(carried)} key(s) under the template's SEED_EXCLUDED_PREFIXES "
+            f"are still in the dump, e.g. {carried[:4]}. The seed fits only the "
+            "class count it was built at; publish the `seed_contract.py strip` "
+            "output instead"
+        )
+        return result
+
+    try:
+        problem = seed_contract_problem(model, state_dict, head)
+    except Exception as exc:  # noqa: BLE001 — shape mismatch == edge abort
+        result["category"] = KEY_MISMATCH
+        result["detail"] = f"{type(exc).__name__}: {exc}"
+        return result
+    if problem:
+        result["category"] = KEY_MISMATCH
+        result["detail"] = problem
         return result
 
     result["category"] = OK
@@ -466,6 +538,7 @@ def _summary(results: list[dict], transformers_version: str | None) -> str:
     for cat in (
         OK,
         KEY_MISMATCH,
+        HEAD_PRESENT,
         BUILD_FAIL,
         MISSING,
         SHA_MISMATCH,
@@ -645,6 +718,11 @@ def _selftest() -> int:
         for stem in ("good", "mismatch", "gone"):
             (zoo / f"{stem}.py").write_text(_SELFTEST_TEMPLATE)
         (zoo / "broken.py").write_text(_SELFTEST_BROKEN)
+        headed = _SELFTEST_TEMPLATE.replace(
+            "main_class", 'SEED_EXCLUDED_PREFIXES = ("fc.",)\nmain_class', 1
+        )
+        (zoo / "headed.py").write_text(headed)
+        (zoo / "stripped.py").write_text(headed)
 
         def dump(name: str, state: dict) -> dict:
             path = dumps / f"{name}_weights.pkl"
@@ -657,6 +735,8 @@ def _selftest() -> int:
             "good": dump("good", _Ref().state_dict()),
             "mismatch": dump("mismatch", bad),
             "broken": dump("broken", _Ref().state_dict()),
+            "headed": dump("headed", _Ref().state_dict()),
+            "stripped": dump("stripped", {}),
             "gone": {"file": "gone_weights.pkl", "sha256": "0" * 64, "size_bytes": 1},
             "old": {"file": "old_weights.pkl", "sha256": "0" * 64, "status": "retired"},
         }
@@ -675,6 +755,8 @@ def _selftest() -> int:
             "good": OK,
             "mismatch": KEY_MISMATCH,
             "broken": BUILD_FAIL,
+            "headed": HEAD_PRESENT,
+            "stripped": OK,
             "gone": MISSING,
             "old": RETIRED_ENTRY,
         }, cats
@@ -701,7 +783,7 @@ def _selftest() -> int:
         assert rc_req == 2, "absent manifest with --require-manifest must be red"
 
     print(
-        "selftest OK: OK/KEY_MISMATCH/BUILD_FAIL/MISSING/RETIRED + provenance + "
+        "selftest OK: OK/KEY_MISMATCH/HEAD_PRESENT/BUILD_FAIL/MISSING/RETIRED + provenance + "
         "fail-closed"
     )
     return 0

@@ -9,6 +9,12 @@ Two subcommands, in the order they must run:
                keys, the engine allows exactly these to be missing, and neither
                restates the other.
 
+  ``audit``  — fail if any dump in a directory still carries a key its template
+               declares in ``SEED_EXCLUDED_PREFIXES`` (model-zoo#135). Run it on
+               the bytes about to be published, or on a ``sync_zoo_weights.py
+               fetch-all`` of what the store serves. Key names only: no model is
+               built, so it needs torch and nothing else.
+
   ``strip``  — turn the staged full dumps into backbone-only seeds by removing
                the keys each template declares. Derives from the EXISTING dumps
                rather than re-downloading from the hub: the staged 52 are already
@@ -321,6 +327,74 @@ def cmd_strip(zoo: Path, weights: Path, dest: Path, dry_run: bool) -> int:
     return 0
 
 
+def _dumps_in(weights: Path) -> List[Path]:
+    """Every ``<name>_weights.pkl`` under ``weights``, in either layout.
+
+    ``strip`` reads and writes ``<dir>/<dir>/<dir>_weights.pkl``; the store's
+    ``fetch-all`` lays dumps out FLAT. The dump's name is its file stem either
+    way, so both are read the same.
+    """
+    return sorted(weights.rglob("*_weights.pkl"))
+
+
+def cmd_audit(zoo: Path, weights: Path) -> int:
+    """Fail if a dump carries a key under its template's declared head.
+
+    WHY THIS IS NOT ``verify_backbone_seeds``. That one proves a seed loads at a
+    class count no dump was built at, so it does catch a head left in -- but
+    only on the directory it is pointed at, and it was pointed at the STRIP
+    OUTPUT while the store kept serving the full dumps (model-zoo#135). This
+    asks the cheaper, sharper question of whatever bytes are in hand, with no
+    model build: does the dump hold a key the template says it must not?
+    """
+    import torch
+
+    index = build_index(zoo)
+    dumps = _dumps_in(weights)
+    if not dumps:
+        print(f"no *_weights.pkl under {weights}: nothing audited, and that is "
+              "not a pass", file=sys.stderr)
+        return 2
+
+    carrying: List[str] = []
+    problems: List[str] = []
+    clean = 0
+    for dump in dumps:
+        name = dump.name[: -len("_weights.pkl")]
+        try:
+            _, template = resolve(index, name)
+        except AmbiguousTemplate as exc:
+            problems.append(str(exc))
+            continue
+        prefixes = tuple(p for p in (read_prefixes(template) or ()) if p)
+        if not prefixes:
+            clean += 1
+            print(f"{name:34s} declares no head — nothing to strip")
+            continue
+        state = torch.load(dump, weights_only=True, map_location="cpu", mmap=True)
+        kept = sorted(k for k in state if k.startswith(prefixes))
+        del state
+        if kept:
+            carrying.append(f"{name}: {len(kept)} declared head key(s), e.g. {kept[:2]}")
+            print(f"{name:34s} CARRIES HEAD  {len(kept)} key(s)")
+        else:
+            clean += 1
+            print(f"{name:34s} backbone only")
+
+    print(f"\n{len(dumps)} dump(s): {clean} clean, {len(carrying)} carrying a "
+          f"declared head, {len(problems)} unresolved")
+    if carrying:
+        print(f"\n{len(carrying)} dump(s) still carry the head their template "
+              "declares in SEED_EXCLUDED_PREFIXES. Each fits only the class count "
+              "it was built at; publish `seed_contract.py strip` output instead:",
+              file=sys.stderr)
+        for line in carrying:
+            print(f"  {line}", file=sys.stderr)
+    for line in problems:
+        print(f"  unresolved: {line}", file=sys.stderr)
+    return 1 if carrying or problems else 0
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--zoo", required=True, help="a model-zoo checkout")
@@ -333,6 +407,9 @@ def main(argv=None) -> int:
     c = sub.add_parser("check", help="fail if a declared head != the derived one")
     c.add_argument("--verdict", required=True, help="derive_seed_excluded.py --out")
 
+    u = sub.add_parser("audit", help="fail if a dump still carries its declared head")
+    u.add_argument("--weights", required=True, help="dumps to audit (flat or nested)")
+
     s = sub.add_parser("strip", help="derive backbone-only dumps from staged ones")
     s.add_argument("--weights", required=True, help="staged full dumps")
     s.add_argument("--dest", required=True, help="where backbone-only seeds go")
@@ -341,6 +418,8 @@ def main(argv=None) -> int:
     zoo = Path(args.zoo).expanduser()
     if args.cmd == "check":
         return cmd_check(zoo, Path(args.verdict).expanduser())
+    if args.cmd == "audit":
+        return cmd_audit(zoo, Path(args.weights).expanduser())
     if args.cmd == "apply":
         return cmd_apply(zoo, Path(args.verdict).expanduser(), args.dry_run)
     return cmd_strip(
