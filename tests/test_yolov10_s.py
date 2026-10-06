@@ -1891,7 +1891,9 @@ def guard_dual_head_branches_are_independent(module) -> None:
     neither assignment.
 
     Also asserts they start IDENTICAL, which is what deepcopy gives and what a
-    second fresh construction would not — the two heads reading the same
+    second fresh construction would not unless the one2many weights are loaded
+    into it (the template does exactly that, because ``copy`` is not on the
+    upload import allowlist) — the two heads reading the same
     features under different assignments is the design; starting them apart adds
     a difference it does not intend.
     """
@@ -3642,16 +3644,19 @@ MUTATIONS = [
     ),
     (
         "one2one_branch_shares_the_one2many_towers",
-        "        self.one2one_box_convs = copy.deepcopy(self.box_convs)",
-        "        self.one2one_box_convs = self.box_convs",
+        "        with torch.random.fork_rng(devices=[]):\n"
+        "            one2one = self._build_branch(in_channels)\n",
+        "        one2one = one2many\n",
         "dual_head_independent",
     ),
     (
+        # The second construction kept, the weight copy dropped: the one2one
+        # branch starts from its own fresh initialisation instead of the
+        # one2many weights (what `copy.deepcopy` used to guarantee).
         "one2one_predictors_built_fresh_instead_of_copied",
-        "        self.one2one_cls_preds = copy.deepcopy(self.cls_preds)",
-        "        self.one2one_cls_preds = nn.ModuleList(\n"
-        "            nn.Conv2d(self.cls_hidden, num_classes, 1) for _ in in_channels\n"
-        "        )",
+        "        for copy_of, source in zip(one2one, one2many):\n"
+        "            copy_of.load_state_dict(source.state_dict())\n",
+        "",
         "dual_head_independent",
     ),
     (
@@ -3660,8 +3665,9 @@ MUTATIONS = [
         # shares the box towers) because only the class predictors are sized
         # from the class count, and only they move this guard.
         "one2one_class_predictors_shared_so_the_slope_halves",
-        "        self.one2one_cls_preds = copy.deepcopy(self.cls_preds)",
-        "        self.one2one_cls_preds = self.cls_preds",
+        "            self.one2one_cls_preds,\n        ) = one2one\n",
+        "            self.one2one_cls_preds,\n        ) = one2one\n"
+        "        self.one2one_cls_preds = self.cls_preds\n",
         "class_count_slope",
     ),
     (
@@ -3800,14 +3806,14 @@ MUTATIONS = [
     ),
     (
         "coupled_head",
-        "            self.cls_convs.append(self._class_tower(channels))",
-        "            self.cls_convs.append(self.box_convs[-1])",
+        "            cls_convs.append(self._class_tower(channels))",
+        "            cls_convs.append(box_convs[-1])",
         "decoupled_head",
     ),
     (
         "hardcoded_box_channel_width",
-        "            self.box_preds.append(nn.Conv2d(self.box_hidden, 4 * reg_max, 1))",
-        "            self.box_preds.append(nn.Conv2d(self.box_hidden, 64, 1))",
+        "            box_preds.append(nn.Conv2d(self.box_hidden, 4 * self.reg_max, 1))",
+        "            box_preds.append(nn.Conv2d(self.box_hidden, 64, 1))",
         "reg_max_is_live",
     ),
     (

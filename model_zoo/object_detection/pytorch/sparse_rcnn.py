@@ -125,7 +125,6 @@ Verified against torch 2.11.0 / torchvision 0.26.0 (the engine pin,
 """
 
 import math
-from typing import Dict, List, Optional, Tuple
 
 import torch
 import torch.nn.functional as F
@@ -242,7 +241,7 @@ BBOX_REG_WEIGHTS = (2.0, 2.0, 1.0, 1.0)
 DETECTIONS_PER_IMG = 100
 
 
-def _linear_sum_assignment(cost: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+def _linear_sum_assignment(cost: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
     """Exact minimum-cost assignment — Jonker-Volgenant augmenting paths.
 
     Returns ``(row_indices, column_indices)`` such that summing
@@ -713,7 +712,7 @@ class _SparseRCNN(nn.Module):
         targets — "no object" is expressed by a proposal going unmatched — so it
         is dropped rather than allowed to win a top-k slot.
         """
-        detections: List[Dict[str, torch.Tensor]] = []
+        detections: list[dict[str, torch.Tensor]] = []
         for image_index, image_shape in enumerate(image_shapes):
             scores = logits[image_index].sigmoid()[:, 1:]
             num_foreground_classes = scores.shape[1]
@@ -735,11 +734,11 @@ class _SparseRCNN(nn.Module):
 
     # --- the handler contract ---------------------------------------------
 
-    def forward(self, images, targets: Optional[List[Dict[str, torch.Tensor]]] = None):
+    def forward(self, images, targets=None):
         if self.training and targets is None:
             raise ValueError("sparse_rcnn: targets are required in training mode")
 
-        original_image_sizes: List[Tuple[int, int]] = [
+        original_image_sizes: list[tuple[int, int]] = [
             (int(image.shape[-2]), int(image.shape[-1])) for image in images
         ]
         images, targets = self.transform(images, targets)
@@ -754,7 +753,7 @@ class _SparseRCNN(nn.Module):
             # the batch, floored at 1 so a batch of unannotated images is a
             # finite zero rather than a division by zero.
             num_boxes = max(1, sum(int(t["boxes"].shape[0]) for t in targets))
-            losses: Dict[str, torch.Tensor] = {}
+            losses: dict[str, torch.Tensor] = {}
             for stage_index, (logits, boxes) in enumerate(zip(stage_logits, stage_boxes)):
                 for name, value in self._stage_loss(
                     logits, boxes, targets, images.image_sizes, num_boxes
