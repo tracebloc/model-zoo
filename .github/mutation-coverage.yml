@@ -26,6 +26,7 @@ guards:
 rows:
   - tests/test_engine_pin_drift_guard.py
   - tests/test_ingest_category_contract_rows.py
+  - tests/test_folder_template_zips.py
 exempt:
   - path: tools/build_index.py
     ticket: tracebloc/model-zoo#84
