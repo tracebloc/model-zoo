@@ -1,7 +1,7 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/set-pr-status.yml`
-# (blob 297f1aad61a76ff2c69bcbec2f39c0becdbdffba) folded with the private source repo's own caller of it,
+# (blob 5baabcb532f44dc7c819f1bc8efc8f2975bbad59) folded with the private source repo's own caller of it,
 # `.github/workflows/set-pr-status-caller.yml` (blob cc4bdf86add1f96e79ee3a1b3c7ae426e97b003f), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
@@ -145,7 +145,8 @@ jobs:
       # declaration of the order is `scripts/pipeline_rank.sh` in this repo, which
       # advance-deploy-env.yml reads for the same comparison (CLAUDE.md rule 1).
       # Same shape and App as the closing-ref job: this repo is PRIVATE, so the
-      # caller's own token cannot read it; the App key arrives via `secrets: inherit`.
+      # caller's own token cannot read it; the token is minted from the
+      # (internal ref) App's id and key (RELEASE_TRAIN_APP_*).
       - name: Mint a read-only token for org-config (private; the caller's own token cannot read it)
         id: rank-token
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
@@ -470,7 +471,8 @@ jobs:
     steps:
       # The checker lives here, not in the calling repo, so the reusable fetches
       # it (the code-quality.yml / bugbot-gate.yml shape). This repo is PRIVATE, so
-      # the checkout needs a read-only App token, which `secrets: inherit` supplies.
+      # the checkout needs a read-only App token, minted from the (internal ref)
+      # App's id and key (RELEASE_TRAIN_APP_*).
       - name: Mint a read-only token for org-config (private; the caller's own token cannot read it)
         id: org-config-token
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
