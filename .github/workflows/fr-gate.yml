@@ -2,7 +2,7 @@
 #
 # Self-contained copy of the reusable workflow `.github/workflows/fr-gate.yml`
 # (blob dad6a8087513716445ae26f77b4d2d0cc4c5b5b7) folded with the private source repo's own caller of it,
-# `.github/workflows/fr-gate-caller.yml` (blob b7ba334ded9a4ed457942c76614a7b01f35226f9), for a PUBLIC repo: GitHub lets a
+# `.github/workflows/fr-gate-caller.yml` (blob c952e1b6cc7a78a421f832c8c0259ecb021f47fc), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
 # reusable's jobs inline -- the triggers are the caller's; every `inputs.*` is
@@ -47,7 +47,7 @@
 # The comments below are the reusable's own and describe the reusable; where
 # they mention `inputs.*` or callers, read them as history.
 #
-# The trigger types of its label re-arm companion `.github/workflows/fr-gate-label-caller.yml` (blob a6c672934f6b1c03c475ab38b520c2c5b10199df) are folded into `on:` -- ONE public file carries both.
+# The trigger types of its label re-arm companion `.github/workflows/fr-gate-label-caller.yml` (blob 1374f3bb5c4269767743a18a6cf57e061273385b) are folded into `on:` -- ONE public file carries both.
 
 name: FR gate
 

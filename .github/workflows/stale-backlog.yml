@@ -2,7 +2,7 @@
 #
 # Self-contained copy of the reusable workflow `.github/workflows/stale-backlog.yml`
 # (blob fd42572fb2dd9c0f225d6a59790fbe794189ec5b) folded with the private source repo's own caller of it,
-# `.github/workflows/stale-backlog-caller.yml` (blob d15d285b2b1f39f7ee91c3ae8366e42c07aaf872), for a PUBLIC repo: GitHub lets a
+# `.github/workflows/stale-backlog-caller.yml` (blob ed9ed7cdc54cd24c95d8a6d5b6ee74185b772230), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
 # reusable's jobs inline -- the triggers are the caller's; every `inputs.*` is
