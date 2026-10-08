@@ -1,7 +1,7 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/kanban-closure-router.yml`
-# (blob e6b55c253c2d8f394a084d51b74f9565032d9c4a) folded with the private source repo's own caller of it,
+# (blob 6e47ac0b4e889b09db269ef47432345313146ba7) folded with the private source repo's own caller of it,
 # `.github/workflows/kanban-closure-caller.yml` (blob e78122f771274190cbfcc450ccfce7ada2ff077a), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
