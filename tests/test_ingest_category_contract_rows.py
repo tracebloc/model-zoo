@@ -1,3 +1,4 @@
+# mutates: tools/ingest_category_contract.py
 """Mutation rows for ``tools/ingest_category_contract.py``.
 
 ``tests/test_zoo_category_contract.py`` holds the zoo to the vendored category

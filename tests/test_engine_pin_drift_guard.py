@@ -1,3 +1,4 @@
+# mutates: tools/check_engine_pin_drift.py
 """The engine-pin drift guard must watch BOTH mirrors of the engine's pin (internal ref).
 
 There are two copies of the engine's pin in this repo:

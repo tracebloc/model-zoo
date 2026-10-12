@@ -1,3 +1,4 @@
+# mutates: tools/build_folder_zips.py
 """Every folder template ships a ready-to-upload zip, and the zip is its folder.
 
 A folder template (``object_detection/pytorch/yolo_v8/``: ``model.py`` and
