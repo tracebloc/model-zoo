@@ -1,0 +1,197 @@
+# GENERATED FILE -- DO NOT EDIT BY HAND.
+#
+# Self-contained copy of the reusable workflow `.github/workflows/desk-verdict-footer.yml`
+# (blob 984ac86c3077f51f0a018e7c64bd4edb7806c452) folded with the private source repo's own caller of it,
+# `.github/workflows/desk-verdict-footer-caller.yml` (blob 2b0b766974fb8ef2ee55bd361a3a2b914bacab98), for a PUBLIC repo: GitHub lets a
+# public repo `uses:` a reusable workflow only from a public repo, and the
+# reusables live in the private source repo. So this file carries the
+# reusable's jobs inline -- the triggers are the caller's; every `inputs.*` is
+# resolved to a literal (repo-inventory.yml's `caller_inputs` floor, else the
+# reusable's default -- the caller's own toolchain choices are NOT copied); the
+# App-token secrets are named directly; a job whose condition resolves to a
+# constant false is omitted; and each job's display name keeps the
+# `desk / ` prefix so the check contexts branch protection requires do
+# not change. Scripts are still fetched from the private source repo at run time with a
+# read-only App installation token; on a fork PR that token cannot be minted
+# (no secrets), so the checkout fails closed rather than running untrusted input.
+# Where the copy checks the private source repo out, its `tools-ref` is the literal `main` --
+# the ref every caller of the reusable pins -- because a public copy has no
+# reusable to take the commit from (the private original defaults to its own).
+#
+# PUBLIC SURFACE. This file is delivered to a public repo. Exactly what was
+# scrubbed, and what was not:
+#
+#   * COMMENT TEXT -- a whole-line YAML `#` comment, a `#`-first line of a `run:`
+#     script that is not inside a heredoc, and this header -- was scrubbed: every
+#     private-repo issue reference, private repo name (org-qualified OR bare),
+#     RFC id and tenant name became `(internal ref)`, and the private repo this
+#     file was generated from became `the private source repo`.
+#     A bare name is left alone where the next character is `/` or `#`: that is a
+#     path or branch prefix, or the issue form, which is matched on its own.
+#     A name that is also an ordinary English word, declared as such on the
+#     inventory row, is left alone in prose as well: it is scrubbed only inside a
+#     code span, as `<org>/<repo>` (URL or not), or as `<repo>#N`.
+#   * CODE -- everything else: commands, heredoc bodies, strings a workflow posts,
+#     `repository:` values, URLs, step names -- was NOT edited. An internal
+#     reference there refuses the render (it is a defect in the source). A BARE
+#     private repo name is never judged in code at all: several are also public
+#     product identifiers -- an image a public chart installs, a package name, a
+#     branch prefix -- so only the org-qualified spelling refuses there, with one
+#     exception: the name of the private repo this file was generated from, which
+#     the code states verbatim because the workflow checks that repo out and
+#     fetches its scripts from it at run time.
+#
+# Regenerate:  python3 scripts/render-self-contained.py          (in the private source repo)
+# Verify:      python3 scripts/render-self-contained.py --check  (make selftest-self-contained)
+#
+# The comments below are the reusable's own and describe the reusable; where
+# they mention `inputs.*` or callers, read them as history.
+
+name: Desk verdict footer
+
+# Reusable workflow (the private source repo, epic (internal ref)). The review
+# account's APPROVE must carry `desk.py`'s footer line, `model: <id> · skill: <tree>`, or
+# this check is red: an approval filed around `desk.py` (over the MCP review tool, which
+# every desk session holds) skips the model gate, the green gate and the head check, and
+# auto-merge lands it -- (internal ref) merged 12 s after one, (internal ref) 56 s
+# after. `scripts/desk-verdict-footer.py` carries the decision and its reasoning; this file
+# is the wiring, and says only what the script cannot.
+#
+# IT IS MEANT TO BE REQUIRED, because auto-merge waits only for required checks; a workflow
+# that dismisses the review afterwards loses the race. ARMING IS FOUR STEPS, IN THIS ORDER:
+# (1) this file reaches `main` -- every caller pins `@main`, so a caller added first dies
+# with `startup_failure`; (2) the canonical caller lands in the private source repo and the fleet's are
+# generated from it, one PR per repo, and the check is ADVICE; (3) one full day of its runs
+# is read, every red named; (4) `desk / verdict-footer` is added to each train repo's
+# `develop` protection, pinned to the GitHub Actions app, on a repo THAT CARRIES A CALLER.
+# Never the reverse: a required context no workflow reports leaves every PR waiting.
+#
+# THE CONTEXT IS THIS JOB'S CHECK RUN, NOT A COMMIT STATUS, and the reason is the race.
+# A status is latest-wins, so the `success` the last push left on the head is still there
+# when a hand-filed APPROVE lands, and auto-merge reads it. A new run's check run is on the
+# head, QUEUED, as soon as the review event creates the run -- measured 4-5 s after the
+# review on (internal ref) (head c7cdd55: reviews at 05:14:14, 05:19:05, 05:35:07Z,
+# their `pull_request_review` jobs created at 05:14:19, 05:19:09, 05:35:11Z, on the PR's
+# HEAD, not `refs/pull/N/merge`) -- and that queued run is the newest-created suite, the
+# one protection reads (below), so it holds the merge. The residual is an auto-merge inside
+# those seconds; the two bypasses on record took 12 s and 56 s.
+#
+# NO `concurrency:`, and none may be added. Branch protection judges a required context by
+# the run in its NEWEST-CREATED check suite, one suite per workflow run -- not the worst
+# run, not the last to finish (measured on the private source repo: five (internal ref)
+# PRs, (internal ref) to (internal ref), auto-merged over older
+# CANCELLED `Design gate` suites; (internal ref) was held 1 h 50 min by a newer-created
+# cancelled `quality` suite whose runs were older by id, start and finish). A group cancels
+# in QUEUE order, and queue order and creation order invert: on (internal ref) the suite
+# created 2 s later started first and was the one cancelled.
+# Reviews come in bursts -- Bugbot's, and every desk thread reply is a `pull_request_review`
+# too -- so a group can leave the head's newest-created suite a corpse that holds the merge
+# until someone re-runs it. Without a group nothing is cancelled: the newest-created suite
+# is always a full verdict, and since every run reads the reviews after its suite exists, a
+# suite created after an APPROVE reads a list that holds it (the script re-reads until it
+# holds the review that started the run: EVENT_REVIEW_ID).
+#
+# NO JOB-LEVEL `if:`, and none may be added: a job skipped by a condition reports SUCCESS,
+# so a skip on any event would read as a pass over an earlier red. Every event judges the
+# whole PR. NO `paths:` OR `branches:` FILTER in a caller either: a filtered required check
+# never reports on the PR it skips (a base retargeted to `develop` included).
+#
+# WHAT A CALLER MUST TRIGGER ON, and the caller job's id:
+#   pull_request:        [opened, synchronize, reopened, ready_for_review]  -- a new head
+#                        needs a run of its own, or the context is missing on it
+#   pull_request_review: [submitted, edited, dismissed]  -- the approval itself, an edit of
+#                        its body, and the remedy (dismissing a footerless approval)
+#   jobs: desk: uses: this file -- `desk` plus this job's `verdict-footer` is the context
+#   name, `desk / verdict-footer`, that branch protection keys on.
+#
+# NO `permissions:` BLOCK HERE (desk-dispatch.yml's reason): a reusable's declared
+# permissions are a demand on the caller, and a caller granting less is a
+# `startup_failure` with no log. The caller grants `contents: read` and
+# `pull-requests: read`; less reaches the script as a 403 on the reviews read, which is
+# CANNOT TELL by name.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  pull_request_review:
+    types: [submitted, edited, dismissed]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  verdict-footer:
+    name: desk / verdict-footer
+    # `ubuntu-slim` ((internal ref)): one mint, one checkout, one or two
+    # paged `gh api` reads -- a one-minute job.
+    runs-on: ubuntu-slim
+    timeout-minutes: 5
+    steps:
+      # ONE MINT, READ-ONLY, for the two private repos this job reads: this one (the
+      # script) and (internal ref) (`desk.py`, the footer's writer). The PR's reviews are
+      # read on the caller's own `github.token`, never on this token.
+      - name: Mint a read-only token for org-config and claude-skills (private; the caller's own token cannot read them)
+        id: tools-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.RELEASE_TRAIN_APP_ID }}
+          private-key: ${{ secrets.RELEASE_TRAIN_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: org-config,claude-skills
+          permission-contents: read
+
+      # THE TOOLS REF ((internal ref) D4, (internal ref)): `job.workflow_sha` is the commit of
+      # THIS reusable file, so the script is the one it was reviewed with; `tools-ref`
+      # overrides it for a test. An EMPTY ref would check out the tools repo's DEFAULT
+      # branch fleet-wide, so it is refused. `toJSON(job)` because actionlint's `job`
+      # schema (1.7.12) does not know `workflow_sha`.
+      - name: Resolve the tools ref, refusing an empty one
+        id: tools-ref
+        env:
+          TOOLS_REF: ${{ 'main' }}
+          JOB_CONTEXT: ${{ toJSON(job) }}
+        run: |
+          if [ -z "$TOOLS_REF" ]; then
+            case "$JOB_CONTEXT" in
+              *'"workflow_sha"'*) TOOLS_REF="${JOB_CONTEXT#*\"workflow_sha\": \"}"; TOOLS_REF="${TOOLS_REF%%\"*}" ;;
+            esac
+          fi
+          if ! [[ "$TOOLS_REF" =~ ^[0-9a-f]{40}$ || ( -n "$TOOLS_REF" && "$TOOLS_REF" != *[![:alnum:]._/-]* ) ]]; then
+            echo "::error::the tools ref is empty or not a ref (${TOOLS_REF:-<empty>}); an empty ref would check out the tools repo's default branch instead of the commit this workflow was pinned at. Refusing."
+            exit 1
+          fi
+          echo "ref=$TOOLS_REF" >> "$GITHUB_OUTPUT"
+          echo "tools ref: $TOOLS_REF"
+      - name: Check out the checker
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: tracebloc/org-config
+          token: ${{ steps.tools-token.outputs.token }}
+          ref: ${{ 'main' }}
+          path: .org-config-tools
+          persist-credentials: false
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+
+      # PyYAML, pinned: the review account is read from desk-dispatch.yml's own
+      # `reviewer` input in the same checkout, never restated in this file.
+      - name: Install PyYAML for the reviewer read
+        run: python -m pip install --quiet --disable-pip-version-check 'pyyaml==6.0.2'
+
+      - name: Judge the review account's approvals
+        env:
+          # The PR's reviews, on the caller's own token (`pull-requests: read`).
+          GH_TOKEN: ${{ github.token }}
+          # (internal ref) `desk.py`, on the App token above (`contents: read`).
+          DESK_PY_TOKEN: ${{ steps.tools-token.outputs.token }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          # The review that started this run, empty on a `pull_request` event: the read
+          # must hold it, or the run is CANNOT TELL (a lagging read is not a verdict).
+          EVENT_REVIEW_ID: ${{ github.event.review.id }}
+        # No interpolation of any PR-controlled string into this shell: the script
+        # reads the reviews from the API itself.
+        run: python3 .org-config-tools/scripts/desk-verdict-footer.py
