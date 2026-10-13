@@ -225,6 +225,7 @@ on:
       - CI
       - Code quality
       - Commit hygiene
+      - Desk verdict footer
       - FR gate
       - Mutation coverage
       - Route kanban Status on closure
