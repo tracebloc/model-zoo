@@ -1,7 +1,7 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/customer-priority-bump.yml`
-# (blob 6ecbc5d00f096d4e976ab631332de89b1403e9de) folded with the private source repo's own caller of it,
+# (blob ed8053010f3925cf86d47da12d3b3500d7ae609f) folded with the private source repo's own caller of it,
 # `.github/workflows/customer-priority-bump-caller.yml` (blob 5335d54604d2c224a8addd47e9c1e2b50774a397), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
@@ -344,19 +344,37 @@ jobs:
             fi
             echo "$_ai"
           }
+          # A FAILURE ON GITHUB'S SIDE IS TRIED AGAIN ((internal ref), the class of
+          # (internal ref)): this event fires ONCE, so one internal error on an
+          # idempotent call used to strand the bug in Backlog for good. The Status
+          # write, its re-read and both board reads get up to 3 attempts;
+          # `graphql_transient` names the only failures that earn one, and anything
+          # else -- or the last attempt -- is the failure it always was. The ADD is
+          # not idempotent and stays single-shot. Warnings go to stderr: read_status's
+          # stdout is its answer.
           write_status() {   # $1=item id  -> Status := $TARGET_COLUMN
-            # shellcheck disable=SC2016  # the $names are GraphQL variables, not shell - keep literal
-            if ! _wr=$(gh api graphql -f query='
-              mutation($p: ID!, $i: ID!, $f: ID!, $o: String!) {
-                updateProjectV2ItemFieldValue(input: {
-                  projectId: $p, itemId: $i, fieldId: $f,
-                  value: {singleSelectOptionId: $o}
-                }) { projectV2Item { id } }
-              }' -F p="$PROJECT_ID" -F i="$1" -F f="$STATUS_FIELD" -f o="$TARGET_OPT"); then
-              echo "::error::the Status write failed for issue #${NUMBER} - the card is still in" \
-                   "'${CURRENT_COL:-<no Status>}' and needs '${TARGET_COLUMN}' by hand" >&2
-              return 1
-            fi
+            for _x in 1 2 3; do
+              _xrc=0
+              # shellcheck disable=SC2016  # the $names are GraphQL variables, not shell - keep literal
+              _wr=$(gh api graphql -f query='
+                mutation($p: ID!, $i: ID!, $f: ID!, $o: String!) {
+                  updateProjectV2ItemFieldValue(input: {
+                    projectId: $p, itemId: $i, fieldId: $f,
+                    value: {singleSelectOptionId: $o}
+                  }) { projectV2Item { id } }
+                }' -F p="$PROJECT_ID" -F i="$1" -F f="$STATUS_FIELD" -f o="$TARGET_OPT" 2>&1) || _xrc=$?
+              if [ "$_x" -lt 3 ] && graphql_transient "$_wr"; then
+                echo "::warning::the Status write for issue #${NUMBER} met a GitHub-side error (attempt $_x/3), retrying: $_wr" >&2
+                sleep $((_x * 5))
+                continue
+              fi
+              if [ "$_xrc" -ne 0 ]; then
+                echo "::error::the Status write failed for issue #${NUMBER} (attempt $_x/3) - the card is still in" \
+                     "'${CURRENT_COL:-<no Status>}' and needs '${TARGET_COLUMN}' by hand: $_wr" >&2
+                return 1
+              fi
+              break
+            done
             # The write goes through the SAME rejection as the reads: this event fires
             # ONCE, so a false success is permanent (Bugbot on (internal ref)).
             reject_graphql_errors "$_wr" \
@@ -369,21 +387,31 @@ jobs:
             fi
           }
           read_status() {   # $1=item id  -> the card's Status name ("" when unset)
-            # shellcheck disable=SC2016  # the $names are GraphQL variables, not shell - keep literal
-            if ! _rr=$(gh api graphql -f query='
-              query($i: ID!) {
-                node(id: $i) {
-                  ... on ProjectV2Item {
-                    id
-                    status: fieldValueByName(name: "Status") {
-                      ... on ProjectV2ItemFieldSingleSelectValue { name }
+            for _x in 1 2 3; do
+              _xrc=0
+              # shellcheck disable=SC2016  # the $names are GraphQL variables, not shell - keep literal
+              _rr=$(gh api graphql -f query='
+                query($i: ID!) {
+                  node(id: $i) {
+                    ... on ProjectV2Item {
+                      id
+                      status: fieldValueByName(name: "Status") {
+                        ... on ProjectV2ItemFieldSingleSelectValue { name }
+                      }
                     }
                   }
-                }
-              }' -F i="$1"); then
-              echo "::error::could not re-read issue #${NUMBER}'s card - its Status is unconfirmed" >&2
-              return 1
-            fi
+                }' -F i="$1" 2>&1) || _xrc=$?
+              if [ "$_x" -lt 3 ] && graphql_transient "$_rr"; then
+                echo "::warning::the re-read of issue #${NUMBER}'s card met a GitHub-side error (attempt $_x/3), retrying: $_rr" >&2
+                sleep $((_x * 5))
+                continue
+              fi
+              if [ "$_xrc" -ne 0 ]; then
+                echo "::error::could not re-read issue #${NUMBER}'s card (attempt $_x/3) - its Status is unconfirmed: $_rr" >&2
+                return 1
+              fi
+              break
+            done
             reject_graphql_errors "$_rr" \
               "the re-read of issue #${NUMBER}'s card came back with GraphQL errors - its Status is unconfirmed" || return 1
             # The read must describe THIS card. A null node reads as "no Status",
@@ -425,29 +453,42 @@ jobs:
           # One query for the ids AND the option ORDER the monotonic gate derives
           # from, so the decision and the write cannot see two different boards.
           # FAIL CLOSED on the read (rule 3): an unreadable board is no evidence.
-          # shellcheck disable=SC2016  # the $names are GraphQL variables, not shell - keep literal
-          if ! PROJ=$(gh api graphql -f query='
-            query($org: String!, $num: Int!) {
-              organization(login: $org) {
-                projectV2(number: $num) {
-                  id
-                  fields(first: 50) {
-                    totalCount
-                    nodes {
-                      ... on ProjectV2SingleSelectField { id name options { id name } }
+          # A GitHub-side failure is tried again, as at the card writes ((internal ref)).
+          # selftest:proj-read-start
+          for _x in 1 2 3; do
+            _xrc=0
+            # shellcheck disable=SC2016  # the $names are GraphQL variables, not shell - keep literal
+            PROJ=$(gh api graphql -f query='
+              query($org: String!, $num: Int!) {
+                organization(login: $org) {
+                  projectV2(number: $num) {
+                    id
+                    fields(first: 50) {
+                      totalCount
+                      nodes {
+                        ... on ProjectV2SingleSelectField { id name options { id name } }
+                      }
                     }
                   }
                 }
-              }
-            }' -F org="$ORG" -F num="$PROJECT_NUMBER"); then
-            echo "::error::could not read project #${PROJECT_NUMBER} - refusing to guess where this card sits" >&2
-            exit 1
-          fi
+              }' -F org="$ORG" -F num="$PROJECT_NUMBER" 2>&1) || _xrc=$?
+            if [ "$_x" -lt 3 ] && graphql_transient "$PROJ"; then
+              echo "::warning::the read of project #${PROJECT_NUMBER} met a GitHub-side error (attempt $_x/3), retrying: $PROJ" >&2
+              sleep $((_x * 5))
+              continue
+            fi
+            if [ "$_xrc" -ne 0 ]; then
+              echo "::error::could not read project #${PROJECT_NUMBER} (attempt $_x/3) - refusing to guess where this card sits: $PROJ" >&2
+              exit 1
+            fi
+            break
+          done
           # A GraphQL `errors[]` payload AT EXIT 0 is a partial read, and a partial
           # read of the option list is exactly the input that makes a position
           # comparison meaningless (the shape `bugbot-gate.py` pins a mutation for).
           reject_graphql_errors "$PROJ" \
             "the project read came back with GraphQL errors - a partial board is not a board" || exit 1
+          # selftest:proj-read-end
 
           FIELD_TOTAL=$(jq -r '.data.organization.projectV2.fields.totalCount // -1' <<< "$PROJ")
           # A field list longer than the page read means `Status` may be on a page
@@ -480,29 +521,43 @@ jobs:
           # The retry covers the Bug template racing `add-to-kanban.yml` on `opened`.
           ITEM_ID=""; CURRENT_COL=""; ARCHIVED=""
           for attempt in 1 2 3 4 5; do
-            # shellcheck disable=SC2016  # the $names are GraphQL variables, not shell - keep literal
-            if ! IRESP=$(gh api graphql -f query='
-              query($org: String!, $repo: String!, $num: Int!) {
-                repository(owner: $org, name: $repo) {
-                  issue(number: $num) {
-                    projectItems(first: 20) {
-                      totalCount
-                      nodes {
-                        id isArchived project { number }
-                        status: fieldValueByName(name: "Status") {
-                          ... on ProjectV2ItemFieldSingleSelectValue { name }
+            # A GitHub-side failure is tried again ((internal ref)); the outer loop
+            # retries a MISSING card, this one an unanswered read.
+            # selftest:items-read-start
+            for _x in 1 2 3; do
+              _xrc=0
+              # shellcheck disable=SC2016  # the $names are GraphQL variables, not shell - keep literal
+              IRESP=$(gh api graphql -f query='
+                query($org: String!, $repo: String!, $num: Int!) {
+                  repository(owner: $org, name: $repo) {
+                    issue(number: $num) {
+                      projectItems(first: 20) {
+                        totalCount
+                        nodes {
+                          id isArchived project { number }
+                          status: fieldValueByName(name: "Status") {
+                            ... on ProjectV2ItemFieldSingleSelectValue { name }
+                          }
                         }
                       }
                     }
                   }
-                }
-              }' -F org="$ORG" -F repo="$REPO_NAME" -F num="$NUMBER"); then
-              echo "::error::could not read issue #${NUMBER}'s project items - an unreadable card is not" \
-                   "a card that may be left where it is" >&2
-              exit 1
-            fi
+                }' -F org="$ORG" -F repo="$REPO_NAME" -F num="$NUMBER" 2>&1) || _xrc=$?
+              if [ "$_x" -lt 3 ] && graphql_transient "$IRESP"; then
+                echo "::warning::the read of issue #${NUMBER}'s project items met a GitHub-side error (attempt $_x/3), retrying: $IRESP" >&2
+                sleep $((_x * 5))
+                continue
+              fi
+              if [ "$_xrc" -ne 0 ]; then
+                echo "::error::could not read issue #${NUMBER}'s project items (attempt $_x/3) - an unreadable card is not" \
+                     "a card that may be left where it is: $IRESP" >&2
+                exit 1
+              fi
+              break
+            done
             reject_graphql_errors "$IRESP" \
               "the project-items read came back with GraphQL errors - unreadable, not 'no card'" || exit 1
+            # selftest:items-read-end
             PI_TOTAL=$(jq -r '.data.repository.issue.projectItems.totalCount // -1' <<< "$IRESP")
             # A MISSING connection is not an EMPTY one. `totalCount` is absent when
             # the issue itself did not resolve, and retrying that four more times
