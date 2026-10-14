@@ -1333,17 +1333,6 @@
       "averageable": true
     },
     {
-      "id": "tabular_classification/sklearn/logistic_regression_stability",
-      "upload": "tabular_classification/sklearn/logistic_regression_stability.py",
-      "category": "tabular_classification",
-      "framework": "sklearn",
-      "model_type": "linear",
-      "label": "Logistic Regression Stability",
-      "batch": 4,
-      "params": null,
-      "averageable": false
-    },
-    {
       "id": "tabular_classification/sklearn/mlp",
       "upload": "tabular_classification/sklearn/mlp.py",
       "category": "tabular_classification",
@@ -1375,17 +1364,6 @@
       "batch": 4,
       "params": null,
       "averageable": true
-    },
-    {
-      "id": "tabular_classification/sklearn/random_forest_stability",
-      "upload": "tabular_classification/sklearn/random_forest_stability.py",
-      "category": "tabular_classification",
-      "framework": "sklearn",
-      "model_type": "tree",
-      "label": "Random Forest Stability",
-      "batch": 4,
-      "params": null,
-      "averageable": false
     },
     {
       "id": "tabular_classification/sklearn/svm",

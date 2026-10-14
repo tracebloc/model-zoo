@@ -41,8 +41,17 @@ CONTRACT = (
 #: decision. This list may only shrink. A listed template that has become clean
 #: fails the test below, so its row cannot outlive the fix. Do not add a row to
 #: make a new template pass: an import the gate refuses is that template's bug.
-KNOWN_REFUSED = {
-    # numpy is the core of both files; allowlist it, rewrite, or park (model-zoo#143).
+KNOWN_REFUSED: dict[str, set[str]] = {}
+
+#: Templates PARKED because the gate refuses them and the fix is a platform
+#: change: moved out of ``model_zoo/`` to the same path under ``parked/``, so no
+#: walker, and no row of ``index.v1.json``, offers them (``parked/README.md``).
+#: Each row records what the gate refuses and the issue that brings it back. A
+#: parked template the gate would admit fails below: un-park it.
+PARKED_ROOT = ROOT / "parked"
+PARKED = {
+    # numpy is not on the allowlist; it comes back with numpy allowlisted and
+    # its file I/O banned in the same scan change (model-zoo#143).
     "tabular_classification/sklearn/logistic_regression_stability.py": {"numpy"},
     "tabular_classification/sklearn/random_forest_stability.py": {"numpy"},
 }
@@ -138,4 +147,35 @@ def test_template_makes_no_call_named_extra(path: pathlib.Path) -> None:
     assert not hits, (
         f"{path.relative_to(ZOO)} calls something named `extra` at line(s) {hits}; "
         "Bandit's B610 flags it and the backend refuses the upload. Rename it."
+    )
+
+
+def _index_ids() -> set[str]:
+    return {row["id"] for row in json.loads((ZOO / "index.v1.json").read_text())["templates"]}
+
+
+def test_the_parked_roster_is_exactly_the_parked_directory() -> None:
+    """Every row names a file under ``parked/``, and every file there has a row.
+
+    Derived both ways, so a stale row and an unlisted parked file are each red.
+    """
+    on_disk = {p.relative_to(PARKED_ROOT).as_posix() for p in PARKED_ROOT.rglob("*.py")}
+    assert on_disk == set(PARKED)
+
+
+@pytest.mark.parametrize("rel", sorted(PARKED))
+def test_a_parked_template_is_not_offered(rel: str) -> None:
+    """Not under ``model_zoo/``, not in the index, not seen by the template walk."""
+    assert not (ZOO / rel).exists(), f"{rel} is parked but also under model_zoo/"
+    assert rel.removesuffix(".py") not in _index_ids(), f"{rel} is parked but indexed"
+    assert ZOO / rel not in _templates()
+
+
+@pytest.mark.parametrize("rel", sorted(PARKED))
+def test_a_parked_template_is_still_refused(rel: str) -> None:
+    """The reason it was parked still holds; once the gate admits it, un-park it."""
+    refused = _refused_imports((PARKED_ROOT / rel).read_text(), _allowed())
+    assert refused == PARKED[rel], (
+        f"parked/{rel} is parked for {sorted(PARKED[rel])} but the gate now refuses "
+        f"{sorted(refused)}. If that is nothing, un-park it (parked/README.md)."
     )
