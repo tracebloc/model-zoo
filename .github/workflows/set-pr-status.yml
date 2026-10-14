@@ -1,7 +1,7 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/set-pr-status.yml`
-# (blob 5baabcb532f44dc7c819f1bc8efc8f2975bbad59) folded with the private source repo's own caller of it,
+# (blob acf4afc64d3ba0618db3ff31e64254fe6b682af1) folded with the private source repo's own caller of it,
 # `.github/workflows/set-pr-status-caller.yml` (blob cc4bdf86add1f96e79ee3a1b3c7ae426e97b003f), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
@@ -233,21 +233,38 @@ jobs:
           . .org-config-tools/scripts/lib/graphql-read.sh
           # selftest:graphql-read-end
 
-          # shellcheck disable=SC2016  # the $names here are GraphQL variables, not shell - keep literal
-          PROJ=$(gh api graphql -f query='
-            query($org: String!, $num: Int!) {
-              organization(login: $org) {
-                projectV2(number: $num) {
-                  id
-                  fields(first: 50) {
-                    nodes {
-                      ... on ProjectV2SingleSelectField { id name options { id name } }
+          # A FAILURE ON GITHUB'S SIDE IS TRIED AGAIN, on every idempotent call in
+          # this step ((internal ref), the class of (internal ref)): one internal error
+          # on a read or on the Status write used to fail the job red. Up to 3
+          # attempts; `graphql_transient` names the only failures that earn one, and
+          # anything else -- or the last attempt -- is the failure it always was.
+          # The ADD below is not retried: it adds, and the helper's rule is never to
+          # retry one that adds.
+          for _p in 1 2 3; do
+            _prc=0
+            # shellcheck disable=SC2016  # the $names here are GraphQL variables, not shell - keep literal
+            PROJ=$(gh api graphql -f query='
+              query($org: String!, $num: Int!) {
+                organization(login: $org) {
+                  projectV2(number: $num) {
+                    id
+                    fields(first: 50) {
+                      nodes {
+                        ... on ProjectV2SingleSelectField { id name options { id name } }
+                      }
                     }
                   }
                 }
-              }
-            }' -F org="$ORG" -F num="$PROJECT_NUMBER")
-          reject_graphql_errors "$PROJ" "project #$PROJECT_NUMBER field read" || exit 1
+              }' -F org="$ORG" -F num="$PROJECT_NUMBER" 2>&1) || _prc=$?
+            if [ "$_p" -lt 3 ] && graphql_transient "$PROJ"; then
+              echo "::warning::project #$PROJECT_NUMBER field read met a GitHub-side error (attempt $_p/3), retrying: $PROJ"
+              sleep $((_p * 5))
+              continue
+            fi
+            [ "$_prc" -eq 0 ] || { echo "::error::project #$PROJECT_NUMBER field read failed (attempt $_p/3): $PROJ" >&2; exit 1; }
+            reject_graphql_errors "$PROJ" "project #$PROJECT_NUMBER field read" || exit 1
+            break
+          done
 
           PROJECT_ID=$(echo "$PROJ" | jq -r '.data.organization.projectV2.id')
           STATUS_FIELD=$(echo "$PROJ" | jq -r '.data.organization.projectV2.fields.nodes[]
@@ -274,28 +291,39 @@ jobs:
             # THE BODY DECIDES, WHATEVER THE EXIT CODE ((internal ref)): an exit-0
             # `errors[]` body used to read as "not yet on project" and, five reads
             # later, as a card to ADD. An unreadable response aborts instead.
-            # shellcheck disable=SC2016  # the $names here are GraphQL variables, not shell - keep literal
-            if ! RESP=$(gh api graphql -f query='
-              query($org: String!, $repo: String!, $num: Int!) {
-                repository(owner: $org, name: $repo) {
-                  pullRequest(number: $num) {
-                    state
-                    projectItems(first: 10) {
-                      nodes {
-                        id
-                        project { number }
-                        status: fieldValueByName(name: "Status") {
-                          ... on ProjectV2ItemFieldSingleSelectValue { name }
+            # A GitHub-side error is retried here too ((internal ref)), INSIDE this
+            # wait: a transient failure is not "not yet on project".
+            for _r in 1 2 3; do
+              _rrc=0
+              # shellcheck disable=SC2016  # the $names here are GraphQL variables, not shell - keep literal
+              RESP=$(gh api graphql -f query='
+                query($org: String!, $repo: String!, $num: Int!) {
+                  repository(owner: $org, name: $repo) {
+                    pullRequest(number: $num) {
+                      state
+                      projectItems(first: 10) {
+                        nodes {
+                          id
+                          project { number }
+                          status: fieldValueByName(name: "Status") {
+                            ... on ProjectV2ItemFieldSingleSelectValue { name }
+                          }
                         }
                       }
                     }
                   }
-                }
-              }' -F org="$ORG" -F repo="$REPO_NAME" -F num="$PR_NUMBER") \
-               || ! reject_graphql_errors "$RESP" "PR #$PR_NUMBER project-item lookup"; then
-              echo "::error::PR #$PR_NUMBER project-item lookup FAILED -- its board state is UNKNOWN, not absent, so nothing was added or written."
-              exit 1
-            fi
+                }' -F org="$ORG" -F repo="$REPO_NAME" -F num="$PR_NUMBER" 2>&1) || _rrc=$?
+              if [ "$_r" -lt 3 ] && graphql_transient "$RESP"; then
+                echo "::warning::PR #$PR_NUMBER project-item lookup met a GitHub-side error (attempt $_r/3), retrying: $RESP"
+                sleep $((_r * 5))
+                continue
+              fi
+              if [ "$_rrc" -ne 0 ] || ! reject_graphql_errors "$RESP" "PR #$PR_NUMBER project-item lookup"; then
+                echo "::error::PR #$PR_NUMBER project-item lookup FAILED (attempt $_r/3) -- its board state is UNKNOWN, not absent, so nothing was added or written: $RESP"
+                exit 1
+              fi
+              break
+            done
             ITEM_ID=$(jq -r --arg n "$PROJECT_NUMBER" 'first(.data.repository.pullRequest.projectItems.nodes[]?
                   | select(.project.number == ($n | tonumber)) | .id) // ""' <<<"$RESP")
             # READ FROM THE SAME RESPONSE THE ITEM ID CAME FROM, inside the loop.
@@ -327,13 +355,23 @@ jobs:
             echo "card absent after 5 retries - adding it here rather than waiting on add-to-kanban"
             # The node-id read's BODY is inspected before jq reduces it: an exit-0
             # errors[] payload must not become "could not be resolved" ((internal ref)).
-            # shellcheck disable=SC2016  # the $names here are GraphQL variables, not shell - keep literal
-            NODE_RESP=$(gh api graphql -f query='
-              query($org: String!, $repo: String!, $num: Int!) {
-                repository(owner: $org, name: $repo) { pullRequest(number: $num) { id } }
-              }' -F org="$ORG" -F repo="$REPO_NAME" -F num="$PR_NUMBER" 2>&1) \
-              || { echo "::error::PR #$PR_NUMBER node-id read failed: $NODE_RESP" >&2; exit 1; }
-            reject_graphql_errors "$NODE_RESP" "PR #$PR_NUMBER node-id read" || exit 1
+            # A GitHub-side error is retried ((internal ref)): a read is idempotent.
+            for _n in 1 2 3; do
+              _nrc=0
+              # shellcheck disable=SC2016  # the $names here are GraphQL variables, not shell - keep literal
+              NODE_RESP=$(gh api graphql -f query='
+                query($org: String!, $repo: String!, $num: Int!) {
+                  repository(owner: $org, name: $repo) { pullRequest(number: $num) { id } }
+                }' -F org="$ORG" -F repo="$REPO_NAME" -F num="$PR_NUMBER" 2>&1) || _nrc=$?
+              if [ "$_n" -lt 3 ] && graphql_transient "$NODE_RESP"; then
+                echo "::warning::PR #$PR_NUMBER node-id read met a GitHub-side error (attempt $_n/3), retrying: $NODE_RESP"
+                sleep $((_n * 5))
+                continue
+              fi
+              [ "$_nrc" -eq 0 ] || { echo "::error::PR #$PR_NUMBER node-id read failed (attempt $_n/3): $NODE_RESP" >&2; exit 1; }
+              reject_graphql_errors "$NODE_RESP" "PR #$PR_NUMBER node-id read" || exit 1
+              break
+            done
             PR_NODE_ID=$(jq -r '.data.repository.pullRequest.id // empty' <<< "$NODE_RESP")
             if [ -z "$PR_NODE_ID" ]; then
               echo "::error::PR #$PR_NUMBER could not be resolved to a node id, so its card" \
@@ -437,16 +475,27 @@ jobs:
           # letters today, but don't rely on that — IDs regenerate if recreated.)
           # THE WRITE'S BODY IS READ TOO: an exit-0 response carrying errors[] means
           # the Status was NOT written; the success line below must not print.
-          # shellcheck disable=SC2016  # the $names here are GraphQL variables, not shell - keep literal
-          WRESP=$(gh api graphql -f query='
-            mutation($p: ID!, $i: ID!, $f: ID!, $o: String!) {
-              updateProjectV2ItemFieldValue(input: {
-                projectId: $p, itemId: $i, fieldId: $f,
-                value: {singleSelectOptionId: $o}
-              }) { projectV2Item { id } }
-            }' -F p="$PROJECT_ID" -F i="$ITEM_ID" -F f="$STATUS_FIELD" -f o="$STATUS_OPT" 2>&1) \
-            || { echo "::error::PR #$PR_NUMBER Status=$STATUS_NAME write failed: $WRESP" >&2; exit 1; }
-          reject_graphql_errors "$WRESP" "PR #$PR_NUMBER Status=$STATUS_NAME write" || exit 1
+          # Setting a single-select value is idempotent, so a GitHub-side error is
+          # retried ((internal ref)), exactly as kanban-closure-router's write is.
+          for _w in 1 2 3; do
+            _wrc=0
+            # shellcheck disable=SC2016  # the $names here are GraphQL variables, not shell - keep literal
+            WRESP=$(gh api graphql -f query='
+              mutation($p: ID!, $i: ID!, $f: ID!, $o: String!) {
+                updateProjectV2ItemFieldValue(input: {
+                  projectId: $p, itemId: $i, fieldId: $f,
+                  value: {singleSelectOptionId: $o}
+                }) { projectV2Item { id } }
+              }' -F p="$PROJECT_ID" -F i="$ITEM_ID" -F f="$STATUS_FIELD" -f o="$STATUS_OPT" 2>&1) || _wrc=$?
+            if [ "$_w" -lt 3 ] && graphql_transient "$WRESP"; then
+              echo "::warning::PR #$PR_NUMBER Status=$STATUS_NAME write met a GitHub-side error (attempt $_w/3), retrying: $WRESP"
+              sleep $((_w * 5))
+              continue
+            fi
+            [ "$_wrc" -eq 0 ] || { echo "::error::PR #$PR_NUMBER Status=$STATUS_NAME write failed (attempt $_w/3): $WRESP" >&2; exit 1; }
+            reject_graphql_errors "$WRESP" "PR #$PR_NUMBER Status=$STATUS_NAME write" || exit 1
+            break
+          done
 
           echo "→ PR #$PR_NUMBER → Status=$STATUS_NAME"
 
