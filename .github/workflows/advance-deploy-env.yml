@@ -1,7 +1,7 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/advance-deploy-env.yml`
-# (blob 55e9758bcab775d485507f4dafefe736a3ef059a) folded with the private source repo's own caller of it,
+# (blob e1d644649095fe26cc9ff15d122f008cefd5843a) folded with the private source repo's own caller of it,
 # `.github/workflows/advance-deploy-env-caller.yml` (blob a4796127e8f8ed55464d9bc51b2271a05638712e), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
@@ -244,21 +244,36 @@ jobs:
           # selftest:graphql-read-end
 
           # Look up project ID + relevant field/option IDs (one query)
-          # shellcheck disable=SC2016  # the $names here are GraphQL variables, not shell - keep literal
-          PROJ=$(gh api graphql -f query='
-            query($org: String!, $num: Int!) {
-              organization(login: $org) {
-                projectV2(number: $num) {
-                  id
-                  fields(first: 50) {
-                    nodes {
-                      ... on ProjectV2SingleSelectField { id name options { id name } }
+          # A FAILURE ON GITHUB'S SIDE IS TRIED AGAIN ((internal ref)): this read is
+          # idempotent, so up to 3 attempts, exactly as the router's Status write
+          # ((internal ref)). `graphql_transient` names the only failures that earn
+          # one; anything else -- or the last attempt -- fails the step as before.
+          PROJ_ERRF=$(mktemp)
+          for _p in 1 2 3; do
+            _prc=0
+            # shellcheck disable=SC2016  # the $names here are GraphQL variables, not shell - keep literal
+            PROJ=$(gh api graphql -f query='
+              query($org: String!, $num: Int!) {
+                organization(login: $org) {
+                  projectV2(number: $num) {
+                    id
+                    fields(first: 50) {
+                      nodes {
+                        ... on ProjectV2SingleSelectField { id name options { id name } }
+                      }
                     }
                   }
                 }
-              }
-            }' -F org="$ORG" -F num="$PROJECT_NUMBER")
-          reject_graphql_errors "$PROJ" "project #$PROJECT_NUMBER field read" || exit 1
+              }' -F org="$ORG" -F num="$PROJECT_NUMBER" 2>"$PROJ_ERRF") || _prc=$?
+            if [ "$_p" -lt 3 ] && graphql_transient "$PROJ $(cat "$PROJ_ERRF")"; then
+              echo "::warning::project #$PROJECT_NUMBER field read met a GitHub-side error (attempt $_p/3), retrying: $(cat "$PROJ_ERRF") $PROJ"
+              sleep $((_p * 5))
+              continue
+            fi
+            [ "$_prc" -eq 0 ] || { echo "::error::project #$PROJECT_NUMBER field read failed (attempt $_p/3): $(cat "$PROJ_ERRF") $PROJ" >&2; exit 1; }
+            reject_graphql_errors "$PROJ" "project #$PROJECT_NUMBER field read" || exit 1
+            break
+          done
 
           PROJECT_ID=$(echo "$PROJ" | jq -r '.data.organization.projectV2.id')
           DEPLOY_FIELD=$(echo "$PROJ" | jq -r '.data.organization.projectV2.fields.nodes[]
@@ -321,21 +336,34 @@ jobs:
           LOOKUP_FAILED=0
           LOOKUP_ERRF=$(mktemp)
           update_field() {   # $1=fieldId  $2=optionId  $3=human label
-            local err body
+            local err body _u _urc
             if [ "${DRY_RUN:-false}" = "true" ]; then
               echo "[DRY] would set $3 on item $ITEM_ID"
               return 0
             fi
             # THE WRITE'S BODY IS READ TOO: an exit-0 mutation response carrying
             # errors[] means the field was NOT written ((internal ref); same rule as the reads).
-            # shellcheck disable=SC2016  # the $names here are GraphQL variables, not shell - keep literal
-            if body=$(gh api graphql -f query='
-              mutation($p: ID!, $i: ID!, $f: ID!, $o: String!) {
-                updateProjectV2ItemFieldValue(input: {
-                  projectId: $p, itemId: $i, fieldId: $f,
-                  value: {singleSelectOptionId: $o}
-                }) { projectV2Item { id } }
-              }' -F p="$PROJECT_ID" -F i="$ITEM_ID" -F f="$1" -f o="$2" 2>&1); then
+            # A FAILURE ON GITHUB'S SIDE IS TRIED AGAIN ((internal ref)): setting a
+            # single-select value is idempotent, so up to 3 attempts, as the router's
+            # Status write; only what `graphql_transient` names earns one.
+            for _u in 1 2 3; do
+              _urc=0
+              # shellcheck disable=SC2016  # the $names here are GraphQL variables, not shell - keep literal
+              body=$(gh api graphql -f query='
+                mutation($p: ID!, $i: ID!, $f: ID!, $o: String!) {
+                  updateProjectV2ItemFieldValue(input: {
+                    projectId: $p, itemId: $i, fieldId: $f,
+                    value: {singleSelectOptionId: $o}
+                  }) { projectV2Item { id } }
+                }' -F p="$PROJECT_ID" -F i="$ITEM_ID" -F f="$1" -f o="$2" 2>&1) || _urc=$?
+              if [ "$_u" -lt 3 ] && graphql_transient "$body"; then
+                echo "::warning::#$prnum $3 write met a GitHub-side error (attempt $_u/3), retrying: $body"
+                sleep $((_u * 5))
+                continue
+              fi
+              break
+            done
+            if [ "$_urc" -eq 0 ]; then
               if err=$(reject_graphql_errors "$body" "#$prnum $3 write" 2>&1); then
                 return 0
               fi
@@ -358,23 +386,34 @@ jobs:
             # as NOT_FOUND on exactly `repository.pullRequest` -- and only that is a
             # quiet skip ((internal ref)); everything else fails closed
             # (kanban-item-lookup-selftest.py holds every shape).
-            LOOKUP_RC=0
-            # shellcheck disable=SC2016  # the $names here are GraphQL variables, not shell - keep literal
-            RESP=$(gh api graphql -f query='
-              query($org: String!, $repo: String!, $num: Int!) {
-                repository(owner: $org, name: $repo) {
-                  pullRequest(number: $num) {
-                    projectItems(first: 10) {
-                      nodes {
-                        id isArchived project { number }
-                        status: fieldValueByName(name: "Status") {
-                          ... on ProjectV2ItemFieldSingleSelectValue { name }
+            # A FAILURE ON GITHUB'S SIDE IS TRIED AGAIN ((internal ref)): a read is
+            # idempotent, so up to 3 attempts; only what `graphql_transient` names
+            # earns one, and the LAST attempt's answer is classified below as before.
+            for _l in 1 2 3; do
+              LOOKUP_RC=0
+              # shellcheck disable=SC2016  # the $names here are GraphQL variables, not shell - keep literal
+              RESP=$(gh api graphql -f query='
+                query($org: String!, $repo: String!, $num: Int!) {
+                  repository(owner: $org, name: $repo) {
+                    pullRequest(number: $num) {
+                      projectItems(first: 10) {
+                        nodes {
+                          id isArchived project { number }
+                          status: fieldValueByName(name: "Status") {
+                            ... on ProjectV2ItemFieldSingleSelectValue { name }
+                          }
                         }
                       }
                     }
                   }
-                }
-              }' -F org="$ORG" -F repo="$REPO_NAME" -F num="$prnum" 2>"$LOOKUP_ERRF") || LOOKUP_RC=$?
+                }' -F org="$ORG" -F repo="$REPO_NAME" -F num="$prnum" 2>"$LOOKUP_ERRF") || LOOKUP_RC=$?
+              if [ "$_l" -lt 3 ] && graphql_transient "$RESP $(cat "$LOOKUP_ERRF")"; then
+                echo "::warning::#$prnum project-item lookup met a GitHub-side error (attempt $_l/3), retrying: $(cat "$LOOKUP_ERRF") $RESP"
+                sleep $((_l * 5))
+                continue
+              fi
+              break
+            done
             if jq -e '(.errors // []) | length > 0 and all(.type == "NOT_FOUND" and .path == ["repository", "pullRequest"])' <<<"$RESP" >/dev/null 2>&1; then
               echo "::notice::#$prnum is not a pull request in $REPO_FULL (NOT_FOUND) -- skipping"
               continue
