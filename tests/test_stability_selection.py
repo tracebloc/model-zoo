@@ -15,7 +15,8 @@ pytest.importorskip("sklearn")
 from sklearn.base import is_classifier  # noqa: E402
 
 ROOT = pathlib.Path(__file__).parent.parent
-SKL = ROOT / "model_zoo" / "tabular_classification" / "sklearn"
+# Parked until the upload scan admits numpy (model-zoo#143); see parked/README.md.
+SKL = ROOT / "parked" / "tabular_classification" / "sklearn"
 FILES = ["logistic_regression_stability.py", "random_forest_stability.py"]
 
 
