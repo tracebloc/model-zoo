@@ -1,7 +1,7 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/fr-pass-comment.yml`
-# (blob 1d63e90f74640e28895bb003f6dd978f1956708d) folded with the private source repo's own caller of it,
+# (blob c70669a30a4389840a5e6109a05f1e7fabba6b81) folded with the private source repo's own caller of it,
 # `.github/workflows/fr-pass-comment-caller.yml` (blob 9840d5e59598f167c780b875de2ee4a3c05af311), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
@@ -636,31 +636,47 @@ jobs:
           # No `2>/dev/null || PROJ='{}'` here. Swallowing the error made an
           # expired token, a rate limit and a genuinely unlisted card all produce
           # the same "not on project" 👎 — undiagnosable from the thread.
-          if ! PROJ=$(gh api graphql -f query="
-            query(\$org: String!, \$num: Int!, \$repo: String!, \$itemNum: Int!) {
-              organization(login: \$org) {
-                projectV2(number: \$num) {
-                  id
-                  field(name: \"Status\") {
-                    ... on ProjectV2SingleSelectField { id options { id name } }
+          # A FAILURE ON GITHUB'S SIDE IS TRIED AGAIN ((internal ref), the class of
+          # (internal ref)): this read and the Status write below get up to 3
+          # attempts each, and `graphql_transient` names the only failures that
+          # earn one. Anything else -- or the last attempt -- is the refusal it
+          # always was. Both calls are idempotent: setting the same option twice
+          # moves the card once.
+          for _x in 1 2 3; do
+            _xrc=0
+            PROJ=$(gh api graphql -f query="
+              query(\$org: String!, \$num: Int!, \$repo: String!, \$itemNum: Int!) {
+                organization(login: \$org) {
+                  projectV2(number: \$num) {
+                    id
+                    field(name: \"Status\") {
+                      ... on ProjectV2SingleSelectField { id options { id name } }
+                    }
                   }
                 }
-              }
-              repository(owner: \$org, name: \$repo) {
-                $CONTENT_QUERY {
-                  projectItems(first: 20) {
-                    totalCount
-                    nodes {
-                      id
-                      project { number }
-                      fieldValueByName(name: \"Status\") {
-                        ... on ProjectV2ItemFieldSingleSelectValue { name }
+                repository(owner: \$org, name: \$repo) {
+                  $CONTENT_QUERY {
+                    projectItems(first: 20) {
+                      totalCount
+                      nodes {
+                        id
+                        project { number }
+                        fieldValueByName(name: \"Status\") {
+                          ... on ProjectV2ItemFieldSingleSelectValue { name }
+                        }
                       }
                     }
                   }
                 }
-              }
-            }" -F org="$ORG" -F num="$PROJECT_NUMBER" -F repo="$REPO_NAME" -F itemNum="$NUMBER" 2> "$GQL_ERR"); then
+              }" -F org="$ORG" -F num="$PROJECT_NUMBER" -F repo="$REPO_NAME" -F itemNum="$NUMBER" 2> "$GQL_ERR") || _xrc=$?
+            if [ "$_x" -lt 3 ] && graphql_transient "$PROJ $(cat "$GQL_ERR")"; then
+              echo "::warning::the project read for #$NUMBER met a GitHub-side error (attempt $_x/3), retrying: $(sed -n '1,5p' "$GQL_ERR")" >&2
+              sleep $((_x * 5))
+              continue
+            fi
+            break
+          done
+          if [ "$_xrc" -ne 0 ]; then
             GQL_HEAD=$(sed -n '1,5p' "$GQL_ERR" | tr -d "$FENCE")
             decide api-error \
               "⚠️ \`/fr-pass\` could **not** be applied: the kanban API call failed, so the card was left alone." \
@@ -792,14 +808,25 @@ jobs:
           # THE WRITE'S BODY IS READ TOO ((internal ref)): an exit-0 errors[] response
           # must not post "advanced" on a card that did not move, and this event
           # fires once. The refusal's text joins gh's stderr in MUT_ERR for the note.
-          # shellcheck disable=SC2016  # the $names here are GraphQL variables, not shell - keep literal
-          if ! WRESP=$(gh api graphql -f query='
-            mutation($p: ID!, $i: ID!, $f: ID!, $o: String!) {
-              updateProjectV2ItemFieldValue(input: {
-                projectId: $p, itemId: $i, fieldId: $f,
-                value: {singleSelectOptionId: $o}
-              }) { projectV2Item { id } }
-            }' -F p="$PROJECT_ID" -F i="$ITEM_ID" -F f="$STATUS_FIELD" -f o="$NEXT_OPT" 2> "$MUT_ERR") \
+          # Retried like the project read above ((internal ref)).
+          for _x in 1 2 3; do
+            _xrc=0
+            # shellcheck disable=SC2016  # the $names here are GraphQL variables, not shell - keep literal
+            WRESP=$(gh api graphql -f query='
+              mutation($p: ID!, $i: ID!, $f: ID!, $o: String!) {
+                updateProjectV2ItemFieldValue(input: {
+                  projectId: $p, itemId: $i, fieldId: $f,
+                  value: {singleSelectOptionId: $o}
+                }) { projectV2Item { id } }
+              }' -F p="$PROJECT_ID" -F i="$ITEM_ID" -F f="$STATUS_FIELD" -f o="$NEXT_OPT" 2> "$MUT_ERR") || _xrc=$?
+            if [ "$_x" -lt 3 ] && graphql_transient "$WRESP $(cat "$MUT_ERR")"; then
+              echo "::warning::the Status write for #$NUMBER met a GitHub-side error (attempt $_x/3), retrying: $(sed -n '1,5p' "$MUT_ERR")" >&2
+              sleep $((_x * 5))
+              continue
+            fi
+            break
+          done
+          if [ "$_xrc" -ne 0 ] \
              || ! reject_graphql_errors "$WRESP" "the Status write" 2>> "$MUT_ERR"; then
             MUT_HEAD=$(sed -n '1,5p' "$MUT_ERR" | tr -d "$FENCE")
             decide mutation-failed \
