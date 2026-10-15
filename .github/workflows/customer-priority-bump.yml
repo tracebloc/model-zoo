@@ -2,7 +2,7 @@
 #
 # Self-contained copy of the reusable workflow `.github/workflows/customer-priority-bump.yml`
 # (blob ed8053010f3925cf86d47da12d3b3500d7ae609f) folded with the private source repo's own caller of it,
-# `.github/workflows/customer-priority-bump-caller.yml` (blob 5335d54604d2c224a8addd47e9c1e2b50774a397), for a PUBLIC repo: GitHub lets a
+# `.github/workflows/customer-priority-bump-caller.yml` (blob 4bf5cb7e712f9024c231e97c61a6c3f050d05926), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
 # reusable's jobs inline -- the triggers are the caller's; every `inputs.*` is
@@ -87,6 +87,8 @@ name: Label-driven issue triage
 on:
   issues:
     types: [labeled, reopened]
+
+permissions: {}
 
 jobs:
   bump:
