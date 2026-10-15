@@ -1,8 +1,8 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/kanban-closure-router.yml`
-# (blob 8b855f9eb6fd88d44742317f92271de1a7e9d0de) folded with the private source repo's own caller of it,
-# `.github/workflows/kanban-closure-caller.yml` (blob e78122f771274190cbfcc450ccfce7ada2ff077a), for a PUBLIC repo: GitHub lets a
+# (blob 672aca63eda185d9fd8e03d6199a38b090874540) folded with the private source repo's own caller of it,
+# `.github/workflows/kanban-closure-caller.yml` (blob b38b7c1e8514240939dd944ad2e3e6add7fcfd57), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
 # reusable's jobs inline -- the triggers are the caller's; every `inputs.*` is
@@ -67,6 +67,8 @@ on:
     types: [closed]
   issues:
     types: [closed]
+
+permissions: {}
 
 jobs:
   route:
@@ -321,10 +323,10 @@ jobs:
           # Find item ID for this PR or issue
           if [ "$IS_PR" = "true" ]; then
             # shellcheck disable=SC2016  # $num is a GraphQL variable - must not expand in shell
-            FIELD_QUERY='pullRequest(number: $num) { projectItems(first: 10) { nodes { id project { number } fieldValueByName(name: "Status") { ... on ProjectV2ItemFieldSingleSelectValue { name } } } } }'
+            FIELD_QUERY='pullRequest(number: $num) { projectItems(first: 10) { nodes { id isArchived project { number } fieldValueByName(name: "Status") { ... on ProjectV2ItemFieldSingleSelectValue { name } } } } }'
           else
             # shellcheck disable=SC2016  # $num is a GraphQL variable - must not expand in shell
-            FIELD_QUERY='issue(number: $num) { projectItems(first: 10) { nodes { id project { number } fieldValueByName(name: "Status") { ... on ProjectV2ItemFieldSingleSelectValue { name } } } } }'
+            FIELD_QUERY='issue(number: $num) { projectItems(first: 10) { nodes { id isArchived project { number } fieldValueByName(name: "Status") { ... on ProjectV2ItemFieldSingleSelectValue { name } } } } }'
           fi
 
           # Retry briefly to let auto-add fire. A FAILED LOOKUP IS NOT AN ABSENT
@@ -369,6 +371,19 @@ jobs:
               exit 1
             fi
             echo "Item #$NUMBER not on project after 5 retries — skipping."
+            exit 0
+          fi
+
+          # AN ARCHIVED CARD IS TERMINAL ((internal ref)). Only Prod, Done and Cancelled
+          # are archived, and GitHub refuses any field write to an archived item ("The
+          # item is archived and cannot be updated") -- not a transient error, so the
+          # write below would fail the step and redden the closing commit. Skip it the
+          # way advance-deploy-env.yml does (kanban-item-lookup-selftest.py's router cases).
+          ARCHIVED=$(echo "$RESP" | jq -r --arg n "$PROJECT_NUMBER" '
+            ([.. | objects | select(has("projectItems"))] | first).projectItems.nodes[]?
+            | select(.project.number == ($n | tonumber)) | .isArchived' | head -1)
+          if [ "$ARCHIVED" = "true" ]; then
+            echo "::notice::#$NUMBER project item is archived -- NOT writing Status=$STATUS_NAME (archived cards are terminal and cannot be updated)"
             exit 0
           fi
 

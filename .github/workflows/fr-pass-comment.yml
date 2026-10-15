@@ -2,7 +2,7 @@
 #
 # Self-contained copy of the reusable workflow `.github/workflows/fr-pass-comment.yml`
 # (blob c70669a30a4389840a5e6109a05f1e7fabba6b81) folded with the private source repo's own caller of it,
-# `.github/workflows/fr-pass-comment-caller.yml` (blob 9840d5e59598f167c780b875de2ee4a3c05af311), for a PUBLIC repo: GitHub lets a
+# `.github/workflows/fr-pass-comment-caller.yml` (blob c362337773bea41e5bc51afa86354efb42be49f5), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
 # reusable's jobs inline -- the triggers are the caller's; every `inputs.*` is
