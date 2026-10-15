@@ -1,7 +1,7 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/advance-deploy-env.yml`
-# (blob e1d644649095fe26cc9ff15d122f008cefd5843a) folded with the private source repo's own caller of it,
+# (blob dff8f6d2bb670278bf70e825bdf0b625f9fc40db) folded with the private source repo's own caller of it,
 # `.github/workflows/advance-deploy-env-caller.yml` (blob a4796127e8f8ed55464d9bc51b2271a05638712e), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
@@ -230,7 +230,12 @@ jobs:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           ORG: ${{ 'tracebloc' }}
           PROJECT_NUMBER: ${{ 2 }}
-          DEPLOY_ENV: ${{ steps.env.outputs.env }}
+          # THE CANONICAL STAGE and THE OPTION NAMES IT MAY BE WRITTEN AS, preferred
+          # first ((internal ref)): `stg` then `staging`, from the mapper's
+          # DEPLOY_ENV_OPTION_NAMES. `env` is the fallback for a mapper that predates
+          # them (a public copy runs the tools repo's `main`).
+          DEPLOY_ENV: ${{ steps.env.outputs.stage || steps.env.outputs.env }}
+          DEPLOY_ENV_NAMES: ${{ steps.env.outputs.env_names }}
           STATUS_NAME: ${{ steps.env.outputs.status_name }}
           REPO_FULL: ${{ github.repository }}
           PR_NUMBERS: ${{ steps.prs.outputs.prs }}
@@ -278,14 +283,27 @@ jobs:
           PROJECT_ID=$(echo "$PROJ" | jq -r '.data.organization.projectV2.id')
           DEPLOY_FIELD=$(echo "$PROJ" | jq -r '.data.organization.projectV2.fields.nodes[]
             | select(.name=="Deploy environment") | .id')
-          DEPLOY_OPT=$(echo "$PROJ" | jq -r --arg e "$DEPLOY_ENV" '.data.organization.projectV2.fields.nodes[]
-            | select(.name=="Deploy environment") | .options[] | select(.name==$e) | .id')
+          # THE OPTION BY EITHER NAME ((internal ref), (internal ref) S5). The staging stage's
+          # canonical value is `stg` and the board's option is spelled `staging` until
+          # it is renamed in the UI, so the FIRST name in DEPLOY_ENV_NAMES the board
+          # has wins -- before the rename and after it, with no edit here. The names
+          # and their order are the mapper's; this only picks the first present. A
+          # mapper with no `env_names` (older than this) names one option, `env`.
+          if [ -z "${DEPLOY_ENV_NAMES:-}" ]; then
+            DEPLOY_ENV_NAMES=$(jq -cn --arg e "$DEPLOY_ENV" '[$e]')
+          fi
+          DEPLOY_PICK=$(echo "$PROJ" | jq -r --argjson names "$DEPLOY_ENV_NAMES" '
+            [.data.organization.projectV2.fields.nodes[] | select(.name=="Deploy environment")
+             | .options[] | select(.id != null)] as $o
+            | first($names[] as $n | $o[] | select(.name == $n) | "\(.id)\t\(.name)") // empty')
+          DEPLOY_OPT="${DEPLOY_PICK%%$'\t'*}"
+          DEPLOY_OPT_NAME="${DEPLOY_PICK#*$'\t'}"
           STATUS_FIELD=$(echo "$PROJ" | jq -r '.data.organization.projectV2.fields.nodes[]
             | select(.name=="Status") | .id')
           STATUS_OPT=$(echo "$PROJ" | jq -r --arg s "$STATUS_NAME" '.data.organization.projectV2.fields.nodes[]
             | select(.name=="Status") | .options[] | select(.name==$s) | .id')
           if [ -z "$DEPLOY_OPT" ] || [ "$DEPLOY_OPT" = "null" ]; then
-            echo "Could not resolve Deploy environment option for '$DEPLOY_ENV' - aborting"
+            echo "Could not resolve Deploy environment option for '$DEPLOY_ENV' (tried $DEPLOY_ENV_NAMES) - aborting"
             exit 1
           fi
 
@@ -462,8 +480,8 @@ jobs:
               continue
             fi
 
-            echo "-> PR #$prnum: Deploy env = $DEPLOY_ENV"
-            update_field "$DEPLOY_FIELD" "$DEPLOY_OPT" "Deploy env=$DEPLOY_ENV"
+            echo "-> PR #$prnum: Deploy env = $DEPLOY_ENV (option '$DEPLOY_OPT_NAME')"
+            update_field "$DEPLOY_FIELD" "$DEPLOY_OPT" "Deploy env=$DEPLOY_OPT_NAME"
 
             if [ "$SKIP_STATUS" != "1" ]; then
               echo "-> PR #$prnum: Status = $STATUS_NAME"
