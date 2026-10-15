@@ -2,7 +2,7 @@
 #
 # Self-contained copy of the reusable workflow `.github/workflows/set-pr-status.yml`
 # (blob acf4afc64d3ba0618db3ff31e64254fe6b682af1) folded with the private source repo's own caller of it,
-# `.github/workflows/set-pr-status-caller.yml` (blob cc4bdf86add1f96e79ee3a1b3c7ae426e97b003f), for a PUBLIC repo: GitHub lets a
+# `.github/workflows/set-pr-status-caller.yml` (blob cc75117351e328f2bf64c58d7c9a2ef9b13e33e4), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
 # reusable's jobs inline -- the triggers are the caller's; every `inputs.*` is
@@ -89,6 +89,8 @@ on:
     # gate whose verdict depends on a mutable field must re-run when that field
     # mutates.
     types: [opened, reopened, ready_for_review, converted_to_draft, edited]
+
+permissions: {}
 # ONE RUN PER PR WINS, AND IT IS THE NEWEST ((internal ref)). Every trigger here
 # can fire twice in quick succession -- `edited` made that ordinary fleet-wide
 # ((internal ref)) -- and without a group the LOSER writes last: the card or the
