@@ -2,7 +2,7 @@
 #
 # Self-contained copy of the reusable workflow `.github/workflows/advance-deploy-env.yml`
 # (blob dff8f6d2bb670278bf70e825bdf0b625f9fc40db) folded with the private source repo's own caller of it,
-# `.github/workflows/advance-deploy-env-caller.yml` (blob a4796127e8f8ed55464d9bc51b2271a05638712e), for a PUBLIC repo: GitHub lets a
+# `.github/workflows/advance-deploy-env-caller.yml` (blob 5de24d409e5bbf2bccbb720912cd551cbe33b040), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
 # reusable's jobs inline -- the triggers are the caller's; every `inputs.*` is
@@ -81,6 +81,9 @@ name: Advance deploy environment
 on:
   push:
     branches: [develop, staging, master, main]
+
+permissions:
+  contents: read
 
 jobs:
   advance:
