@@ -1,7 +1,7 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/desk-verdict-footer.yml`
-# (blob d69a4fc5bd07e9184229497414d54b040b28529b) folded with the private source repo's own caller of it,
+# (blob fcef528902a016205aeaf13ea2d14ba5057b1fa6) folded with the private source repo's own caller of it,
 # `.github/workflows/desk-verdict-footer-caller.yml` (blob 2b0b766974fb8ef2ee55bd361a3a2b914bacab98), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
@@ -108,6 +108,12 @@ name: Desk verdict footer
 #                        needs a run of its own, or the context is missing on it
 #   pull_request_review: [submitted, edited, dismissed]  -- the approval itself, an edit of
 #                        its body, and the remedy (dismissing a footerless approval)
+#   merge_group:         -- ONLY on a repo whose protected branch merges through a merge
+#                        queue: the required context must report on the queue's commit, or
+#                        the queue removes the PR with `checks_timed_out`, see
+#                        (internal ref). The script passes it by name, judging
+#                        nothing -- the queue admits a PR only after protection held on its
+#                        head -- and reads the event from GITHUB_EVENT_NAME, so no new input.
 #   jobs: desk: uses: this file -- `desk` plus this job's `verdict-footer` is the context
 #   name, `desk / verdict-footer`, that branch protection keys on.
 #
