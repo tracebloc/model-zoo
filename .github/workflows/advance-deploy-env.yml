@@ -1,7 +1,7 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/advance-deploy-env.yml`
-# (blob dff8f6d2bb670278bf70e825bdf0b625f9fc40db) folded with the private source repo's own caller of it,
+# (blob 72bd0fa46e6d5ba7f848e8a4ae60995d5eb9aeb5) folded with the private source repo's own caller of it,
 # `.github/workflows/advance-deploy-env-caller.yml` (blob 5de24d409e5bbf2bccbb720912cd551cbe33b040), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
@@ -234,9 +234,10 @@ jobs:
           ORG: ${{ 'tracebloc' }}
           PROJECT_NUMBER: ${{ 2 }}
           # THE CANONICAL STAGE and THE OPTION NAMES IT MAY BE WRITTEN AS, preferred
-          # first ((internal ref)): `stg` then `staging`, from the mapper's
-          # DEPLOY_ENV_OPTION_NAMES. `env` is the fallback for a mapper that predates
-          # them (a public copy runs the tools repo's `main`).
+          # first ((internal ref)), from the mapper's DEPLOY_ENV_OPTION_NAMES: today
+          # each stage is written as its own name (`stg` for staging). `env` is the
+          # fallback for a mapper that predates them (a public copy runs the tools
+          # repo's `main`).
           DEPLOY_ENV: ${{ steps.env.outputs.stage || steps.env.outputs.env }}
           DEPLOY_ENV_NAMES: ${{ steps.env.outputs.env_names }}
           STATUS_NAME: ${{ steps.env.outputs.status_name }}
@@ -286,12 +287,13 @@ jobs:
           PROJECT_ID=$(echo "$PROJ" | jq -r '.data.organization.projectV2.id')
           DEPLOY_FIELD=$(echo "$PROJ" | jq -r '.data.organization.projectV2.fields.nodes[]
             | select(.name=="Deploy environment") | .id')
-          # THE OPTION BY EITHER NAME ((internal ref), (internal ref) S5). The staging stage's
-          # canonical value is `stg` and the board's option is spelled `staging` until
-          # it is renamed in the UI, so the FIRST name in DEPLOY_ENV_NAMES the board
-          # has wins -- before the rename and after it, with no edit here. The names
-          # and their order are the mapper's; this only picks the first present. A
-          # mapper with no `env_names` (older than this) names one option, `env`.
+          # THE OPTION BY THE MAPPER'S NAMES ((internal ref), (internal ref) S5). The staging
+          # stage's canonical value is `stg`, and so is the board's option since its
+          # 2026-10-15 rename; the old spelling `staging` is no longer accepted. The
+          # FIRST name in DEPLOY_ENV_NAMES the board has wins, so a future option
+          # rename needs only a mapper entry, no edit here. The names and their order
+          # are the mapper's; this only picks the first present, and none present is a
+          # refusal. A mapper with no `env_names` (older than this) names one, `env`.
           if [ -z "${DEPLOY_ENV_NAMES:-}" ]; then
             DEPLOY_ENV_NAMES=$(jq -cn --arg e "$DEPLOY_ENV" '[$e]')
           fi
