@@ -228,6 +228,7 @@ on:
       - Desk verdict footer
       - FR gate
       - Mutation coverage
+      - Naming guard
       - Route kanban Status on closure
       - Set PR card Status on project
       - Verify dumps against engine pin
