@@ -1,8 +1,8 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/code-quality.yml`
-# (blob b9a2899562fc34f50897750bd1b6c80fe083929b) folded with the private source repo's own caller of it,
-# `.github/workflows/code-quality-caller.yml` (blob a690dd9342c56a9efc609065bbfc5ff7e18f9131), for a PUBLIC repo: GitHub lets a
+# (blob 759faeff229fadd2a8ea478b7c65e8961d71c871) folded with the private source repo's own caller of it,
+# `.github/workflows/code-quality-caller.yml` (blob ec693c3a03c9a13c3669fd94a6b2cb35080808f9), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
 # reusable's jobs inline -- the triggers are the caller's; every `inputs.*` is
@@ -116,7 +116,14 @@ name: Code quality
 
 on:
   pull_request:
-    types: [opened, reopened, synchronize, ready_for_review]
+    # No `ready_for_review` ((internal ref)): it re-runs an UNCHANGED head beside
+    # the cancelling group below. This workflow does not skip drafts, so the
+    # draft's own run is already the verdict on that head. The re-run only bought
+    # a race: on (internal ref) the release train opened a draft and marked it ready
+    # 5 s later, the newer-created run was the one cancelled, and branch
+    # protection (which reads the newest-CREATED suite) held the merge 2h41m
+    # until a re-run. scripts/reusable-no-cancel.py holds the pair apart.
+    types: [opened, reopened, synchronize]
   # Manual whole-tree scan (gitleaks baseline etc.) -- runs every enabled
   # job in all-files mode instead of a PR diff.
   workflow_dispatch:
