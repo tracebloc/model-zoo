@@ -1,8 +1,8 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/customer-priority-bump.yml`
-# (blob ed8053010f3925cf86d47da12d3b3500d7ae609f) folded with the private source repo's own caller of it,
-# `.github/workflows/customer-priority-bump-caller.yml` (blob 4bf5cb7e712f9024c231e97c61a6c3f050d05926), for a PUBLIC repo: GitHub lets a
+# (blob cf2bcf53c4071a7fb0d1f170bf62bad59e470b33) folded with the private source repo's own caller of it,
+# `.github/workflows/customer-priority-bump-caller.yml` (blob a686ae9014a039416b30fe837cdb67d8c5c90cc3), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
 # reusable's jobs inline -- the triggers are the caller's; every `inputs.*` is
@@ -50,8 +50,8 @@
 name: Label-driven issue triage
 
 # Reusable workflow, called by a thin `customer-priority-bump.yml` caller in
-# each wired repo on issues.types=labeled (callers pass `secrets: inherit` and
-# no inputs). TWO label rules live here, both keyed on the label that was just
+# each wired repo on issues.types=labeled (callers pass no inputs, and the
+# secrets declared under `on.workflow_call.secrets`). TWO label rules live here, both keyed on the label that was just
 # added:
 #
 #   from:customer   -> add the binary `priority` label to the issue (D5).
