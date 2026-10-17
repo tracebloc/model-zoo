@@ -1,0 +1,210 @@
+# GENERATED FILE -- DO NOT EDIT BY HAND.
+#
+# Self-contained copy of the reusable workflow `.github/workflows/naming-guard.yml`
+# (blob 8c37a3a2f7e4b3391c2c61dbe54f21523dbfc5c9) folded with the private source repo's own caller of it,
+# `.github/workflows/naming-guard-caller.yml` (blob fb90474c3f070ba177dc1dd457c042c3b07de895), for a PUBLIC repo: GitHub lets a
+# public repo `uses:` a reusable workflow only from a public repo, and the
+# reusables live in the private source repo. So this file carries the
+# reusable's jobs inline -- the triggers are the caller's; every `inputs.*` is
+# resolved to a literal (repo-inventory.yml's `caller_inputs` floor, else the
+# reusable's default -- the caller's own toolchain choices are NOT copied); the
+# App-token secrets are named directly; a job whose condition resolves to a
+# constant false is omitted; and each job's display name keeps the
+# `naming / ` prefix so the check contexts branch protection requires do
+# not change. Scripts are still fetched from the private source repo at run time with a
+# read-only App installation token; on a fork PR that token cannot be minted
+# (no secrets), so the checkout fails closed rather than running untrusted input.
+# Where the copy checks the private source repo out, its `tools-ref` is the literal `main` --
+# the ref every caller of the reusable pins -- because a public copy has no
+# reusable to take the commit from (the private original defaults to its own).
+#
+# PUBLIC SURFACE. This file is delivered to a public repo. Exactly what was
+# scrubbed, and what was not:
+#
+#   * COMMENT TEXT -- a whole-line YAML `#` comment, a `#`-first line of a `run:`
+#     script that is not inside a heredoc, and this header -- was scrubbed: every
+#     private-repo issue reference, private repo name (org-qualified OR bare),
+#     RFC id and tenant name became `(internal ref)`, and the private repo this
+#     file was generated from became `the private source repo`.
+#     A bare name is left alone where the next character is `/` or `#`: that is a
+#     path or branch prefix, or the issue form, which is matched on its own.
+#     A name that is also an ordinary English word, declared as such on the
+#     inventory row, is left alone in prose as well: it is scrubbed only inside a
+#     code span, as `<org>/<repo>` (URL or not), or as `<repo>#N`.
+#   * CODE -- everything else: commands, heredoc bodies, strings a workflow posts,
+#     `repository:` values, URLs, step names -- was NOT edited. An internal
+#     reference there refuses the render (it is a defect in the source). A BARE
+#     private repo name is never judged in code at all: several are also public
+#     product identifiers -- an image a public chart installs, a package name, a
+#     branch prefix -- so only the org-qualified spelling refuses there, with one
+#     exception: the name of the private repo this file was generated from, which
+#     the code states verbatim because the workflow checks that repo out and
+#     fetches its scripts from it at run time.
+#
+# Regenerate:  python3 scripts/render-self-contained.py          (in the private source repo)
+# Verify:      python3 scripts/render-self-contained.py --check  (make selftest-self-contained)
+#
+# The comments below are the reusable's own and describe the reusable; where
+# they mention `inputs.*` or callers, read them as history.
+
+name: Naming guard
+
+# Reusable workflow ((internal ref), epic (internal ref), (internal ref)): a pull
+# request may not ADD an env name the naming canon has not recorded -- an unprefixed name we
+# would own, or one under a banned prefix (TB_, CLIENT_, ...) -- nor a legacy spelling of an
+# `enforced` form on its own. backend has had its own settings guard since
+# (internal ref); the other repos had nothing, and (internal ref) gained ~29 new TB_
+# names in a week (the canon's fourteenth pass, the private source repo).
+# `scripts/naming-lint.py --diff-base` carries the decision and its reasoning (its module
+# docstring, "THE DIFF MODE"); this file is the wiring, and says only what the script cannot.
+#
+# WHAT GOES RED, AND WHAT IS GRANDFATHERED. Only what the PR INTRODUCES is judged: a name on
+# a line the PR adds, which the file now names more often than its merge base did. A name
+# already there -- every grandfathered alias, every pre-existing unrecorded name, a legacy
+# spelling past its `remove_by` -- never reds a PR that did not add it, and a line that only
+# changes a value introduces nothing. Red, by name and line, with the canonical to use:
+#   * a new unrecorded unprefixed name on the repo's product surface (the canon's
+#     `env_prefix.plumbing` keeps CI-local, test and tooling paths out, unchanged), or a new
+#     banned-prefix name anywhere;
+#   * a new legacy spelling of an `enforced` form in a file that does not also name its
+#     canonical (beside the canonical it is the alias-first read or dual-emit, and reports).
+# A genuinely external name (an SDK's, a tool's) is recorded under `env_prefix.exemptions` in
+# naming-canon.yml here, and passes once that canon is on `main` -- the canon is read from
+# THIS checkout (`tools-ref`), never from the calling repo.
+#
+# IT IS MEANT TO BE REQUIRED, LATER. ARMING IS FOUR STEPS, IN THIS ORDER: (1) this file
+# reaches `main` -- every caller pins `@main`, so a caller added first dies with
+# `startup_failure`; (2) the canonical caller lands in the private source repo and the fleet's are
+# generated from it with scripts/onboard_repo.py (`--steps target-pr --deliver-only
+# .github/workflows/naming-guard-caller.yml`), one PR per repo, and model-zoo and quickstart
+# receive the rendered copy -- the check is ADVICE, red where it finds something and
+# required nowhere (an optional red holds no PR: scripts/one-rule-for-reds.json); each
+# repo's inventory row flips to `required` after its caller merges (caller first, row
+# after); (3) at least ONE WEEK of its runs fleet-wide is read, every red named: a red that was a real new
+# name stays, a red that was noise is fixed in the script or the canon before arming -- a
+# guard that cries wolf is switched off; (4) a person adds `naming / check` to each repo's
+# protected branch (`develop`, or the default branch off the train), pinned to the GitHub
+# Actions app, on a repo THAT CARRIES A CALLER WHOSE RUNS WERE GREEN, and records it in that
+# row's protection cell. Never the reverse: a required context no workflow reports leaves
+# every PR waiting. No session arms it; branch protection is a human write.
+#
+# WHAT A CALLER MUST TRIGGER ON, and the caller job's id:
+#   pull_request: [opened, synchronize, reopened, ready_for_review] -- a new head needs a run
+#                 of its own, or the context is missing on it once required;
+#   merge_group:  -- FROM DAY ONE, on every repo (it never fires where no merge queue runs):
+#                 a required context must report on the queue's commit or the queue removes
+#                 the PR with `checks_timed_out` ((internal ref)). The queue commit is
+#                 judged like a PR head, against `merge_group.base_sha`, so it re-runs the
+#                 same verdict on what the queue is about to merge;
+#   jobs: naming: uses: this file -- `naming` plus this job's `check` is the context name,
+#   `naming / check`, that branch protection keys on at step 4.
+# NO `paths:` OR `branches:` FILTER in a caller: a filtered required check never reports on
+# the PR it skips. NO JOB-LEVEL `if:` here: a skipped job reports success.
+#
+# NO `concurrency:` with `cancel-in-progress: true` (scripts/reusable-no-cancel.py): a
+# cancelled run beside the winner on the same head reads as a red X. The job is a minute.
+#
+# NO `permissions:` BLOCK HERE (desk-dispatch.yml's reason): a reusable's declared
+# permissions are a demand on the caller, and a caller granting less is a `startup_failure`
+# with no log. The caller grants `contents: read`, which is all this reads.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  merge_group:
+
+permissions:
+  contents: read
+
+# THE DIFF BASE, DECLARED ONCE, code-quality.yml's expression ((internal ref)): the
+# pull request's base where there is one, the merge group's where there is not. Both absent
+# (an event this workflow is not meant for) is EMPTY, and the run step refuses on it -- a
+# change set with no base cannot be judged, and judging the whole tree would red every PR
+# for names it never added.
+env:
+  BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
+
+jobs:
+  check:
+    name: naming / check
+    # `ubuntu-slim` ((internal ref)): one mint, two checkouts, one pure-Python scan
+    # of a PR's changed files -- a one-minute job, under the slim cap's 15.
+    runs-on: ubuntu-slim
+    timeout-minutes: 10
+    steps:
+      # FULL HISTORY: the script diffs the head against the merge base of BASE_SHA and HEAD,
+      # and reads each changed file's base text from it. A shallow clone has neither, and
+      # the script refuses rather than guessing.
+      - name: Check out the change
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+
+      - name: Mint a read-only token for org-config (private; the caller's own token cannot read it)
+        id: tools-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.RELEASE_TRAIN_APP_ID }}
+          private-key: ${{ secrets.RELEASE_TRAIN_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: org-config
+          permission-contents: read
+
+      # THE TOOLS REF ((internal ref) D4, (internal ref)): `job.workflow_sha` is the commit of
+      # THIS reusable file, so the script and the canon are the ones it was reviewed with;
+      # `tools-ref` overrides it for a test. An EMPTY ref would check out the tools repo's
+      # DEFAULT branch fleet-wide, so it is refused. `toJSON(job)` because actionlint's `job`
+      # schema (1.7.12) does not know `workflow_sha`.
+      - name: Resolve the tools ref, refusing an empty one
+        id: tools-ref
+        env:
+          TOOLS_REF: ${{ 'main' }}
+          JOB_CONTEXT: ${{ toJSON(job) }}
+        run: |
+          if [ -z "$TOOLS_REF" ]; then
+            case "$JOB_CONTEXT" in
+              *'"workflow_sha"'*) TOOLS_REF="${JOB_CONTEXT#*\"workflow_sha\": \"}"; TOOLS_REF="${TOOLS_REF%%\"*}" ;;
+            esac
+          fi
+          if ! [[ "$TOOLS_REF" =~ ^[0-9a-f]{40}$ || ( -n "$TOOLS_REF" && "$TOOLS_REF" != *[![:alnum:]._/-]* ) ]]; then
+            echo "::error::the tools ref is empty or not a ref (${TOOLS_REF:-<empty>}); an empty ref would check out the tools repo's default branch instead of the commit this workflow was pinned at. Refusing."
+            exit 1
+          fi
+          echo "ref=$TOOLS_REF" >> "$GITHUB_OUTPUT"
+          echo "tools ref: $TOOLS_REF"
+      # Into the workspace, UNTRACKED there, so the change set the script reads from git
+      # never contains it.
+      - name: Check out the checker and the canon
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: tracebloc/org-config
+          token: ${{ steps.tools-token.outputs.token }}
+          ref: ${{ 'main' }}
+          path: .org-config-tools
+          persist-credentials: false
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+
+      # PyYAML, pinned: the canon is YAML, and the script refuses without it.
+      - name: Install PyYAML for the canon read
+        run: python -m pip install --quiet --disable-pip-version-check 'pyyaml==6.0.2'
+
+      # `--repo` is this repository's name, for the canon's per-repo scopes (`repos:`,
+      # `exclude_paths:`, `product_paths:`); `--repo-root` places every file under it. No
+      # PR-controlled string is interpolated into this shell: the script reads the change
+      # set from git itself.
+      - name: Judge what this change introduces
+        run: |
+          set -uo pipefail
+          if [ -z "${BASE_SHA:-}" ]; then
+            echo "::error::no base to diff against (neither pull_request.base.sha nor merge_group.base_sha is in the payload of a '$GITHUB_EVENT_NAME' event) -- this check judges what a change introduces, and cannot tell without one. Refusing."
+            exit 1
+          fi
+          python3 .org-config-tools/scripts/naming-lint.py \
+            --canon-root .org-config-tools \
+            --diff-base "$BASE_SHA" --unknown --fail \
+            --repo "${GITHUB_REPOSITORY#*/}" --repo-root "$GITHUB_WORKSPACE"
