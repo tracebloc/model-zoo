@@ -1,8 +1,8 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/desk-dispatch.yml`
-# (blob cd982bac1408272d3d305de74f4137f19284b711) folded with the private source repo's own caller of it,
-# `.github/workflows/desk-dispatch-caller.yml` (blob 9b0fbf5a7f8038d11d6c13c327d9aac48fe852b5), for a PUBLIC repo: GitHub lets a
+# (blob 5fb0d251aab0471056c40d0bf7010b11fadc1b10) folded with the private source repo's own caller of it,
+# `.github/workflows/desk-dispatch-caller.yml` (blob da6b3e60b6437c39dee685020829ff7ff0e6e6a0), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
 # reusable's jobs inline -- the triggers are the caller's; every `inputs.*` is
@@ -117,13 +117,15 @@
 # the only event that carries the green. GitHub starts no workflow for a check suite
 # GitHub Actions created, so the self-trigger loop (internal ref) feared cannot start
 # (its script-side refusal was deleted as unreachable, (internal ref)). Callers MUST
-# send `workflow_run: {workflows: [<every pull-request workflow of that repo>],
-# types: [completed]}` and `check_suite: {types: [completed]}`, and grant
-# `checks: read` + `statuses: read`. There is no ungated degrade any more: every
-# desk caller grants both reads, and a 403 on the head read refuses like any failed
-# read -- a red run, no review ((internal ref)). A pull-request workflow the caller
-# does not list leaves the review unfired when it finishes last
-# ((internal ref), (internal ref)).
+# send `workflow_run: {workflows: [<every pull-request workflow of that repo that
+# posts a required context>], types: [completed]}` and `check_suite: {types:
+# [completed]}`, and grant `checks: read` + `statuses: read`. There is no ungated
+# degrade any more: every desk caller grants both reads, and a 403 on the head read
+# refuses like any failed read -- a red run, no review ((internal ref)). A gating
+# workflow the caller does not list leaves the review unfired when it finishes last
+# ((internal ref), (internal ref)); a workflow that posts no required
+# context cannot hold a review (`held_contexts`), so listing it only buys runs that
+# skip ((internal ref)).
 #
 # NO `permissions:` BLOCK IN THIS REUSABLE, DELIBERATELY. A reusable's declared
 # permissions are a DEMAND on the caller, not a grant: a caller granting less is
@@ -210,28 +212,28 @@ on:
   # so the promotion predicate can only live in the callee's `if:`.
   # THE GREEN GATE (Lukas, 2026-09-14): a review fires only once the head is green,
   # and a CI workflow completing is the event that carries that. The list names
-  # EVERY workflow of THIS repo that runs on a pull-request event -- a completion
-  # left off the list that finishes last leaves the review UNFIRED, nothing
-  # re-fires ((internal ref), (internal ref)). The set is DERIVED:
-  # `test_the_canonical_caller_is_gated_and_hears_bugbots_check_suite` reads
-  # this repo's workflow files and reddens on a missing or an extra name.
+  # every workflow of THIS repo that runs on a pull-request event AND posts a
+  # context `develop` requires -- a gating completion left off the list that
+  # finishes last leaves the review UNFIRED, nothing re-fires
+  # ((internal ref), (internal ref)). A workflow that posts no
+  # required context cannot hold the desk (`held_contexts`), so its completion
+  # only bought a dispatcher run that skipped ((internal ref)). The set is
+  # DERIVED twice: caller-drift holds it to the LIVE required contexts of
+  # `develop`, both protection systems (`gating_names`), and
+  # `test_the_canonical_caller_is_gated_and_hears_bugbots_check_suite` holds it
+  # offline to this repo's workflow files and the inventory's declared floor.
+  # A required context no workflow is seen to post, or a set that cannot be
+  # read, owes EVERY pull-request workflow again.
   workflow_run:
     # A `workflow_run`'s `branches` filter is on the TRIGGERING run's head branch
     # -- a PR run's feature branch -- so integration branches are IGNORED rather
     # than `develop` allowed: that drops the `push` and cron completions ((internal ref)).
     branches-ignore: [develop, staging, main]
     workflows:
-      - Add to engineer kanban
-      - CI
       - Code quality
       - Commit hygiene
       - Desk verdict footer
-      - FR gate
       - Mutation coverage
-      - Naming guard
-      - Route kanban Status on closure
-      - Set PR card Status on project
-      - Verify dumps against engine pin
     types: [completed]
   # `check_suite: completed` IS subscribed, for Cursor Bugbot: the `Bugbot gate`
   # workflow that turned Bugbot's verdict into a completion here is retired
