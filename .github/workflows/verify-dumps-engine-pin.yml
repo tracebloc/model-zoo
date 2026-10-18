@@ -127,7 +127,7 @@ jobs:
           # DERIVES which of it pins anything (`_ENGINE_SOURCE_GLOBS`, kept
           # equal to these patterns by a test). Fetching files that pin nothing
           # is the point, not waste: the derivation has to be able to see that
-          # the three GPU Dockerfiles pin torch via a cu129 wheel index rather
+          # the three GPU Dockerfiles pin torch via a CUDA wheel index rather
           # than a literal `pkg==ver`, and a candidate never fetched is
           # indistinguishable from one that pins nothing.
           #

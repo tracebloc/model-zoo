@@ -184,7 +184,7 @@ def _candidates_under(root: Path) -> dict[str, str]:
 #: A candidate that carries NO literal pin but DERIVES one from another
 #: candidate: the three GPU bases `grep` a torch pin out of whichever
 #: requirements file their `REQUIREMENTS_FILE` build-arg names and install it
-#: from the cu129 wheel index. Two independent signals are required so a
+#: from a CUDA wheel index. Two independent signals are required so a
 #: stray `grep` somewhere else cannot classify a file as deriving.
 _WHEEL_INDEX = re.compile(r"--index-url\s+https://download\.pytorch\.org/whl/")
 _GREPS_A_TORCH_PIN = re.compile(r"grep\b[^\n]*\btorch[^\n]*==")
@@ -432,7 +432,7 @@ def derive_engine_sources(candidates: dict[str, str]) -> list[str]:
 
     THE THREE GPU DOCKERFILES ARE READ AND DERIVE NOTHING, correctly. Each
     pins torch by `grep -E '^torch(vision)?==' /tmp/requirements.txt` piped
-    into a `--index-url .../cu129` install, so it carries no literal pin of its
+    into a `--index-url .../whl/cu<NNN>` install, so it carries no literal pin of its
     own: its torch version IS whichever requirements file its
     `REQUIREMENTS_FILE` build-arg names, and that file is a candidate in its
     own right. Handing one to `--engine` would name a source contributing zero
