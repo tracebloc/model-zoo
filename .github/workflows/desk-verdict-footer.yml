@@ -1,7 +1,7 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/desk-verdict-footer.yml`
-# (blob fcef528902a016205aeaf13ea2d14ba5057b1fa6) folded with the private source repo's own caller of it,
+# (blob 75d9f2da7e3dfb56b87f41a0f6c5e2f518b18ba0) folded with the private source repo's own caller of it,
 # `.github/workflows/desk-verdict-footer-caller.yml` (blob 2b0b766974fb8ef2ee55bd361a3a2b914bacab98), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
@@ -122,6 +122,19 @@ name: Desk verdict footer
 # `startup_failure` with no log. The caller grants `contents: read` and
 # `pull-requests: read`; less reaches the script as a 403 on the reviews read, which is
 # CANNOT TELL by name.
+#
+# `desk.py` COMES OVER GIT, NOT THE CONTENTS API ((internal ref)). The script names
+# where it lives (`--desk-source`, off dispatch-sweep.py's `DESK_PY_SOURCE`), and a sparse,
+# depth-1 checkout fetches that one directory on the App token. The contents read this
+# replaces spent one REST call of the App installation's hourly budget on every review
+# event, and on 2026-10-17 it went 403 with the rest of that budget, holding approved PRs
+# on "cannot tell"; a git fetch does not spend it. The checkout fetches a COMMIT, which the
+# script resolves the ref to with `git ls-remote`, also git: given a branch, actions/checkout
+# first asks the REST API for the repository's hash algorithm, on the same token. The PR's
+# reviews, on the caller's own token, are the job's only API read. This file passes no
+# `DESK_PY_TOKEN`: the script still reads one -- THE OLD PATH in its header, the contents
+# read -- only for public copies delivered before the checkout step, and that path is
+# deleted once every render carries it.
 
 on:
   pull_request:
@@ -136,14 +149,15 @@ permissions:
 jobs:
   verdict-footer:
     name: desk / verdict-footer
-    # `ubuntu-slim` ((internal ref)): one mint, one checkout, one or two
+    # `ubuntu-slim` ((internal ref)): one mint, two shallow checkouts, one or two
     # paged `gh api` reads -- a one-minute job.
     runs-on: ubuntu-slim
     timeout-minutes: 5
     steps:
-      # ONE MINT, READ-ONLY, for the two private repos this job reads: this one (the
-      # script) and (internal ref) (`desk.py`, the footer's writer). The PR's reviews are
-      # read on the caller's own `github.token`, never on this token.
+      # ONE MINT, READ-ONLY, for the two private repos this job checks out over git: this
+      # one (the script) and (internal ref) (`desk.py`, the footer's writer). It makes no
+      # API read at all. The PR's reviews are read on the caller's own `github.token`,
+      # never on this token.
       - name: Mint a read-only token for the two private repos this job reads (the caller's own token cannot read them)
         id: tools-token
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
@@ -194,12 +208,49 @@ jobs:
       - name: Install PyYAML for the reviewer read
         run: python -m pip install --quiet --disable-pip-version-check 'pyyaml==6.0.2'
 
+      # WHERE `desk.py` LIVES, from the script: `DESK_PY_SOURCE` is declared once, in
+      # dispatch-sweep.py, and never restated here, and `sha`, the commit its ref names,
+      # read with `git ls-remote` on the App token (git protocol, no REST read).
+      # `continue-on-error`, like the checkout below: the judge step re-reads the same
+      # declaration itself, and only an APPROVE to judge needs it, so a failure here
+      # reddens only a PR that has one, naming the cause. A failure prints no output, so
+      # the checkout below fails too, never falling back to a branch ref.
+      - name: Read where desk.py lives, for the checkout below
+        id: desk-source
+        continue-on-error: true
+        env:
+          DESK_PY_GIT_TOKEN: ${{ steps.tools-token.outputs.token }}
+        run: |
+          out=$(python3 .org-config-tools/scripts/desk-verdict-footer.py --desk-source)
+          echo "$out"
+          echo "$out" >> "$GITHUB_OUTPUT"
+
+      # `desk.py` OVER GIT, at that repo and COMMIT, on the App token: a sparse, depth-1
+      # fetch of its one directory, no REST read (the header says why; a branch `ref`
+      # here would cost one, the hash-algorithm read). It MAY FAIL --
+      # `continue-on-error` -- because the script reads `desk.py` only when there is an
+      # APPROVE to judge, so a (internal ref) outage reddens no PR that has none; with an
+      # APPROVE, an empty or partial checkout is CANNOT TELL in the judge step. The commit
+      # it lands on is the one the verdict names.
+      - name: Check out desk.py's directory over git
+        id: desk-py
+        continue-on-error: true
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.repository_owner }}/${{ steps.desk-source.outputs.repo }}
+          token: ${{ steps.tools-token.outputs.token }}
+          ref: ${{ steps.desk-source.outputs.sha }}
+          path: .desk-py-source
+          persist-credentials: false
+          fetch-depth: 1
+          sparse-checkout: ${{ steps.desk-source.outputs.dir }}
+
       - name: Judge the review account's approvals
         env:
           # The PR's reviews, on the caller's own token (`pull-requests: read`).
           GH_TOKEN: ${{ github.token }}
-          # (internal ref) `desk.py`, on the App token above (`contents: read`).
-          DESK_PY_TOKEN: ${{ steps.tools-token.outputs.token }}
+          # The checkout above (its `path:`): (internal ref) `desk.py` is read from there.
+          DESK_PY_CHECKOUT: .desk-py-source
           REPO: ${{ github.repository }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           # The review that started this run, empty on a `pull_request` event: the read
