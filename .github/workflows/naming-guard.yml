@@ -1,7 +1,7 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/naming-guard.yml`
-# (blob 8c37a3a2f7e4b3391c2c61dbe54f21523dbfc5c9) folded with the private source repo's own caller of it,
+# (blob a37fa5fff01f0ca7b5fd58e373866b5b0abdba86) folded with the private source repo's own caller of it,
 # `.github/workflows/naming-guard-caller.yml` (blob fb90474c3f070ba177dc1dd457c042c3b07de895), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
@@ -129,7 +129,7 @@ jobs:
     name: naming / check
     # `ubuntu-slim` ((internal ref)): one mint, two checkouts, one pure-Python scan
     # of a PR's changed files -- a one-minute job, under the slim cap's 15.
-    runs-on: ubuntu-slim
+    runs-on: ubuntu-slim  # runner: hosted (ubuntu-slim)
     timeout-minutes: 10
     steps:
       # FULL HISTORY: the script diffs the head against the merge base of BASE_SHA and HEAD,

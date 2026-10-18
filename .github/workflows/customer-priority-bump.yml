@@ -1,7 +1,7 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/customer-priority-bump.yml`
-# (blob cf2bcf53c4071a7fb0d1f170bf62bad59e470b33) folded with the private source repo's own caller of it,
+# (blob f9d73100bb7bb183c77b3096bdaede42a0c50ba7) folded with the private source repo's own caller of it,
 # `.github/workflows/customer-priority-bump-caller.yml` (blob a686ae9014a039416b30fe837cdb67d8c5c90cc3), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
@@ -94,7 +94,7 @@ jobs:
   bump:
     name: bump / bump
     if: github.event.label.name == 'from:customer'
-    runs-on: ubuntu-slim
+    runs-on: ubuntu-slim  # runner: hosted (ubuntu-slim)
     # Declared because `ubuntu-slim` kills at its 15-minute cap with no timeout
     # report ((internal ref) item 2; scripts/runner-tier.py asserts it for every
     # slim job). Measured: no run in the sampled window; its sibling `bug-to-ready` already declares 10.
@@ -154,7 +154,7 @@ jobs:
     # reopened arm's `contains()` is over the label ARRAY, which is element
     # membership rather than a substring match ((internal ref)).
     if: github.event_name == 'issues' && (github.event.label.name == 'work-type:bug' || (github.event.action == 'reopened' && contains(github.event.issue.labels.*.name, 'work-type:bug')))
-    runs-on: ubuntu-slim
+    runs-on: ubuntu-slim  # runner: hosted (ubuntu-slim)
     timeout-minutes: 10
     # Nothing here uses the caller's GITHUB_TOKEN: every call is made with the
     # App installation token minted below.
