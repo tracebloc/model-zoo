@@ -1,7 +1,7 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/desk-dispatch.yml`
-# (blob 5fb0d251aab0471056c40d0bf7010b11fadc1b10) folded with the private source repo's own caller of it,
+# (blob 7cb8da673e3820b39e9701ec976c2be6d183151a) folded with the private source repo's own caller of it,
 # `.github/workflows/desk-dispatch-caller.yml` (blob da6b3e60b6437c39dee685020829ff7ff0e6e6a0), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
@@ -300,7 +300,7 @@ concurrency:
 jobs:
   dispatch:
     name: desk / dispatch
-    runs-on: ubuntu-slim
+    runs-on: ubuntu-slim  # runner: hosted (ubuntu-slim)
     timeout-minutes: 10
     # NOT ON A PROMOTION PR ((internal ref)): a promotion PR's head sha IS a
     # branch tip, and the runs every promotion queued here left `cancelled`
