@@ -1,7 +1,7 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/kanban-closure-router.yml`
-# (blob 672aca63eda185d9fd8e03d6199a38b090874540) folded with the private source repo's own caller of it,
+# (blob 463f39cb8d6b99e4304b36178f23a2389a851f9e) folded with the private source repo's own caller of it,
 # `.github/workflows/kanban-closure-caller.yml` (blob b38b7c1e8514240939dd944ad2e3e6add7fcfd57), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
@@ -51,8 +51,11 @@ name: Route kanban Status on closure
 
 # Reusable workflow. Called on PR closed + issue closed events, and sets the
 # Status that matches what happened:
+#   - (internal ref) promotion PR     → its card is ARCHIVED, merged or not ((internal ref))
 #   - PR merged to develop           → On dev         (automatic; no dev-side review — D6)
-#   - PR merged to staging           → FR on staging  (functional review on staging environment)
+#   - PR merged to staging           → FR on staging  (functional review on staging environment),
+#                                      or Ready for prod where the repo's inventory row
+#                                      declares `staging_surface: none` ((internal ref))
 #   - PR merged to main/master       → Prod           (shipped to prod)
 #   - PR closed without merging      → Cancelled
 #   - Issue closed as completed      → Done (terminal; how it was closed is irrelevant, (internal ref))
@@ -158,12 +161,32 @@ jobs:
           permission-pull-requests: read
           permission-organization-projects: write
 
+      # PyYAML FOR A MERGE TO `staging` ONLY ((internal ref)): the mapper then reads the
+      # repo's `staging_surface` through the inventory's one loader, which needs it, and
+      # no other merge reads the row. NEVER FATAL HERE: a failed install must not cost
+      # the Status write -- the mapper then refuses on the missing module and the next
+      # step writes the holding state and labels the card, the path every unreadable
+      # mapping already takes. A failed job writes nothing, and "Item closed" sets
+      # Cancelled ((internal ref)).
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        if: github.event_name == 'pull_request' && github.event.pull_request.merged && github.event.pull_request.base.ref == 'staging'
+        continue-on-error: true
+        with:
+          python-version: '3.12'
+      - name: Install PyYAML for the inventory loader
+        if: github.event_name == 'pull_request' && github.event.pull_request.merged && github.event.pull_request.base.ref == 'staging'
+        continue-on-error: true
+        run: python -m pip install --quiet --disable-pip-version-check 'pyyaml==6.0.2'
+
       - name: Determine target Status
         id: target
         env:
           EVENT_NAME: ${{ github.event_name }}
           PR_MERGED: ${{ github.event.pull_request.merged }}
           BASE_REF: ${{ github.event.pull_request.base.ref }}
+          # Read only through this variable and only by the promotion rule: a branch
+          # name is author-controlled text and never reaches the shell as code.
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
           ISSUE_REASON: ${{ github.event.issue.state_reason }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
           # ORG + REPO_FULL are read by the project lookups, the .kanban.yml
@@ -189,7 +212,28 @@ jobs:
           # fetched AND one that names an undeclared Status both land here; the
           # mapper says which on stderr, this flag only says "we could not tell".
           UNUSABLE_OVERRIDE="false"
+          # A PROMOTION PR'S CARD IS ARCHIVED, NOT ROUTED ((internal ref), B13). It is the
+          # train's plumbing, never a work item: routed by its base, every staging hop
+          # parked one card per repo in `FR on staging`, a review queue with nothing in
+          # it to review, until the weekly reconcile archived it. This is reconcile's own
+          # decision (`plan_item`: a promotion PR that is no longer open is archived),
+          # taken at the event -- merged or not, so a closed cut is not `Cancelled`
+          # first. The rule is the dispatchers' `is_promo`, head AND base, which the
+          # mapper loads rather than restates. COULD NOT TELL ROUTES AS BEFORE, with a
+          # warning: archiving on a guess could take a work PR's card off the board,
+          # while routing a promotion is only the noise this removes.
+          ARCHIVE="false"
+          PROMO="false"
           if [ "$EVENT_NAME" = "pull_request" ]; then
+            if ! PROMO=$(python3 .org-config-tools/scripts/branch_status_map.py --promotion "$HEAD_REF" "$BASE_REF"); then
+              echo "::warning::could not tell whether this PR is a release-train promotion (the rule did not load); routing it by its base as before."
+              PROMO="false"
+            fi
+          fi
+          if [ "$PROMO" = "true" ]; then
+            ARCHIVE="true"
+            echo "A release-train promotion PR ($HEAD_REF -> $BASE_REF): archiving its card, no Status."
+          elif [ "$EVENT_NAME" = "pull_request" ]; then
             if [ "$PR_MERGED" = "true" ]; then
               # ONE SHARED MAPPING ((internal ref)), FETCHED not read off disk: this
               # workflow never checks the caller out. A REFUSED OVERRIDE MUST NOT
@@ -207,7 +251,7 @@ jobs:
                 # and refusing by writing NOTHING hands the decision to the built-in
                 # "Item closed" automation, which sets `Cancelled` -- so "we could
                 # not tell" is expressed AS A WRITE (the selftest pins both halves).
-                echo "::warning::the .kanban.yml override for $REPO_FULL could not be used (see the error above: unreadable, or it names a Status the mapping does not declare), so the Status for $BASE_REF is UNKNOWN. Writing the non-terminal holding state and labelling the card for the weekly pass -- publishing nothing would let the built-in Item-closed automation set Cancelled (.github#157)."
+                echo "::warning::the Status mapping for $REPO_FULL could not be used (see the error above: a .kanban.yml that is unreadable or names a Status the mapping does not declare, or -- for a merge to staging -- an inventory row that could not be read), so the Status for $BASE_REF is UNKNOWN. Writing the non-terminal holding state and labelling the card for the weekly pass -- publishing nothing would let the built-in Item-closed automation set Cancelled (.github#157)."
                 STATUS="On dev"
                 UNUSABLE_OVERRIDE="true"
               fi
@@ -251,22 +295,25 @@ jobs:
           # actionlint is a required check here.
           {
             echo "status=$STATUS"
+            echo "archive=$ARCHIVE"
             echo "sibling=$SIBLING"
             echo "unusable_override=$UNUSABLE_OVERRIDE"
           } >> "$GITHUB_OUTPUT"
-          echo "Routing decision: status=${STATUS:-(unchanged)} sibling=$SIBLING unusable-override=$UNUSABLE_OVERRIDE"
+          echo "Routing decision: status=${STATUS:-(unchanged)} archive=$ARCHIVE sibling=$SIBLING unusable-override=$UNUSABLE_OVERRIDE"
 
       # The Status write runs BEFORE the label steps below, so a label failure can
       # never suppress the column write -- label-first skipped the update via the
       # implicit success() and left the card where the built-in automation put it
       # (Bugbot on (internal ref)). App token: caller permission sets vary.
       - name: Update Status on the kanban
-        if: steps.target.outputs.status != ''
+        if: steps.target.outputs.status != '' || steps.target.outputs.archive == 'true'
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           ORG: ${{ 'tracebloc' }}
           PROJECT_NUMBER: ${{ 2 }}
           STATUS_NAME: ${{ steps.target.outputs.status }}
+          # `true` for a promotion PR ((internal ref)): the card is archived, no Status written.
+          ARCHIVE: ${{ steps.target.outputs.archive }}
           NUMBER: ${{ github.event.pull_request.number || github.event.issue.number }}
           IS_PR: ${{ github.event_name == 'pull_request' }}
           REPO_FULL: ${{ github.repository }}
@@ -315,7 +362,8 @@ jobs:
             | select(.name=="Status") | .id')
           STATUS_OPT=$(echo "$PROJ" | jq -r --arg s "$STATUS_NAME" '.data.organization.projectV2.fields.nodes[]
             | select(.name=="Status") | .options[] | select(.name==$s) | .id')
-          if [ -z "$STATUS_OPT" ] || [ "$STATUS_OPT" = "null" ]; then
+          # An archive writes no Status, so it needs no option ((internal ref)).
+          if [ "${ARCHIVE:-false}" != "true" ] && { [ -z "$STATUS_OPT" ] || [ "$STATUS_OPT" = "null" ]; }; then
             echo "Could not resolve Status option '$STATUS_NAME' — aborting"
             exit 1
           fi
@@ -384,6 +432,31 @@ jobs:
             | select(.project.number == ($n | tonumber)) | .isArchived' | head -1)
           if [ "$ARCHIVED" = "true" ]; then
             echo "::notice::#$NUMBER project item is archived -- NOT writing Status=$STATUS_NAME (archived cards are terminal and cannot be updated)"
+            exit 0
+          fi
+
+          # A PROMOTION PR'S CARD IS ARCHIVED, AND NOTHING ELSE IS WRITTEN ((internal ref)):
+          # the decision kanban-reconcile's `plan_item` makes weekly, at the event. The
+          # body is read like every other write's: an exit-0 `errors[]` is a failed
+          # archive, and only a GitHub-side failure earns another attempt.
+          if [ "${ARCHIVE:-false}" = "true" ]; then
+            for _a in 1 2 3; do
+              _arc=0
+              # shellcheck disable=SC2016  # the $names here are GraphQL variables, not shell - keep literal
+              ARESP=$(gh api graphql -f query='
+                mutation($p: ID!, $i: ID!) {
+                  archiveProjectV2Item(input: {projectId: $p, itemId: $i}) { item { id } }
+                }' -f p="$PROJECT_ID" -f i="$ITEM_ID" 2>&1) || _arc=$?
+              if [ "$_a" -lt 3 ] && graphql_transient "$ARESP"; then
+                echo "::warning::#$NUMBER archive met a GitHub-side error (attempt $_a/3), retrying: $ARESP"
+                sleep $((_a * 5))
+                continue
+              fi
+              [ "$_arc" -eq 0 ] || { echo "::error::#$NUMBER archive failed (attempt $_a/3): $ARESP" >&2; exit 1; }
+              reject_graphql_errors "$ARESP" "#$NUMBER archive" || exit 1
+              break
+            done
+            echo "→ #$NUMBER → archived (promotion PR)"
             exit 0
           fi
 

@@ -1,7 +1,7 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/code-quality.yml`
-# (blob 759faeff229fadd2a8ea478b7c65e8961d71c871) folded with the private source repo's own caller of it,
+# (blob eba6edba23c8dbd574f9c95fa7f5bc3bd2eb5edc) folded with the private source repo's own caller of it,
 # `.github/workflows/code-quality-caller.yml` (blob ec693c3a03c9a13c3669fd94a6b2cb35080808f9), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
@@ -46,6 +46,9 @@
 #
 # The comments below are the reusable's own and describe the reusable; where
 # they mention `inputs.*` or callers, read them as history.
+#
+# LEFT OUT by design: step `runner-linux` of job `house-rules`. It checks a rule that applies
+# to private repos only, so a public repo has nothing for it to check.
 
 name: Code quality
 
