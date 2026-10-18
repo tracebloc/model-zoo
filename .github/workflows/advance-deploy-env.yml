@@ -1,7 +1,7 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/advance-deploy-env.yml`
-# (blob 72bd0fa46e6d5ba7f848e8a4ae60995d5eb9aeb5) folded with the private source repo's own caller of it,
+# (blob 11d8eaed76e6074091f02ca6ccdebff1f6134aa4) folded with the private source repo's own caller of it,
 # `.github/workflows/advance-deploy-env-caller.yml` (blob 5de24d409e5bbf2bccbb720912cd551cbe33b040), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
@@ -53,7 +53,10 @@ name: Advance deploy environment
 # For each PR contained in the push, updates the Deploy environment project field
 # and advances Status through the multi-stage validation flow:
 #   develop      -> Status = "On dev"         (automatic; no dev-side review — D6)
-#   staging      -> Status = "FR on staging"  (functional review on staging environment)
+#   staging      -> Status = "FR on staging"  (functional review on staging environment),
+#                   or "Ready for prod" where the repo's repo-inventory.yml row declares
+#                   `staging_surface: none` -- nothing of it is on staging to review
+#                   ((internal ref); scripts/branch_status_map.py reads the row)
 #   master/main  -> Status = "Prod"           (shipped to production)
 #
 # Advancement is MONOTONIC: a card is never moved backward. Back-merges and
@@ -145,6 +148,19 @@ jobs:
           ref: ${{ 'main' }}
           path: .org-config-tools
           persist-credentials: false
+
+      # PyYAML FOR A STAGING PUSH ONLY ((internal ref)): the mapper reads the repo's
+      # `staging_surface` through the inventory's one loader, which needs it, and a
+      # develop or main push reads no row. A failed install fails the mapper, and so
+      # the run: a push has no competing automation, so the card keeps what it had and
+      # a re-run once PyPI answers is the remedy (see the mapper's `main`).
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        if: github.ref_name == 'staging'
+        with:
+          python-version: '3.12'
+      - name: Install PyYAML for the inventory loader
+        if: github.ref_name == 'staging'
+        run: python -m pip install --quiet --disable-pip-version-check 'pyyaml==6.0.2'
 
       - name: Resolve deploy env + status (one shared mapping)
         id: env
