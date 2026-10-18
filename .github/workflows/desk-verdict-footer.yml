@@ -1,7 +1,7 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/desk-verdict-footer.yml`
-# (blob 75d9f2da7e3dfb56b87f41a0f6c5e2f518b18ba0) folded with the private source repo's own caller of it,
+# (blob 9bce05e5b1bfc06e76603241a4bd661fd187a20d) folded with the private source repo's own caller of it,
 # `.github/workflows/desk-verdict-footer-caller.yml` (blob 2b0b766974fb8ef2ee55bd361a3a2b914bacab98), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
@@ -151,7 +151,7 @@ jobs:
     name: desk / verdict-footer
     # `ubuntu-slim` ((internal ref)): one mint, two shallow checkouts, one or two
     # paged `gh api` reads -- a one-minute job.
-    runs-on: ubuntu-slim
+    runs-on: ubuntu-slim  # runner: hosted (ubuntu-slim)
     timeout-minutes: 5
     steps:
       # ONE MINT, READ-ONLY, for the two private repos this job checks out over git: this

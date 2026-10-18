@@ -1,7 +1,7 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/code-quality.yml`
-# (blob eba6edba23c8dbd574f9c95fa7f5bc3bd2eb5edc) folded with the private source repo's own caller of it,
+# (blob 0b518673603d66494981dc858402a700e3e24a69) folded with the private source repo's own caller of it,
 # `.github/workflows/code-quality-caller.yml` (blob ec693c3a03c9a13c3669fd94a6b2cb35080808f9), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
@@ -172,7 +172,7 @@ jobs:
     # 2026-09-17 with setup-python + pip measured on slim; early-close always
     # ran there). 10 minutes covers black over a whole tree (n=8 measured
     # 4-13 s) plus the awk pass, well under slim's 15-minute cap.
-    runs-on: ubuntu-slim
+    runs-on: ubuntu-slim  # runner: hosted (ubuntu-slim)
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -504,7 +504,7 @@ jobs:
   # --------------------------------------------------------------- gitleaks ---
   gitleaks:
     name: quality / gitleaks
-    runs-on: ubuntu-slim
+    runs-on: ubuntu-slim  # runner: hosted (ubuntu-slim)
     timeout-minutes: 14  # under ubuntu-slim's hard 15-minute cap, so the timeout speaks before the platform does
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -698,7 +698,7 @@ jobs:
   # ------------------------------------------------------------ house rules ---
   house-rules:
     name: quality / house-rules
-    runs-on: ubuntu-slim
+    runs-on: ubuntu-slim  # runner: hosted (ubuntu-slim)
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -831,7 +831,7 @@ jobs:
   #   docker://image@sha256:<digest>    digest-pinned images only
   action-pins:
     name: quality / action-pins
-    runs-on: ubuntu-slim
+    runs-on: ubuntu-slim  # runner: hosted (ubuntu-slim)
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

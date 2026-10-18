@@ -1,7 +1,7 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/set-pr-status.yml`
-# (blob acf4afc64d3ba0618db3ff31e64254fe6b682af1) folded with the private source repo's own caller of it,
+# (blob fbf4fd4c82dde082ecf2765cc353176323d11902) folded with the private source repo's own caller of it,
 # `.github/workflows/set-pr-status-caller.yml` (blob cc75117351e328f2bf64c58d7c9a2ef9b13e33e4), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
@@ -127,7 +127,7 @@ jobs:
   set-status:
     name: set-status / set-status
     if: ${{ github.event.pull_request.state == 'open' }}
-    runs-on: ubuntu-slim
+    runs-on: ubuntu-slim  # runner: hosted (ubuntu-slim)
     # Declared because `ubuntu-slim` kills at its 15-minute cap with no timeout
     # report ((internal ref) item 2; scripts/runner-tier.py asserts it for every
     # slim job). Measured: set-status / set-status: n=25, 20 s median, 71 s max.
@@ -517,7 +517,7 @@ jobs:
     # already happened, and a late red X on a shipped PR teaches people to ignore
     # the check (rule 4). A retitle happens while the PR is open, when this runs.
     if: ${{ true && github.event.pull_request.state == 'open' }}
-    runs-on: ubuntu-slim
+    runs-on: ubuntu-slim  # runner: hosted (ubuntu-slim)
     timeout-minutes: 5
     steps:
       # The checker lives here, not in the calling repo, so the reusable fetches
