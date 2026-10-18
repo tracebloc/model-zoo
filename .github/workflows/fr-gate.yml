@@ -1,8 +1,8 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/fr-gate.yml`
-# (blob dad6a8087513716445ae26f77b4d2d0cc4c5b5b7) folded with the private source repo's own caller of it,
-# `.github/workflows/fr-gate-caller.yml` (blob c952e1b6cc7a78a421f832c8c0259ecb021f47fc), for a PUBLIC repo: GitHub lets a
+# (blob b062dd99f24fb5d8007aaf438a2ac21325000476) folded with the private source repo's own caller of it,
+# `.github/workflows/fr-gate-caller.yml` (blob 0593a6057c697b36c281485a753b5aa284e91dae), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
 # reusable's jobs inline -- the triggers are the caller's; every `inputs.*` is
@@ -75,6 +75,16 @@ permissions:
 jobs:
   gate:
     name: gate / gate
+    # THE BASE DECIDES ON THE JOB, NOT IN A STEP ((internal ref)). A job skipped by
+    # its `if:` takes no runner; a step-level skip took one on every event of
+    # every PR into `develop` only to print "not gated". The skipped job still
+    # posts `gate / gate`, as `skipped`, which branch protection counts as
+    # passing -- so a PR retargeted OUT of a promotion base still has its stale
+    # FAILURE superseded ((internal ref); the caller's header).
+    # This list and the `case` below are ONE rule in two spellings: the `case`
+    # maps each base listed here to the Status it requires, and fails closed on
+    # any other. fr-gate-selftest parses both and fails when they differ.
+    if: contains(fromJSON('["staging", "main", "master"]'), github.base_ref)
     runs-on: ubuntu-slim
     # ubuntu-slim hard-caps a job at 15 minutes; a board read that takes longer
     # than this is a stuck read, and the cap would kill it without a message.
@@ -88,16 +98,11 @@ jobs:
           case "$BASE" in
             staging)     echo "required=On dev" >> "$GITHUB_OUTPUT" ;;
             main|master) echo "required=Ready for prod"    >> "$GITHUB_OUTPUT" ;;
-            *)           echo "required="                  >> "$GITHUB_OUTPUT" ;;
+            *)           echo "::error::base '$BASE' passed the job's if: but has no required Status here; the two lists disagree, so the gate refuses rather than guessing."; exit 1 ;;
           esac
-
-      - name: Skip if not promoting to staging/main/master
-        if: steps.target.outputs.required == ''
-        run: echo "Target branch '${{ github.base_ref }}' is not gated — nothing to enforce."
 
       - name: Check for skip-fr-gate label
         id: skip
-        if: steps.target.outputs.required != ''
         env:
           LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
         run: |
@@ -110,7 +115,7 @@ jobs:
           fi
 
       - name: Promotion-shape guard — only the train promotes
-        if: steps.target.outputs.required != '' && steps.skip.outputs.skip != 'true'
+        if: steps.skip.outputs.skip != 'true'
         env:
           HEAD_REF: ${{ github.event.pull_request.head.ref }}
           LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
@@ -133,7 +138,7 @@ jobs:
           exit 1
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        if: steps.target.outputs.required != '' && steps.skip.outputs.skip != 'true'
+        if: steps.skip.outputs.skip != 'true'
         with:
           fetch-depth: 0
           ref: ${{ github.event.pull_request.head.sha }}
@@ -147,7 +152,7 @@ jobs:
       # token minted further below.
       - name: Mint a read-only token for org-config (private; the caller's own token cannot read it)
         id: org-config-token
-        if: steps.target.outputs.required != '' && steps.skip.outputs.skip != 'true'
+        if: steps.skip.outputs.skip != 'true'
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
           app-id: ${{ secrets.RELEASE_TRAIN_APP_ID }}
@@ -163,7 +168,7 @@ jobs:
       # actionlint's `job` schema (1.7.12) does not know `workflow_sha`.
       - name: Resolve the tools ref, refusing an empty one
         id: tools-ref
-        if: steps.target.outputs.required != '' && steps.skip.outputs.skip != 'true'
+        if: steps.skip.outputs.skip != 'true'
         env:
           TOOLS_REF: ${{ 'main' }}
           JOB_CONTEXT: ${{ toJSON(job) }}
@@ -180,7 +185,7 @@ jobs:
           echo "ref=$TOOLS_REF" >> "$GITHUB_OUTPUT"
           echo "tools ref: $TOOLS_REF"
       - name: Check out the shared walk script
-        if: steps.target.outputs.required != '' && steps.skip.outputs.skip != 'true'
+        if: steps.skip.outputs.skip != 'true'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: tracebloc/org-config
@@ -197,7 +202,7 @@ jobs:
       # is far better than it passing wrongly.
       - name: Mint an installation token
         id: app-token
-        if: steps.target.outputs.required != '' && steps.skip.outputs.skip != 'true'
+        if: steps.skip.outputs.skip != 'true'
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
           app-id: ${{ secrets.RELEASE_TRAIN_APP_ID }}
@@ -218,7 +223,7 @@ jobs:
 
       - name: Discover items in this promotion
         id: items
-        if: steps.target.outputs.required != '' && steps.skip.outputs.skip != 'true'
+        if: steps.skip.outputs.skip != 'true'
         env:
           BASE_REF: ${{ github.base_ref }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
@@ -237,7 +242,7 @@ jobs:
           bash .org-config-tools/scripts/fr-gate-walk.sh discover
 
       - name: Verify each item is in required Status
-        if: steps.target.outputs.required != '' && steps.skip.outputs.skip != 'true'
+        if: steps.skip.outputs.skip != 'true'
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           ORG: ${{ 'tracebloc' }}
