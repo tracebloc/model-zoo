@@ -1,7 +1,7 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/fr-gate.yml`
-# (blob b062dd99f24fb5d8007aaf438a2ac21325000476) folded with the private source repo's own caller of it,
+# (blob 781164c2388d47c949a48a6f8e191904c6aa4119) folded with the private source repo's own caller of it,
 # `.github/workflows/fr-gate-caller.yml` (blob 0593a6057c697b36c281485a753b5aa284e91dae), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
@@ -85,7 +85,7 @@ jobs:
     # maps each base listed here to the Status it requires, and fails closed on
     # any other. fr-gate-selftest parses both and fails when they differ.
     if: contains(fromJSON('["staging", "main", "master"]'), github.base_ref)
-    runs-on: ubuntu-slim
+    runs-on: ubuntu-slim  # runner: hosted (ubuntu-slim)
     # ubuntu-slim hard-caps a job at 15 minutes; a board read that takes longer
     # than this is a stuck read, and the cap would kill it without a message.
     timeout-minutes: 10

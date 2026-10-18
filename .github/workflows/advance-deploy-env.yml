@@ -1,7 +1,7 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/advance-deploy-env.yml`
-# (blob 11d8eaed76e6074091f02ca6ccdebff1f6134aa4) folded with the private source repo's own caller of it,
+# (blob 2b9935151d688186d3dc3ecf551748a8b053f3c5) folded with the private source repo's own caller of it,
 # `.github/workflows/advance-deploy-env-caller.yml` (blob 5de24d409e5bbf2bccbb720912cd551cbe33b040), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
@@ -97,7 +97,7 @@ jobs:
     # ~50 recent PRs' kanban items — e.g. every time a new `staging` branch is
     # cut for a repo ((internal ref) D8, (internal ref)). Skip create/delete pushes.
     if: github.event.created != true && github.event.deleted != true
-    runs-on: ubuntu-slim
+    runs-on: ubuntu-slim  # runner: hosted (ubuntu-slim)
     # Declared because `ubuntu-slim` kills at its 15-minute cap with no timeout
     # report ((internal ref) item 2; scripts/runner-tier.py asserts it for every
     # slim job). Measured: advance / advance: n=25, 25 s median, 110 s max.

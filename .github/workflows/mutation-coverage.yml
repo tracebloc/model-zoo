@@ -1,7 +1,7 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/mutation-coverage.yml`
-# (blob 908989545c3ee31306c475175dd16fd339649300) folded with the private source repo's own caller of it,
+# (blob 84273bc4e4568bf1cb8e721e00d7d0bf5d5df041) folded with the private source repo's own caller of it,
 # `.github/workflows/mutation-coverage-caller.yml` (blob 239a5c175a6a05ee61c3ae490177b9f7387df3bb), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
@@ -126,7 +126,7 @@ jobs:
     # skipped job reports nothing a protection rule can wait on.
     # `ubuntu-slim` ((internal ref)): two checkouts, one token mint and
     # one `git ls-files` pass -- a one-minute job.
-    runs-on: ubuntu-slim
+    runs-on: ubuntu-slim  # runner: hosted (ubuntu-slim)
     timeout-minutes: 10
     steps:
       # The CALLER's tree FIRST: a checkout at the workspace root cleans the

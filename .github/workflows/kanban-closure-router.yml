@@ -1,7 +1,7 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/kanban-closure-router.yml`
-# (blob 463f39cb8d6b99e4304b36178f23a2389a851f9e) folded with the private source repo's own caller of it,
+# (blob 3be581db6503e5e296ce52963588a4b622a99068) folded with the private source repo's own caller of it,
 # `.github/workflows/kanban-closure-caller.yml` (blob b38b7c1e8514240939dd944ad2e3e6add7fcfd57), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
@@ -76,7 +76,7 @@ permissions: {}
 jobs:
   route:
     name: route / route
-    runs-on: ubuntu-slim
+    runs-on: ubuntu-slim  # runner: hosted (ubuntu-slim)
     # Declared because `ubuntu-slim` kills at its 15-minute cap with no timeout
     # report ((internal ref) item 2; scripts/runner-tier.py asserts it for every
     # slim job). Measured: route / route: n=25, 16 s median, 45 s max.
