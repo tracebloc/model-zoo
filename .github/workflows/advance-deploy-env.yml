@@ -1,7 +1,7 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/advance-deploy-env.yml`
-# (blob 2b9935151d688186d3dc3ecf551748a8b053f3c5) folded with the private source repo's own caller of it,
+# (blob 47361a087cdc6a105e554e613a7037038659a6ec) folded with the private source repo's own caller of it,
 # `.github/workflows/advance-deploy-env-caller.yml` (blob 5de24d409e5bbf2bccbb720912cd551cbe33b040), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
@@ -410,6 +410,18 @@ jobs:
             else
               err="$body"
             fi
+            # ARCHIVED BETWEEN THE LOOKUP AND THIS WRITE ((internal ref)): the
+            # router archives a promotion PR's card when it closes, concurrently
+            # with this push's run, so the `isArchived` skip below can read a live
+            # card that GitHub then refuses to update. That refusal is the
+            # pre-check's own answer, arrived late -- out of the deploy flow, a
+            # clean skip -- and the card's remaining writes are skipped with it.
+            # Only this one message; every other refusal is still a failed write.
+            if grep -qF 'The item is archived and cannot be updated' <<< "$body"; then
+              echo "::notice::#$prnum project item was archived between lookup and write -- $3 not written, skipping (out of deploy flow)"
+              ITEM_ARCHIVED=1
+              return 0
+            fi
             echo "::warning::#$prnum $3 update failed: $err"
             RUN_FAILED=1
             return 0
@@ -502,9 +514,10 @@ jobs:
             fi
 
             echo "-> PR #$prnum: Deploy env = $DEPLOY_ENV (option '$DEPLOY_OPT_NAME')"
+            ITEM_ARCHIVED=0
             update_field "$DEPLOY_FIELD" "$DEPLOY_OPT" "Deploy env=$DEPLOY_OPT_NAME"
 
-            if [ "$SKIP_STATUS" != "1" ]; then
+            if [ "$SKIP_STATUS" != "1" ] && [ "$ITEM_ARCHIVED" = "0" ]; then
               echo "-> PR #$prnum: Status = $STATUS_NAME"
               update_field "$STATUS_FIELD" "$STATUS_OPT" "Status=$STATUS_NAME"
             fi
