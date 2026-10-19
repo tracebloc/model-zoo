@@ -230,6 +230,7 @@ on:
     # than `develop` allowed: that drops the `push` and cron completions ((internal ref)).
     branches-ignore: [develop, staging, main]
     workflows:
+      - CI
       - Code quality
       - Commit hygiene
       - Desk verdict footer
