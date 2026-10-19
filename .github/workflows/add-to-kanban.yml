@@ -1,6 +1,6 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
-# Public-safe copy of `.github/workflows/add-to-kanban.yml` (blob 2a3a432b3d01516575d5c57b9d0a1b2379db299d) for a PUBLIC repo:
+# Public-safe copy of `.github/workflows/add-to-kanban.yml` (blob c1a90a5c9133e0b85649e46b8add62a6a73f8e1c) for a PUBLIC repo:
 # the same workflow, byte for byte, except that its comments are scrubbed as
 # described below. Private repos carry the original; the conformance audit
 # compares a public repo's copy against THIS file and a private repo's
@@ -43,7 +43,7 @@ on:
 jobs:
   add-to-project:
     runs-on: ubuntu-latest
-    # NO GITHUB_TOKEN AT ALL (saadqbal, #2181). Every call in this job authenticates
+    # NO GITHUB_TOKEN AT ALL (#2181). Every call in this job authenticates
     # as the App, so the workflow token needs nothing -- and an empty grant is the
     # only version of that claim a reader can check. Free, and it means the least-
     # privilege story covers both credentials in the job rather than just the loud one.
@@ -64,8 +64,8 @@ jobs:
           app-id: ${{ secrets.RELEASE_TRAIN_APP_ID }}
           private-key: ${{ secrets.RELEASE_TRAIN_APP_PRIVATE_KEY }}
           owner: ${{ github.repository_owner }}
-          # SCOPED TO THIS REPO, or the two reads below land org-wide (saadqbal,
-          # #2181). `owner:` alone does not narrow anything -- run 32239403796 says
+          # SCOPED TO THIS REPO, or the two reads below land org-wide (#2181).
+          # `owner:` alone does not narrow anything -- run 32239403796 says
           # so in as many words: "Input 'repositories' is not set. Creating token for
           # all repositories owned by tracebloc." A token calling itself
           # least-privilege while carrying issue+PR read across all 19 installed
@@ -102,7 +102,7 @@ jobs:
           # has ever produced it. So "fails loudly" is proven for the read scopes and
           # is an expectation, not a measurement, for the write.
           #
-          # AND ONE RUN THAT LOOKED LIKE EVIDENCE IS NOT (aptracebloc). The previous
+          # AND ONE RUN THAT LOOKED LIKE EVIDENCE IS NOT. The previous
           # wording cited run 32237283072 as a second scope failure. It is not one:
           # it ran on `develop`, whose file at that sha passes NO `permission-*` at
           # all (the App's full grant), and it failed on

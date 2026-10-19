@@ -1,8 +1,8 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/desk-dispatch.yml`
-# (blob 7cb8da673e3820b39e9701ec976c2be6d183151a) folded with the private source repo's own caller of it,
-# `.github/workflows/desk-dispatch-caller.yml` (blob da6b3e60b6437c39dee685020829ff7ff0e6e6a0), for a PUBLIC repo: GitHub lets a
+# (blob 1b93a28c9e7a48bf28c3f7b4bbc65359a5143e6b) folded with the private source repo's own caller of it,
+# `.github/workflows/desk-dispatch-caller.yml` (blob 9e033c0a8b6d2b291a38c26d5f458a960291cde6), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
 # reusable's jobs inline -- the triggers are the caller's; every `inputs.*` is
@@ -100,7 +100,7 @@
 # ONE staffing path. Drafts, bots, promotion heads, team requests and the
 # reviewer's own PRs are skipped with the reason in the job summary.
 #
-# THE GREEN GATE (Lukas, 2026-09-14). The review account is the most expensive
+# THE GREEN GATE (decided 2026-09-14). The review account is the most expensive
 # check on a PR, so nothing fires until the head is green; Cursor Bugbot's own
 # check is part of the rollup (its pending holds the head wherever it runs) and
 # review latency becomes CI latency, by design. What "green" means is
@@ -210,7 +210,7 @@ on:
   # NO BASE FILTER HERE ((internal ref), (internal ref)): `on:` filters a BASE ref
   # only and a base-ref filter would also drop an emergency hotfix into `main`,
   # so the promotion predicate can only live in the callee's `if:`.
-  # THE GREEN GATE (Lukas, 2026-09-14): a review fires only once the head is green,
+  # THE GREEN GATE (decided 2026-09-14): a review fires only once the head is green,
   # and a CI workflow completing is the event that carries that. The list names
   # every workflow of THIS repo that runs on a pull-request event AND posts a
   # context `develop` requires -- a gating completion left off the list that
