@@ -631,7 +631,7 @@ def test_an_unparseable_template_is_a_loud_failure(tmp_path) -> None:
 #: correction was measured against ("their regression siblings declare their
 #: library"). Pinning only the classifiers would leave the other half free to
 #: silently recreate the split — e.g. xgboost_regressor drifting to ``tree`` — so
-#: both are asserted here (@shujaatTracebloc on (internal ref)). ``test_every_template_
+#: both are asserted here. ``test_every_template_
 #: declares_a_storable_model_type`` only proves a value is STORABLE, and ``tree``
 #: is storable, so only a per-file pin catches a regression back to it.
 #: hist_gradient_boosting has no histgb value in the platform vocabulary and stays
