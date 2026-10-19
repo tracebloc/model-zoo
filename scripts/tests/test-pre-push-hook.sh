@@ -82,7 +82,7 @@ git config --unset core.hooksPath
 # prefix and read the worktree as the target. Both wrote pre-push above the
 # worktree, the stomp the guard exists to prevent. A `..` in the
 # not-yet-existing suffix cannot be resolved until the prefix exists, so the
-# guard refuses it (Lukas). Assert nothing lands outside the repo.
+# guard refuses it. Assert nothing lands outside the repo.
 esc=$(mktemp -d)
 mkdir -p "$esc/repo"
 ( cd "$esc/repo" && git init -q . && git config user.email t@t && git config user.name t \
@@ -97,7 +97,7 @@ rm -rf "$esc"
 
 # 4d) a not-yet-created IN-REPO hooks dir still INSTALLS — the fresh-clone case
 # the ancestor-walk exists for, and the arm the suffix-`..` refusal must not
-# over-block (Lukas). No `..`, so it is unambiguously in-repo.
+# over-block. No `..`, so it is unambiguously in-repo.
 git config core.hooksPath freshhooks
 make -s install-hooks >/dev/null
 check "$(grep -c 'tracebloc pre-push hook' "$work/freshhooks/pre-push" 2>/dev/null || echo 0)" "1" "core.hooksPath in-repo but not-yet-created: hook installed"
@@ -163,7 +163,7 @@ rm -rf "$stub"; rm -f "$sent"
 # `make -n guard-toolchain` fails there too, so control would reach `exec make
 # check` and hard-block on "No rule to make target check" — with no --no-verify
 # in the GUI clients this family protects. The hook probes `check` too and
-# soft-passes (Lukas). Stub make: -n check has no rule (exit 2).
+# soft-passes. Stub make: -n check has no rule (exit 2).
 sent="$(mktemp -u)"; stub="$(mktemp -d)"
 printf '#!/bin/sh\nfor a in "$@"; do case "$a" in check) exit 2 ;; esac; done\n: > %s\nexit 0\n' "$sent" > "$stub/make"; chmod +x "$stub/make"
 if printf 'refs/heads/x deadbeef refs/heads/x 000\n' | env PATH="$stub:$PATH" sh "$hook"; then rc=0; else rc=$?; fi

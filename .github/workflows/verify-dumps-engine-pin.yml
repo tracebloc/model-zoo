@@ -534,7 +534,7 @@ jobs:
   #    the declaration is quietly wrong -- after which a seed either carries head
   #    weights it must not, or excludes keys that no longer exist. That is the
   #    failure the backbone-only contract exists to remove, coming back through
-  #    the declaration instead of the load (internal ref).
+  #    the declaration instead of the load.
   #
   #    So the derivation is the CHECK rather than the authoring step. It runs
   #    under the ENGINE's pinned stack for the same reason `verify-dumps` does: a
