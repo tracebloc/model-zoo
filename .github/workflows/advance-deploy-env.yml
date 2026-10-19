@@ -1,7 +1,7 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/advance-deploy-env.yml`
-# (blob 47361a087cdc6a105e554e613a7037038659a6ec) folded with the private source repo's own caller of it,
+# (blob 0ebde3008740f7d0de046a946fae55cd76a4d985) folded with the private source repo's own caller of it,
 # `.github/workflows/advance-deploy-env-caller.yml` (blob 5de24d409e5bbf2bccbb720912cd551cbe33b040), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
@@ -175,7 +175,7 @@ jobs:
         # with a `.kanban.yml` present the two workflows wrote DIFFERENT statuses
         # for the same merge and run ordering decided which stuck.
         # Third argument is the REF to read `.kanban.yml` from, which is the branch
-        # being mapped -- not the repo default (Bugbot, (internal ref)).
+        # being mapped -- not the repo default (a Bugbot finding, (internal ref)).
         run: python3 .org-config-tools/scripts/branch_status_map.py "$BRANCH" "$GITHUB_REPOSITORY" "$BRANCH"
 
       - name: Skip if branch not tracked
