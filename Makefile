@@ -193,7 +193,7 @@ install-hooks:
 	      '# every target with -n: an absent check (or Makefile) soft-passes rather' \
 	      '# than hard-blocking a push that has no --no-verify, and an absent' \
 	      '# guard-toolchain falls through to make check instead of skipping it' \
-	      '# silently (Bugbot + Lukas).' \
+	      '# silently.' \
 	      'make -n check >/dev/null 2>&1 || exit 0' \
 	      'if make -n guard-toolchain >/dev/null 2>&1; then make guard-toolchain >/dev/null 2>&1 || exit 0; fi' \
 	      'exec make check' > "$$hook" && \
