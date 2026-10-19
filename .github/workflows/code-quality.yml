@@ -1,7 +1,7 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/code-quality.yml`
-# (blob 0b518673603d66494981dc858402a700e3e24a69) folded with the private source repo's own caller of it,
+# (blob ae62cd4340c27e0c42b0dafe6e59f9bcb1aa738e) folded with the private source repo's own caller of it,
 # `.github/workflows/code-quality-caller.yml` (blob ec693c3a03c9a13c3669fd94a6b2cb35080808f9), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
@@ -878,7 +878,7 @@ jobs:
                       continue
                   # tracebloc/* is judged FIRST: the org convention is @main and
                   # nothing else, so a tracebloc ref frozen on a SHA is drift,
-                  # not a pin (Bugbot, .github#159) - SHA_PIN must never see it.
+                  # not a pin (a Bugbot finding, .github#159) - SHA_PIN must never see it.
                   if ref.startswith("tracebloc/"):
                       if TB_MAIN.match(ref):
                           continue
@@ -896,7 +896,7 @@ jobs:
               # workflow file (its own caller), so an empty glob means the
               # checkout or working directory is wrong - a malfunction, not a
               # clean tree. Malfunctions fail even under soft-fail: that flag
-              # governs FINDINGS, never the scan's own integrity (Bugbot,
+              # governs FINDINGS, never the scan's own integrity (a Bugbot finding,
               # .github#159; the watchdog's findings-vs-malfunction split).
               print("::error::action-pins scanned ZERO workflow files - the checkout or cwd is wrong; refusing to report a pass")
               sys.exit(2)
@@ -907,7 +907,7 @@ jobs:
 
           # The summary carries the FULL list, like ruff/format/gitleaks do:
           # annotations cap at ten per step, so a backlog-carrying repo would
-          # otherwise show ten warnings and a bare number (Bugbot, .github#159).
+          # otherwise show ten warnings and a bare number (a Bugbot finding, .github#159).
           summary = os.environ.get("GITHUB_STEP_SUMMARY")
           if summary:
               with open(summary, "a", encoding="utf-8") as out:
