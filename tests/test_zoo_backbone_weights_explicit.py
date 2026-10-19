@@ -26,7 +26,7 @@ shim maps it onto ``weights`` and never touches ``weights_backbone``.
 
 WHY THIS FILE EXISTS -- two guards, one blind spot each
 -------------------------------------------------------
-Neither existing half sees this shape, and this is @LukasWodka's observation on
+Neither existing half sees this shape, and the observation on
 (internal ref) that neither alone is sufficient:
 
 * ``test_model_contract.py::test_no_runtime_hub_fetch_patterns`` is the zoo-wide

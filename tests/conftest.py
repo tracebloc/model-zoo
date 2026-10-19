@@ -56,7 +56,7 @@ from ingest_producer_marker import pytest_collection_modifyitems, pytest_configu
 # Force the closed door for the whole test session (not setdefault — the point
 # is that the suite proves templates build with the hub shut, regardless of the
 # ambient environment).
-# TAKEN from the ship-build's own environment, not restated (@LukasWodka). The
+# TAKEN from the ship-build's own environment, not restated. The
 # header below claimed this "mirrors" `_offline_env` while omitting
 # `HUGGINGFACE_HUB_CACHE`, which takes precedence over `HF_HOME` when it is set in
 # the parent environment -- and offline mode serves a warm cache happily, without
@@ -120,7 +120,7 @@ def _shut_the_torch_door() -> None:
 
 _shut_the_torch_door()
 
-# AND THE SOCKET, ONCE, REGARDLESS OF IMPORT ORDER (@LukasWodka ask 3).
+# AND THE SOCKET, ONCE, REGARDLESS OF IMPORT ORDER.
 # The rebind above is the MESSAGE-BEARING layer -- it names `weights_backbone=None`,
 # which is what a template author has to read. What it cannot do is survive import
 # order. torchvision captures the loader BY VALUE at import
