@@ -55,7 +55,7 @@ def test_the_refusal_names_the_actual_fix():
     `pretrained=False` is the spelling that looked like it settled this and did not: the
     legacy shim maps it to `weights=None` and never touches `weights_backbone`.
 
-    ONE token, not two prose substrings (@LukasWodka): `weights_backbone=None` is the
+    ONE token, not two prose substrings: `weights_backbone=None` is the
     load-bearing thing a reader must find. Pinning the surrounding sentence as well made
     this a copy of the message, red on a reword that changed nothing about the door.
     """
@@ -106,7 +106,7 @@ def test_the_fixed_call_constructs_offline():
 
 
 def test_the_socket_is_shut_too():
-    """The layer that does not depend on import order (@LukasWodka ask 3).
+    """The layer that does not depend on import order.
 
     `prep_offline_weights._block_network()` refuses at the socket, which is what covers
     `torch.hub.download_url_to_file` (timm's fetch path), `urllib` and `requests` --

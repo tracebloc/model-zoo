@@ -89,7 +89,7 @@ def cmd_check(zoo: Path, verdict: Path) -> int:
     quietly wrong -- after which a seed either carries head weights it should
     not or excludes keys that no longer exist. That is the failure this whole
     contract exists to remove, coming back through the declaration instead of
-    the load (Lukas, (internal ref)).
+    the load.
 
     So the derivation is the CHECK, not the authoring step.
 
