@@ -23,7 +23,7 @@
 # the engine goes red here instead of reaching the edge.
 pytest
 # CPU wheel index for torch/torchvision, so CI on a CPU runner does not pull the
-# ~2 GB CUDA wheel. Versions stay engine-pinned at 2.13.0 / 0.28.0; the
+# ~2 GB CUDA wheel. Versions stay engine-pinned at 2.14.1 / 0.29.1; the
 # engine-pin drift guard reads only the `pkg==ver` lines, not this option, so
 # the mirror stays in agreement.
 #
@@ -38,15 +38,15 @@ pytest
 # change than the CUDA-wheel problem this line exists to solve.
 #
 # What this line therefore does NOT guarantee: which wheel wins. Both indexes
-# offer `torch==2.13.0`, and the CPU build carries the `+cpu` PEP 440 local
+# offer `torch==2.14.1`, and the CPU build carries the `+cpu` PEP 440 local
 # label, which sorts ABOVE the plain PyPI version for the same release — that
 # ordering is what selects it, not the presence of the option. Confirm it the
 # only way that settles it: assert `torch.__version__` ends in `+cpu` in CI, or
-# `pip download torch==2.13.0` and read the filename. A green `dead-weight`
+# `pip download torch==2.14.1` and read the filename. A green `dead-weight`
 # `cuda-torch-on-cpu` check proves only that the CHECKER greps for this option.
 --extra-index-url https://download.pytorch.org/whl/cpu
-torch==2.13.0
-torchvision==0.28.0
+torch==2.14.1
+torchvision==0.29.1
 transformers==5.10.1
 timm==1.0.26
 # peft: no `import peft` anywhere in model_zoo/, tests/ or tools/ -- templates
