@@ -1,8 +1,8 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/desk-verdict-footer.yml`
-# (blob 9bce05e5b1bfc06e76603241a4bd661fd187a20d) folded with the private source repo's own caller of it,
-# `.github/workflows/desk-verdict-footer-caller.yml` (blob 2b0b766974fb8ef2ee55bd361a3a2b914bacab98), for a PUBLIC repo: GitHub lets a
+# (blob 9b790f8e5a6fb1752fe92289a7d730c45b19fece) folded with the private source repo's own caller of it,
+# `.github/workflows/desk-verdict-footer-caller.yml` (blob bcee1883d619384ab1440cca73b88bbf012e425f), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
 # reusable's jobs inline -- the triggers are the caller's; every `inputs.*` is
@@ -106,6 +106,9 @@ name: Desk verdict footer
 # WHAT A CALLER MUST TRIGGER ON, and the caller job's id:
 #   pull_request:        [opened, synchronize, reopened, ready_for_review]  -- a new head
 #                        needs a run of its own, or the context is missing on it
+#   pull_request:        [auto_merge_enabled]  -- a run pending between the desk's arm and
+#                        its APPROVE's own run; the script passes it while no APPROVE is on
+#                        the head, and GitHub never sees an approved head with nothing pending
 #   pull_request_review: [submitted, edited, dismissed]  -- the approval itself, an edit of
 #                        its body, and the remedy (dismissing a footerless approval)
 #   merge_group:         -- ONLY on a repo whose protected branch merges through a merge
@@ -138,7 +141,7 @@ name: Desk verdict footer
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
+    types: [opened, synchronize, reopened, ready_for_review, auto_merge_enabled]
   pull_request_review:
     types: [submitted, edited, dismissed]
 
