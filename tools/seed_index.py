@@ -47,8 +47,8 @@ DUMP_DIR_CATEGORY = {
 
 
 #: `tests/test_model_contract.py` is the SOURCE OF TRUTH for which templates are
-#: too big to build on a CI runner (`gemma_2`'s fp32 tensors alone are ~10.5 GB
-#: on a ~16 GB runner). `verify_dumps_against_engine_pin.py` already mirrors it
+#: too big to build on a CI runner (the retired `gemma_2`'s fp32 tensors alone
+#: were ~10.5 GB on a ~16 GB runner). `verify_dumps_against_engine_pin.py` already mirrors it
 #: by hand; rather than add a THIRD copy, read the real one.
 _CONTRACT_TEST = "tests/test_model_contract.py"
 _RAM_SKIP_CONSTANT = "_TOO_LARGE_FOR_CI_RAM"

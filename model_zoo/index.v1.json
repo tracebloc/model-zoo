@@ -1696,17 +1696,6 @@
       "averageable": true
     },
     {
-      "id": "text_classification/pytorch/gemma_2",
-      "upload": "text_classification/pytorch/gemma_2.py",
-      "category": "text_classification",
-      "framework": "pytorch",
-      "model_type": "",
-      "label": "Gemma 2",
-      "batch": 4,
-      "params": 2614353408,
-      "averageable": true
-    },
-    {
       "id": "text_classification/pytorch/gte_modernbert",
       "upload": "text_classification/pytorch/gte_modernbert.py",
       "category": "text_classification",
