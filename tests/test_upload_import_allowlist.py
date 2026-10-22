@@ -51,9 +51,7 @@ KNOWN_REFUSED: dict[str, set[str]] = {}
 #: what the gate refuses, by ``_gate_refusals``. A parked template the gate would
 #: admit fails below: un-park it.
 PARKED_ROOT = ROOT / "parked"
-PARKED = {
-    "tabular_classification/sklearn/random_forest_stability.py": {"B110"},
-}
+PARKED: dict[str, set[str]] = {}
 
 
 def _allowed() -> frozenset[str]:
