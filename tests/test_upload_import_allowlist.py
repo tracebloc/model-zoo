@@ -17,9 +17,11 @@ template's AST the way Bandit builds its per-file import set: every ``import``
 and ``from ... import`` statement, at ANY depth. An import inside a function
 body counts the same as one at the top of the file.
 
-A second, narrower check covers the one non-import Bandit finding a template
-has tripped: B610 (Django ``QuerySet.extra``) matches any call whose name is
-``extra``, so a loop variable called ``extra`` refused ``efficientdet_d0.py``.
+Two narrower checks cover the non-import Bandit findings a template has
+tripped: B610 (Django ``QuerySet.extra``) matches any call whose name is
+``extra``, so a loop variable called ``extra`` refused ``efficientdet_d0.py``;
+B110 matches an ``except`` whose whole body is ``pass``, which kept the
+stability-selection templates out.
 
 Stdlib only, no network, no Bandit install: runs in every CI framework job.
 """
@@ -43,18 +45,13 @@ CONTRACT = (
 #: make a new template pass: an import the gate refuses is that template's bug.
 KNOWN_REFUSED: dict[str, set[str]] = {}
 
-#: Templates PARKED because the gate refuses them and the fix is a platform
-#: change: moved out of ``model_zoo/`` to the same path under ``parked/``, so no
-#: walker, and no row of ``index.v1.json``, offers them (``parked/README.md``).
-#: Each row records what the gate refuses and the issue that brings it back. A
-#: parked template the gate would admit fails below: un-park it.
+#: Templates PARKED because the gate refuses them: moved out of ``model_zoo/`` to
+#: the same path under ``parked/``, so no walker, and no row of ``index.v1.json``,
+#: offers them (``parked/README.md`` says what brings each back). Each row records
+#: what the gate refuses, by ``_gate_refusals``. A parked template the gate would
+#: admit fails below: un-park it.
 PARKED_ROOT = ROOT / "parked"
-PARKED = {
-    # numpy is not on the allowlist; it comes back with numpy allowlisted and
-    # its file I/O banned in the same scan change (model-zoo#143).
-    "tabular_classification/sklearn/logistic_regression_stability.py": {"numpy"},
-    "tabular_classification/sklearn/random_forest_stability.py": {"numpy"},
-}
+PARKED: dict[str, set[str]] = {}
 
 
 def _allowed() -> frozenset[str]:
@@ -85,6 +82,27 @@ def _refused_imports(source: str, allowed: frozenset[str]) -> set[str]:
             top = name.split(".", 1)[0]
             if top not in allowed:
                 refused.add(top)
+    return refused
+
+
+def _try_except_pass_lines(source: str) -> list[int]:
+    """Lines of the handlers Bandit's B110 flags under the default config the scan
+    runs with: a bare ``except:`` or ``except Exception:`` whose whole body is ``pass``."""
+    lines = []
+    for node in ast.walk(ast.parse(source)):
+        if not isinstance(node, ast.ExceptHandler) or len(node.body) != 1:
+            continue
+        broad = node.type is None or getattr(node.type, "id", None) == "Exception"
+        if broad and isinstance(node.body[0], ast.Pass):
+            lines.append(node.lineno)
+    return lines
+
+
+def _gate_refusals(source: str, allowed: frozenset[str]) -> set[str]:
+    """What the gate refuses in *source*: imports by top-level name, B110 by its id."""
+    refused = _refused_imports(source, allowed)
+    if _try_except_pass_lines(source):
+        refused.add("B110")
     return refused
 
 
@@ -150,6 +168,32 @@ def test_template_makes_no_call_named_extra(path: pathlib.Path) -> None:
     )
 
 
+def test_the_b110_walk_sees_what_bandit_flags() -> None:
+    """A control on each handler shape, flagged or not, under Bandit's default config."""
+    probes = {
+        "try:\n    f()\nexcept:\n    pass\n": [3],
+        "try:\n    f()\nexcept Exception:\n    pass\n": [3],
+        "try:\n    f()\nexcept ValueError:\n    pass\n": [],
+        "try:\n    f()\nexcept Exception:\n    g()\n": [],
+        "try:\n    f()\nexcept Exception:\n    pass\n    g()\n": [],
+    }
+    for source, expected in probes.items():
+        assert _try_except_pass_lines(source) == expected, source
+
+
+@pytest.mark.parametrize(
+    "path", _templates(), ids=lambda p: str(p.relative_to(ZOO))
+)
+def test_template_has_no_try_except_pass(path: pathlib.Path) -> None:
+    """Bandit B110 flags ``except: pass``, and one finding refuses the upload."""
+    hits = _try_except_pass_lines(path.read_text())
+    assert not hits, (
+        f"{path.relative_to(ZOO)} swallows an exception with `pass` at line(s) {hits}; "
+        "Bandit's B110 flags it and the backend refuses the upload. Handle the case "
+        "the exception stands for, or let it raise."
+    )
+
+
 def _index_ids() -> set[str]:
     return {row["id"] for row in json.loads((ZOO / "index.v1.json").read_text())["templates"]}
 
@@ -174,7 +218,7 @@ def test_a_parked_template_is_not_offered(rel: str) -> None:
 @pytest.mark.parametrize("rel", sorted(PARKED))
 def test_a_parked_template_is_still_refused(rel: str) -> None:
     """The reason it was parked still holds; once the gate admits it, un-park it."""
-    refused = _refused_imports((PARKED_ROOT / rel).read_text(), _allowed())
+    refused = _gate_refusals((PARKED_ROOT / rel).read_text(), _allowed())
     assert refused == PARKED[rel], (
         f"parked/{rel} is parked for {sorted(PARKED[rel])} but the gate now refuses "
         f"{sorted(refused)}. If that is nothing, un-park it (parked/README.md)."

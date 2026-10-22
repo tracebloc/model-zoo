@@ -5,9 +5,9 @@
     "repo": "backend",
     "path": "bandit_tracebloc_model_validation/bandit_plugins/import_names.py",
     "symbol": "ALLOWED_PYTHON_PACKAGE_IMPORTS",
-    "ref": "a91c404bb29a0d29a884e5e469de0b9b04ced252",
+    "ref": "17dab7907ffa2c5f7f90da0e24609ce9651db50b",
     "branch": "main",
-    "date": "2026-10-06"
+    "date": "2026-10-22"
   },
   "allowed_top_level_packages": [
     "catboost",
@@ -16,6 +16,7 @@
     "lifelines",
     "lightgbm",
     "math",
+    "numpy",
     "peft",
     "pycox",
     "pytorch_forecasting",

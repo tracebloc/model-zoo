@@ -85,7 +85,7 @@ The top-level packages an uploaded model file may import: `ALLOWED_PYTHON_PACKAG
 in the backend's upload-scan Bandit plugin (TBT001).
 
 - **Upstream:** `backend` — `bandit_tracebloc_model_validation/bandit_plugins/import_names.py`
-- **Pinned ref:** `a91c404bb29a0d29a884e5e469de0b9b04ced252` (`main`, 2026-10-06; `develop` identical)
+- **Pinned ref:** `17dab7907ffa2c5f7f90da0e24609ce9651db50b` (`main`, 2026-10-22; `develop` identical)
 - **Why it exists:** the scan refuses an upload whose file imports any other top-level name,
   **standard library included**. `from typing import List` or `import copy` is enough. Nothing in
   this repo checked it, so `cascade_rcnn.py`, `sparse_rcnn.py` and `yolov10_s.py` shipped and could
