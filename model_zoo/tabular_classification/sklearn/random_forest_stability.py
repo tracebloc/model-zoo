@@ -16,9 +16,20 @@ This is the consensus comparator to the LASSO variant
 meaningful here (use the LASSO model for direction of effect).
 
 Call ``get_stability_report()`` for a ready-to-tabulate dict. The fitted model
-is saved by the tracebloc client as the experiment's weights artifact; download
-it, load the estimator, and read these attributes to build a selection-frequency
-panel — no raw data leaves the environment.
+is saved as a plain scikit-learn ``Pipeline`` (impute, scale, then the forest
+trained on all rows), because the platform reloads weights with a loader that
+admits scikit-learn and numpy classes only, so a run's weights artifact loads
+without this file. The report rides on it as ``stability_report_``::
+
+    import pickle
+
+    with open("trained_weights.pkl", "rb") as f:
+        model = pickle.load(f)
+    report = model.stability_report_
+    report["features"]   # selection_frequency and mean_effect per feature, most stable first
+    report["summary"]    # held-out AUROC over the folds
+
+No raw data leaves the environment.
 
 Preprocessing (median imputation + standardisation) is fit INSIDE each CV fold
 via an sklearn Pipeline, so per-fold statistics never leak across the split.
@@ -132,18 +143,20 @@ class StabilityFeatureSelector(ClassifierMixin, BaseEstimator):
                 effect_sums += effect
                 n_folds += 1
                 y_val = y[val_idx]
-                if np.unique(y_val).size >= 2 and hasattr(pipe, "predict_proba"):
-                    try:
-                        proba = pipe.predict_proba(X[val_idx])
-                        if proba.shape[1] == 2:
-                            score = roc_auc_score(y_val, proba[:, 1])
-                        else:
-                            score = roc_auc_score(
-                                y_val, proba, multi_class="ovr", labels=self.classes_
-                            )
-                        fold_aurocs.append(float(score))
-                    except Exception:
-                        pass
+                # AUROC is defined only when the held-out fold holds every class
+                # the scores have a column for; stratification gives that, and a
+                # fold without it is skipped rather than scored.
+                if np.unique(y_val).size == self.classes_.size and hasattr(
+                    pipe, "predict_proba"
+                ):
+                    proba = pipe.predict_proba(X[val_idx])
+                    if proba.shape[1] == 2:
+                        score = roc_auc_score(y_val, proba[:, 1])
+                    else:
+                        score = roc_auc_score(
+                            y_val, proba, multi_class="ovr", labels=self.classes_
+                        )
+                    fold_aurocs.append(float(score))
 
         self.n_folds_total_ = n_folds
         self.selection_frequency_ = (
@@ -156,7 +169,18 @@ class StabilityFeatureSelector(ClassifierMixin, BaseEstimator):
         self.final_estimator_ = self._build_pipeline(
             clone(self.base_estimator)
         ).fit(X, y)
+        self.final_estimator_.stability_report_ = self._report()
         return self
+
+    def __reduce_ex__(self, protocol):
+        # The platform reloads weights with a loader that admits scikit-learn and
+        # numpy classes only, never this file's: a fitted selector pickles as its
+        # final Pipeline, with the report on it. An unfitted one (the SDK pickles
+        # the model before training) keeps its class.
+        if hasattr(self, "final_estimator_"):
+            pipe = self.final_estimator_
+            return (Pipeline, (pipe.steps,), pipe.__getstate__())
+        return super().__reduce_ex__(protocol)
 
     def predict(self, X):
         return self.final_estimator_.predict(np.asarray(X, dtype=float))
@@ -166,6 +190,11 @@ class StabilityFeatureSelector(ClassifierMixin, BaseEstimator):
 
     def get_stability_report(self):
         """Plain dict of the stability results, ready to tabulate or store as JSON."""
+        if hasattr(self, "final_estimator_"):
+            return self.final_estimator_.stability_report_
+        return self._report()
+
+    def _report(self):
         freq = np.asarray(getattr(self, "selection_frequency_", []))
         eff = np.asarray(getattr(self, "mean_coefficient_", []))
         features = [

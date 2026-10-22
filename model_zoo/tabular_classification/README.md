@@ -21,6 +21,7 @@ Classify structured, tabular records into discrete categories.
 | Model | When to pick |
 |---|---|
 | [`logistic_regression_stability.py`](sklearn/logistic_regression_stability.py) | Many candidate features, few rows: which features truly predict the label, and which only look predictive by chance |
+| [`random_forest_stability.py`](sklearn/random_forest_stability.py) | Random-forest importance-based selection; consensus comparator to the logistic template |
 
 `fit` fits an L1-penalised logistic regression on 1,000 random halves of the
 training rows, at each of 10 penalties. A feature chosen in at least 75% of the
@@ -49,6 +50,17 @@ report["expected_false_selections_bound"]
 
 On the platform the model sees the features as numbers, so the report names them
 `x0`, `x1`, ... in the dataset's column order, without the label.
+
+`random_forest_stability.py` runs `n_splits` x `n_repeats` stratified CV inside
+`fit` (default 10 x 10 = 100 models), building a fresh `impute -> scale -> forest`
+pipeline per fold so per-fold statistics never leak across the split, and records
+how often each feature's importance clears 1 / n_features, plus held-out AUROC per
+fold. Class imbalance is handled with `class_weight='balanced'`. Run it with
+**1 epoch and 1 cycle**. Its artifact is also a plain scikit-learn `Pipeline`
+(imputer, scaler, then the forest trained on all rows); `model.stability_report_`
+holds `features` (per feature: `selection_frequency`, `mean_effect`, most stable
+first), `fold_aurocs` and a `summary` of them. `mean_effect` is the mean
+importance; direction is not meaningful for a forest.
 
 ### PyTorch (pick when features have sequential/spatial structure)
 

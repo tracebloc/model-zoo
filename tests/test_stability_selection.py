@@ -3,8 +3,8 @@
 The logistic template is checked here on a small planted problem (seeded, a few
 seconds), and on the platform's first-run example data in the CI job that checks
 out the ingestor (the ``ingest_producer`` marker, deselected everywhere else).
-The random-forest template is parked (``parked/README.md``) and keeps the
-behaviour tests it was parked with.
+The random-forest template keeps the behaviour tests it was parked with, and
+gets the logistic template's pickle checks.
 """
 import csv
 import hashlib
@@ -29,8 +29,8 @@ from sklearn.pipeline import Pipeline  # noqa: E402
 from sklearn.preprocessing import StandardScaler  # noqa: E402
 
 ROOT = pathlib.Path(__file__).parent.parent
-LOGISTIC = ROOT / "model_zoo" / "tabular_classification" / "sklearn" / "logistic_regression_stability.py"
-PARKED_SKL = ROOT / "parked" / "tabular_classification" / "sklearn"
+ZOO_SKL = ROOT / "model_zoo" / "tabular_classification" / "sklearn"
+LOGISTIC = ZOO_SKL / "logistic_regression_stability.py"
 
 
 def _load(path):
@@ -287,9 +287,9 @@ def test_dropping_a_recovered_planted_cpg_fails_the_check(bundle_run):
     )
 
 
-# --- the parked random-forest template -------------------------------------
+# --- the random-forest template ---------------------------------------------
 
-FOREST = PARKED_SKL / "random_forest_stability.py"
+FOREST = ZOO_SKL / "random_forest_stability.py"
 
 
 def _forest_data(seed=0, n_per=30, p=8, nan_frac=0.1):
@@ -339,3 +339,48 @@ def test_forest_tiny_n_does_not_raise():
     y = np.array([0, 1, 0, 1])
     model.fit(X, y)
     assert model.predict(X).shape == (4,)
+
+
+@pytest.fixture(scope="module")
+def forest_fit():
+    mod = _load(FOREST)
+    model = mod.StabilityFeatureSelector(
+        base_estimator=mod.MyModel().base_estimator, n_splits=3, n_repeats=2, random_state=0
+    )
+    X, y = _forest_data()
+    return mod, X, model.fit(X, y)
+
+
+def test_the_fitted_forest_pickles_as_a_plain_sklearn_pipeline(forest_fit):
+    """As the logistic template: the weight loader admits scikit-learn and numpy
+    classes, never one from the uploaded file."""
+    mod, X, model = forest_fit
+    loaded, seen = _globals_in(pickle.dumps(model))
+    assert type(loaded) is Pipeline
+    assert not any(module == mod.__name__ for module, _ in seen), seen
+    assert {module.split(".")[0] for module, _ in seen} <= {"sklearn", "numpy"}, seen
+    assert loaded.stability_report_ == model.get_stability_report()
+    assert loaded.stability_report_["summary"]["n_folds"] == 6
+    np.testing.assert_array_equal(loaded.predict_proba(X), model.predict_proba(X))
+
+
+def test_an_unfitted_forest_keeps_its_class(monkeypatch):
+    mod = _load(FOREST)
+    monkeypatch.setitem(sys.modules, mod.__name__, mod)
+    model = mod.MyModel()
+    assert type(pickle.loads(pickle.dumps(model))) is type(model)
+    assert clone(model).get_params().keys() == model.get_params().keys()
+
+
+def test_forest_scores_every_fold_of_a_three_class_fit():
+    """The fold-AUROC loop has no ``except: pass`` (Bandit B110) any more: every
+    stratified fold holds every class, so every fold is scored, multi-class too."""
+    mod = _load(FOREST)
+    model = mod.StabilityFeatureSelector(
+        base_estimator=mod.MyModel().base_estimator, n_splits=3, n_repeats=2, random_state=0
+    )
+    X, y = _forest_data(n_per=30)
+    y = np.where(np.arange(len(y)) % 3 == 0, 2, y)
+    model.fit(X, y)
+    assert len(model.fold_aurocs_) == model.n_folds_total_ == 6
+    assert all(0.0 <= a <= 1.0 for a in model.fold_aurocs_)
