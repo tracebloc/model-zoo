@@ -189,8 +189,9 @@ def main(argv=None) -> int:
     # only what is actually missing.
     out_path = Path(args.out) if args.out else None
     # DO NOT BUILD WHAT CI CANNOT HOLD (Bugbot). This sweep builds every template
-    # TWICE, and `gemma_2`'s fp32 tensors alone are ~10.5 GB on a ~16 GB runner --
-    # so the full sweep would SIGKILL rather than report drift. The existing
+    # TWICE, and a multi-billion-parameter template (the retired `gemma_2`: ~10.5
+    # GB of fp32 tensors on a ~16 GB runner) would SIGKILL the sweep rather than
+    # report drift. The existing
     # tooling already skips it; this reads the same list instead of restating it.
     skips = ci_ram_skips(zoo)
 
