@@ -139,17 +139,15 @@ _RUNTIME_HUB_FETCH = re.compile(
 # fetch, so they are constructible in tests — which is the point. But
 # construction materializes the full fp32 random-init parameter set in RAM, and
 # for multi-billion-parameter templates that exceeds the ~16GB of a standard
-# ubuntu-latest runner (gemma_2: ~2.6B params -> ~10.5GB for the tensors alone,
-# before torch/test overhead). This is the ONLY reason a template is excluded
-# from the instantiation test — a RAM ceiling, never a network dependency (the
+# ubuntu-latest runner (the retired gemma_2, ~2.6B params, needed ~10.5GB for the
+# tensors alone; the set is empty since it was dropped). This is
+# the ONLY reason a template is excluded from the instantiation test — a RAM ceiling, never a network dependency (the
 # hub is closed; see test_no_runtime_hub_fetch_patterns).
 # Keyed on the path relative to MODEL_ROOT (posix), not the basename: 19
 # basenames are duplicated across task directories (e.g. bert_base_uncased.py
 # in both text_classification and sentence_pair_classification), so a
 # basename key would silently skip every file sharing the name.
-_TOO_LARGE_FOR_CI_RAM = {
-    "text_classification/pytorch/gemma_2.py",
-}
+_TOO_LARGE_FOR_CI_RAM = set()
 
 
 def _ci_ram_skip_key(path: pathlib.Path) -> str:

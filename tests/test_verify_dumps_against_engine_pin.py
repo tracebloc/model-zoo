@@ -214,11 +214,18 @@ def test_partial_built_with_is_red(tmp_path):
     )
 
 
-def test_too_large_template_is_skipped_not_built(tmp_path):
+def test_too_large_template_is_skipped_not_built(tmp_path, monkeypatch):
     """A dump whose template is too large to construct in CI RAM is reported
     SKIPPED_RAM: the build is not attempted (so it can't OOM the sweep and take
-    every other dump down with it) and it does not redden the gate."""
+    every other dump down with it) and it does not redden the gate.
+
+    The entry is planted rather than read from the real set, which is empty
+    since gemma_2 was dropped: the mechanism must still work for
+    the next template that needs it."""
     mod = _tool()
+    monkeypatch.setattr(
+        mod, "_TOO_LARGE_FOR_CI_RAM", {"text_classification/pytorch/huge_llm.py"}
+    )
     dumps = _write_dumps(tmp_path)
     huge = pathlib.PurePosixPath(next(iter(mod._TOO_LARGE_FOR_CI_RAM)))
     # The template must EXIST now — an entry resolves to its template by name
