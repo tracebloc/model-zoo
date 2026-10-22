@@ -195,9 +195,7 @@ _NOT_FAILURES = (OK, SKIPPED_RAM, RETIRED_ENTRY, NOT_FETCHED)
 # the path relative to model_zoo/ (directory-scoped, never a bare basename: 19
 # basenames are duplicated across task dirs, so a basename key would skip the
 # wrong files).
-_TOO_LARGE_FOR_CI_RAM = {
-    "text_classification/pytorch/gemma_2.py",
-}
+_TOO_LARGE_FOR_CI_RAM = set()
 
 
 class ManifestError(ValueError):
