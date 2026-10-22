@@ -1377,6 +1377,17 @@
       "averageable": true
     },
     {
+      "id": "tabular_classification/sklearn/random_forest_stability",
+      "upload": "tabular_classification/sklearn/random_forest_stability.py",
+      "category": "tabular_classification",
+      "framework": "sklearn",
+      "model_type": "tree",
+      "label": "Random Forest Stability",
+      "batch": 4,
+      "params": null,
+      "averageable": false
+    },
+    {
       "id": "tabular_classification/sklearn/svm",
       "upload": "tabular_classification/sklearn/svm.py",
       "category": "tabular_classification",
