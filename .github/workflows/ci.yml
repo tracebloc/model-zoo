@@ -3,8 +3,10 @@ name: CI
 on:
   pull_request:
     branches: [main, develop]
+  # `develop` only: main receives the release train's merge commits, whose tree a develop
+  # push run already tested, and no protection on main reads this workflow's jobs.
   push:
-    branches: [main, develop]
+    branches: [develop]
 
 concurrency:
   group: ci-${{ github.ref }}
