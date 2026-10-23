@@ -39,9 +39,9 @@ Each row::
     averageable  whether the federated merge can combine this model across
                  edges (``is_averageable``). Always true for PyTorch (weights are
                  averaged); for the pickle frameworks it depends on the final
-                 estimator, and a false row is still listed -- it trains on a
-                 single-edge dataset -- so a picker can flag it on a multi-edge
-                 one.
+                 estimator of the model a trained run uploads, and a false row
+                 is still listed -- it trains on a single-edge dataset -- so a
+                 picker can flag it on a multi-edge one.
 
 The static fields need nothing but the standard library. ``params`` needs torch
 and ``averageable`` needs the template's own framework, and CI runs one
@@ -60,12 +60,14 @@ from __future__ import annotations
 import argparse
 import ast
 import contextlib
+import copyreg
 import importlib
 import importlib.util
 import io
 import json
 import os
 import pathlib
+import pickle
 import re
 import sys
 import tempfile
@@ -443,7 +445,56 @@ def _final_estimator(model):
     return model
 
 
-def is_averageable(path: pathlib.Path, framework: str) -> bool:
+#: Rows of the synthetic table ``_as_uploaded`` fits a template on.
+FIT_ROWS = 40
+
+
+def _rewrites_its_pickle(estimator) -> bool:
+    """Whether ``estimator``'s class overrides how it pickles (``__reduce__``,
+    ``__reduce_ex__`` or a ``copyreg`` registration). The engine uploads a trained
+    model by pickling it, so such a model arrives as whatever that returns."""
+    cls = type(estimator)
+    return not (
+        cls.__reduce_ex__ is object.__reduce_ex__
+        and cls.__reduce__ is object.__reduce__
+        and cls not in copyreg.dispatch_table
+    )
+
+
+def _as_uploaded(model, consts: dict):
+    """``model`` fitted on a synthetic table shaped by the template's own
+    ``num_feature_points`` and ``output_classes``, pickled and loaded back.
+    Raises ValueError for a template it does not know how to fit, rather than
+    guess what it uploads."""
+    import numpy as np
+
+    category = consts.get("category")
+    if category != "tabular_classification":
+        raise ValueError(
+            f"its estimator rewrites its pickle, and only a tabular_classification "
+            f"template can be fitted to see what it uploads, not {category!r}"
+        )
+    features, classes = consts.get("num_feature_points"), consts.get("output_classes")
+    if not (type(features) is int and features >= 1) or not (
+        type(classes) is int and classes >= 2
+    ):
+        raise ValueError(
+            "its estimator rewrites its pickle, and fitting it needs int literals "
+            f"num_feature_points >= 1 and output_classes >= 2, got {features!r}, {classes!r}"
+        )
+    rng = np.random.default_rng(0)
+    X = rng.normal(size=(FIT_ROWS, features))
+    y = np.arange(FIT_ROWS) % classes
+    with contextlib.redirect_stdout(io.StringIO()):
+        model.fit(X, y)
+    return pickle.loads(pickle.dumps(model))
+
+
+def is_averageable(path: pathlib.Path, consts: dict) -> bool:
+    """Judged on the model a trained run uploads: for most templates ``MyModel()``
+    itself, for one whose estimator rewrites its pickle what ``_as_uploaded``
+    returns."""
+    framework = consts["framework"]
     if framework == "pytorch":
         return True
     allowed = []
@@ -454,8 +505,10 @@ def is_averageable(path: pathlib.Path, framework: str) -> bool:
         if cls is not None:
             allowed.append(cls)
     with contextlib.redirect_stdout(io.StringIO()):
-        estimator = _final_estimator(_load(path)())
-    return isinstance(estimator, tuple(allowed))
+        model = _load(path)()
+    if _rewrites_its_pickle(_final_estimator(model)):
+        model = _as_uploaded(model, consts)
+    return isinstance(_final_estimator(model), tuple(allowed))
 
 
 # --- the index ---------------------------------------------------------------
@@ -495,7 +548,7 @@ def build(committed: dict[str, dict] | None = None) -> tuple[dict, list[str]]:
                 row["params"] = (
                     count_params(path) if row["framework"] == "pytorch" else None
                 )
-                row["averageable"] = is_averageable(path, row["framework"])
+                row["averageable"] = is_averageable(path, consts)
             except Exception as exc:
                 raise RuntimeError(f"{row['id']}: could not be indexed: {exc!r}") from exc
         elif row["id"] in committed:
