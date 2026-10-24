@@ -7,6 +7,7 @@ main_method = "MyModel"
 batch_size = 128
 output_classes = 1
 category = "time_to_event_prediction"
+# Not an input width: see "Dataset expectations" in ../README.md.
 num_feature_points = 12
 
 
