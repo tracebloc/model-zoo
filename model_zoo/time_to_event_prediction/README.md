@@ -44,7 +44,8 @@ For deep-learning approaches, try [`pytorch/deepsurv.py`](pytorch/deepsurv.py) â
 ## Dataset expectations
 
 - **Input**: tabular rows of numeric covariates. A PyTorch or scikit-survival template
-  declares its width in `num_feature_points`, which must match the dataset. A lifelines
-  template fits whatever covariates the dataset has, so it links to any time-to-event
-  dataset as it is; its `num_feature_points` is not checked.
+  declares its input width in `num_feature_points`. A lifelines template's
+  `num_feature_points` is not an input width: lifelines fits whatever covariates the
+  dataset has, one coefficient per column. The template declares it only because the
+  upload check requires the field for a time-to-event model.
 - **Labels**: `(time_to_event, event_observed)` pairs. `event_observed=0` means censored.

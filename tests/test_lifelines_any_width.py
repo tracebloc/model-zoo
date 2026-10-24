@@ -2,9 +2,8 @@
 
 lifelines fits the DataFrame it is given and estimates one coefficient per
 covariate column, so a lifelines template's ``num_feature_points`` is not an
-input width and the platform's dataset link does not compare it with the
-dataset's column count. That only holds while no lifelines template pins a
-width: one that did would link to a dataset it cannot train on, and goes red here.
+input width (the category README's "Dataset expectations"). That only holds
+while no lifelines template pins a width; one that did goes red here.
 
 Runs where lifelines is installed (the survival CI job); skips elsewhere.
 """
