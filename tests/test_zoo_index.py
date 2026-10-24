@@ -142,3 +142,110 @@ def test_every_upload_path_is_a_committed_file() -> None:
         if not (build_index.MODEL_ROOT / row["upload"]).is_file()
     ]
     assert not missing, f"upload paths with no file under model_zoo/: {missing}"
+
+
+_REWRITING_TEMPLATE = '''
+from sklearn.base import BaseEstimator, ClassifierMixin
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import StandardScaler
+from sklearn.{module} import {estimator}
+
+framework = "sklearn"
+category = "{category}"
+main_method = "MyModel"
+batch_size = 4
+num_feature_points = 3
+output_classes = 2
+
+
+class Wrapper(ClassifierMixin, BaseEstimator):
+    def fit(self, X, y):
+        self.model_ = Pipeline([("scale", StandardScaler()), ("model", {estimator}())])
+        self.model_.fit(X, y)
+        return self
+
+    def __reduce_ex__(self, protocol):
+        if hasattr(self, "model_"):
+            return (Pipeline, (self.model_.steps,), self.model_.__getstate__())
+        return super().__reduce_ex__(protocol)
+
+
+def MyModel():
+    return Wrapper()
+'''
+
+
+def _template(tmp_path, monkeypatch, **fields) -> tuple[pathlib.Path, dict]:
+    path = tmp_path / "tabular_classification" / "sklearn" / "wrapper.py"
+    path.parent.mkdir(parents=True)
+    path.write_text(_REWRITING_TEMPLATE.format(**fields))
+    monkeypatch.setattr(build_index, "MODEL_ROOT", tmp_path)
+    return path, build_index._module_constants(path)
+
+
+@pytest.mark.parametrize(
+    ("module", "estimator", "averageable"),
+    [
+        ("linear_model", "LogisticRegression", True),
+        ("tree", "DecisionTreeClassifier", False),
+    ],
+)
+def test_a_template_that_rewrites_its_pickle_is_judged_by_what_it_uploads(
+    tmp_path, monkeypatch, module, estimator, averageable
+) -> None:
+    # The unfitted Wrapper is on no allowlist; the trained run uploads the
+    # Pipeline it pickles as, and that is what the federated merge sees.
+    pytest.importorskip("sklearn")
+    path, consts = _template(
+        tmp_path,
+        monkeypatch,
+        module=module,
+        estimator=estimator,
+        category="tabular_classification",
+    )
+    assert build_index.is_averageable(path, consts) is averageable
+
+
+def test_a_rewriting_template_that_cannot_be_fitted_is_not_judged(
+    tmp_path, monkeypatch
+) -> None:
+    pytest.importorskip("sklearn")
+    path, consts = _template(
+        tmp_path,
+        monkeypatch,
+        module="linear_model",
+        estimator="LogisticRegression",
+        category="tabular_regression",
+    )
+    with pytest.raises(ValueError, match="rewrites its pickle"):
+        build_index.is_averageable(path, consts)
+
+
+class _ReduceEx:
+    def __reduce_ex__(self, protocol):
+        return (dict, ())
+
+
+class _Reduce:
+    def __reduce__(self):
+        return (dict, ())
+
+
+class _Registered:
+    pass
+
+
+class _Plain:
+    pass
+
+
+@pytest.mark.parametrize(
+    ("estimator", "rewrites"),
+    [(_ReduceEx(), True), (_Reduce(), True), (_Registered(), True), (_Plain(), False)],
+    ids=["reduce_ex", "reduce", "copyreg", "plain"],
+)
+def test_rewrites_its_pickle(monkeypatch, estimator, rewrites) -> None:
+    monkeypatch.setitem(
+        build_index.copyreg.dispatch_table, _Registered, lambda obj: (dict, ())
+    )
+    assert build_index._rewrites_its_pickle(estimator) is rewrites

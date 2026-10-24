@@ -1341,7 +1341,7 @@
       "label": "Logistic Regression Stability",
       "batch": 4,
       "params": null,
-      "averageable": false
+      "averageable": true
     },
     {
       "id": "tabular_classification/sklearn/mlp",
@@ -1385,7 +1385,7 @@
       "label": "Random Forest Stability",
       "batch": 4,
       "params": null,
-      "averageable": false
+      "averageable": true
     },
     {
       "id": "tabular_classification/sklearn/svm",
