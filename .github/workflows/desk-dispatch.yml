@@ -2,7 +2,7 @@
 #
 # Self-contained copy of the reusable workflow `.github/workflows/desk-dispatch.yml`
 # (blob e9f28c82aa941e745ba5d8139e90e149a6b59773) folded with the private source repo's own caller of it,
-# `.github/workflows/desk-dispatch-caller.yml` (blob 1c47faf245704ccec4aad7ea9c60db9aa4141d3a), for a PUBLIC repo: GitHub lets a
+# `.github/workflows/desk-dispatch-caller.yml` (blob 51c7270cbb388e5e4c088e454399625049d082e7), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
 # reusable's jobs inline -- the triggers are the caller's; every `inputs.*` is
@@ -203,7 +203,11 @@ on:
     # A `workflow_run`'s `branches` filter is on the TRIGGERING run's head branch
     # -- a PR run's feature branch -- so integration branches are IGNORED rather
     # than `develop` allowed: that drops the `push` and cron completions ((internal ref)).
-    branches-ignore: [develop, staging, main]
+    # `gh-readonly-queue/**` drops the MERGE QUEUE's completions: a queue run's head
+    # branch is `gh-readonly-queue/<base>/pr-<N>-<sha>`, no integration branch and no
+    # open PR's, so each one started a dispatch that could only skip it
+    # ((internal ref), (internal ref)).
+    branches-ignore: [develop, staging, main, 'gh-readonly-queue/**']
     workflows:
       - CI
       - Code quality
