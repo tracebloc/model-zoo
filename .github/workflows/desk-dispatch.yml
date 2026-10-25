@@ -1,7 +1,7 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/desk-dispatch.yml`
-# (blob 6cd8f31983e1acf0b97cd986c0804a1c831db408) folded with the private source repo's own caller of it,
+# (blob 9991d4a49ca08759a084ecffa6ce18f24cf077e6) folded with the private source repo's own caller of it,
 # `.github/workflows/desk-dispatch-caller.yml` (blob 1bb32771b7fdd4165b5fb7c3da4da2234a6d3085), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
@@ -136,18 +136,15 @@
 # shortfall reaches the script as a 403 on the head read, which refuses by name.
 # `test_the_reusables_declare_no_permissions_block` pins this.
 #
-# THE LOCK. `claude-desk:reviewing` on the PR means a session is on it; a second
-# review event while it is held is skipped (the hourly `--once` sweep catches up).
-# The session removes the label when it finishes (skill `--pr` mode, step 4); a
-# label older than `stale-minutes` is a dead session's and is stolen.
-#
-# THE PR'S ONE CLAIM ((internal ref) part 2). Once the lock is won, the
-# dispatcher also takes the claim every session takes before it works a PR --
-# `claude-ship:driving-<n>`, a label only one creator gets -- under a token
-# it makes up for the session, and writes `claim=<token>` on the PR's payload line.
-# The session adopts it, so nothing takes the PR in the minutes the fired session
-# spends booting. A fire that starts no session gives it back, owner-checked
-# (`take_session_claim` / `release_session_claim` in scripts/desk-dispatch.py).
+# THE LOCK IS THE PR'S ONE CLAIM ((internal ref) part 2, (internal ref)). Before it
+# fires, the dispatcher takes `claude-desk:claim-<n>`, a label only one creator gets,
+# under a token it makes up for the session, and writes `claim=<token>` on the PR's
+# payload line. The session adopts it, so nothing takes the PR in the minutes the
+# fired session spends booting, and removes it when it finishes (skill `--pr` mode,
+# step 4). A review event while a live claim is on the PR is skipped (the sweep
+# catches up); a claim past its window is a dead session's, which the next session
+# recovers. A fire that starts no session gives it back, owner-checked
+# (`take_desk_claim` / `release_session_claim` in scripts/desk-dispatch.py).
 #
 # FAIL CLOSED. An unreadable event, an unreadable reviews/events read, an empty
 # fire URL or token when there is work to do, or a fire the routine refuses are
@@ -156,7 +153,7 @@
 # nothing; it is the operator's signal that reviews stopped flowing. THE ONE
 # NON-2xx THAT IS NOT A REFUSAL is the routine's own rate limit ((internal ref)):
 # DEFERRED on the first answer, never waited out in the job ((internal ref)) --
-# lock and claim released, `::warning::`, run green -- because the 20-minute sweep
+# claim released, `::warning::`, run green -- because the 20-minute sweep
 # re-fires it.
 #
 # THE CANONICAL CALLER is `desk-dispatch-caller.yml` beside this file
@@ -234,7 +231,7 @@ permissions:
 # One group per PR for every event the job ACTS on: a workflow_run / check_suite
 # event carries the PR under `<event>.pull_requests[0].number`. Keying them
 # differently would let two finishing runs on one PR execute in parallel and both
-# read the lock label as free (the defect the retired ship-dispatch.yml had,
+# read the claim as free (the defect the retired ship-dispatch.yml had,
 # (internal ref)).
 #
 # EVERY EVENT THE JOB SKIPS GETS A GROUP OF ITS OWN (`noop-<run id>`): a PR event or
@@ -444,5 +441,4 @@ jobs:
           # fires one routine, as before. desk-dispatch-selftest holds the shape.
           DESK_FIRE_URL_FAILOVER: ${{ ((vars.DESK_ROUTINE_FIRE_URL_2) != '' && secrets.DESK_ROUTINE_TOKEN_2 != '') && (vars.DESK_ROUTINE_FIRE_URL_2) || '' }}
           DESK_ROUTINE_TOKEN_FAILOVER: ${{ ((vars.DESK_ROUTINE_FIRE_URL_2) != '' && secrets.DESK_ROUTINE_TOKEN_2 != '') && secrets.DESK_ROUTINE_TOKEN_2 || '' }}
-          DESK_STALE_MINUTES: ${{ 45 }}
         run: python3 .org-config-tools/scripts/desk-dispatch.py
