@@ -2,7 +2,10 @@
 #
 # Self-contained copy of the reusable workflow `.github/workflows/mutation-coverage.yml`
 # (blob 84273bc4e4568bf1cb8e721e00d7d0bf5d5df041) folded with the private source repo's own caller of it,
-# `.github/workflows/mutation-coverage-caller.yml` (blob 239a5c175a6a05ee61c3ae490177b9f7387df3bb), for a PUBLIC repo: GitHub lets a
+# job `mutation-coverage` of `.github/workflows/ci.yml` with that file's `on:` and
+# `permissions:` (blob e902f5b48881ce8254de708c9d117f139973e336 of those lines; its
+# `concurrency:` is one group for every job it runs, so it is not
+# carried), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
 # reusable's jobs inline -- the triggers are the caller's; every `inputs.*` is
@@ -111,7 +114,8 @@ name: Mutation coverage
 
 on:
   pull_request:
-    types: [opened, reopened, synchronize, ready_for_review]
+    types: [opened, reopened, synchronize]
+  merge_group:
 
 # Only `contents: read`: the gate reads the caller's tree and history and
 # nothing else. Requesting more would exceed a minimal caller's grant and fail

@@ -2,7 +2,10 @@
 #
 # Self-contained copy of the reusable workflow `.github/workflows/code-quality.yml`
 # (blob ae62cd4340c27e0c42b0dafe6e59f9bcb1aa738e) folded with the private source repo's own caller of it,
-# `.github/workflows/code-quality-caller.yml` (blob ec693c3a03c9a13c3669fd94a6b2cb35080808f9), for a PUBLIC repo: GitHub lets a
+# job `quality` of `.github/workflows/ci.yml` with that file's `on:` and
+# `permissions:` (blob 5f52e88f6154b7d545ea46c9aa129d3ea597f715 of those lines; its
+# `concurrency:` is one group for every job it runs, so it is not
+# carried), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
 # reusable's jobs inline -- the triggers are the caller's; every `inputs.*` is
@@ -119,26 +122,8 @@ name: Code quality
 
 on:
   pull_request:
-    # No `ready_for_review` ((internal ref)): it re-runs an UNCHANGED head beside
-    # the cancelling group below. This workflow does not skip drafts, so the
-    # draft's own run is already the verdict on that head. The re-run only bought
-    # a race: on (internal ref) the release train opened a draft and marked it ready
-    # 5 s later, the newer-created run was the one cancelled, and branch
-    # protection (which reads the newest-CREATED suite) held the merge 2h41m
-    # until a re-run. scripts/reusable-no-cancel.py holds the pair apart.
     types: [opened, reopened, synchronize]
-  # Manual whole-tree scan (gitleaks baseline etc.) -- runs every enabled
-  # job in all-files mode instead of a PR diff.
-  workflow_dispatch:
-    inputs:
-      all-files:
-        description: "Scan the whole repo, not a diff"
-        type: boolean
-        default: true
-
-concurrency:
-  group: code-quality-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  merge_group:
 
 # THE DIFF BASE, DECLARED ONCE ((internal ref)). Five jobs scan "the files this
 # change touches"; each used to carry its own `BASE_SHA`, and on a MERGE_GROUP
@@ -390,7 +375,7 @@ jobs:
         id: files
         if: ${{ !cancelled() && steps.gates.outputs.format == 'true' }}
         env:
-          ALL_FILES: ${{ (inputs.all-files || false) }}
+          ALL_FILES: ${{ false }}
         run: |
           set -euo pipefail
           if [ "$ALL_FILES" = "true" ] || [ -z "${BASE_SHA:-}" ]; then
@@ -538,7 +523,7 @@ jobs:
 
       - name: Scan for leaked credentials
         env:
-          ALL_FILES: ${{ (inputs.all-files || false) }}
+          ALL_FILES: ${{ false }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
           BASELINE: ${{ '' }}
           SOFT_FAIL: ${{ false }}
@@ -749,7 +734,7 @@ jobs:
 
       - name: Run the house-rules checker
         env:
-          ALL_FILES: ${{ (inputs.all-files || false) }}
+          ALL_FILES: ${{ false }}
           CONFIG: ${{ '.house-rules.conf' }}
           EXCLUDE: ${{ '' }}
           SOFT_FAIL: ${{ false }}
