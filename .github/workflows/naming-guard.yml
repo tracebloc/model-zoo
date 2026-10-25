@@ -2,7 +2,10 @@
 #
 # Self-contained copy of the reusable workflow `.github/workflows/naming-guard.yml`
 # (blob a37fa5fff01f0ca7b5fd58e373866b5b0abdba86) folded with the private source repo's own caller of it,
-# `.github/workflows/naming-guard-caller.yml` (blob fb90474c3f070ba177dc1dd457c042c3b07de895), for a PUBLIC repo: GitHub lets a
+# job `naming` of `.github/workflows/ci.yml` with that file's `on:` and
+# `permissions:` (blob b3ce07c2477acde3c2c8366688d97cfecd35b033 of those lines; its
+# `concurrency:` is one group for every job it runs, so it is not
+# carried), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
 # reusable's jobs inline -- the triggers are the caller's; every `inputs.*` is
@@ -110,7 +113,7 @@ name: Naming guard
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
+    types: [opened, reopened, synchronize]
   merge_group:
 
 permissions:

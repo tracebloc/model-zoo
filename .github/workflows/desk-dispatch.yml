@@ -1,8 +1,8 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/desk-dispatch.yml`
-# (blob e9f28c82aa941e745ba5d8139e90e149a6b59773) folded with the private source repo's own caller of it,
-# `.github/workflows/desk-dispatch-caller.yml` (blob 51c7270cbb388e5e4c088e454399625049d082e7), for a PUBLIC repo: GitHub lets a
+# (blob 6cd8f31983e1acf0b97cd986c0804a1c831db408) folded with the private source repo's own caller of it,
+# `.github/workflows/desk-dispatch-caller.yml` (blob 1bb32771b7fdd4165b5fb7c3da4da2234a6d3085), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
 # reusable's jobs inline -- the triggers are the caller's; every `inputs.*` is
@@ -79,14 +79,17 @@
 #   any other event: a PR event, a comment, a PR-     -> the job is skipped by its
 #     metadata check finishing, another app's suite,     `if:` and starts no runner
 #     a run that concluded `skipped`
-#   a held red that is only CANCELLED runs on the live -> re-run each in place, as
-#     head ((internal ref))                              the App, once per run; no
-#                                                          session (`heal_cancelled`)
+#   a held red that is only CANCELLED or FAILED runs  -> re-run each in place, as
+#     on the live head                                    the App, once per run; no
+#                                                          session (`heal_retryable`)
 #   FIX MODE on (`vars.CRD_FIX_MODE`, the dispatcher's  -> a FIX session where a review
 #     switch; (internal ref) item 1): a head      would be owed, once per head;
 #     red on a held check, or dirty -- even before any    re-entered when the base moves
 #     CI ran -- the reviewer requested or on the PR       (a red: once a red it met is
-#                                                          green on the base tip)
+#                                                          green on the base tip); none
+#                                                          while the base tip carries
+#                                                          every held red
+#                                                          (`base_red_hold`)
 #
 # WHO STAFFS: CODEOWNERS ((internal ref)). Every repo with a desk caller carries
 # `* @tracebloc-review` in its CODEOWNERS, so GitHub requests `reviewer` when a PR
@@ -370,13 +373,12 @@ jobs:
         run: python3 .org-config-tools/scripts/desk-dispatch.py --precheck
       # SCOPED to the caller repo and to actions: write, for exactly one call: an
       # in-place re-run, as the App so the re-run's completion is a `workflow_run` the
-      # caller sees, of a run behind a CANCELLED required context on the live head,
-      # once per run ((internal ref) item 1, (internal ref); `heal_cancelled`
-      # in scripts/desk-dispatch.py) -- no session can re-run one, and no other token
-      # here may. `continue-on-error`, DELIBERATELY: a refused mint must not redden
-      # every dispatch, and the script refuses ONLY when it finds a cancelled red it
-      # could have healed. Minted on every event that gets past the pre-check: each is
-      # a finished commit, which can meet a red.
+      # caller sees, of a run behind a CANCELLED or FAILED required context on the live
+      # head, once per run (`heal_retryable` in scripts/desk-dispatch.py) -- no session
+      # can re-run one, and no other token here may. `continue-on-error`, DELIBERATELY:
+      # a refused mint must not redden every dispatch, and the script refuses ONLY when
+      # it finds a red it could have re-run. Minted on every event that gets past the
+      # pre-check: each is a finished commit, which can meet a red.
       - name: Mint an actions token for re-running a cancelled required run in place (tolerates a refused mint)
         id: rerun-token
         if: steps.precheck.outputs.go != 'false'
