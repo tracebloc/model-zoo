@@ -1,7 +1,7 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/desk-dispatch.yml`
-# (blob 9991d4a49ca08759a084ecffa6ce18f24cf077e6) folded with the private source repo's own caller of it,
+# (blob 5efa1996d7116683415c585876fe5642f89d9cc1) folded with the private source repo's own caller of it,
 # `.github/workflows/desk-dispatch-caller.yml` (blob 1bb32771b7fdd4165b5fb7c3da4da2234a6d3085), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
