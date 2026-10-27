@@ -242,6 +242,20 @@ class Checkout:
         (self.root / rel).write_text(source)
         return rel.as_posix()
 
+    def _fresh_runner_temp(self) -> str:
+        """``$RUNNER_TEMP``, emptied: what a test reads back is the last run's."""
+        temp = self.root / "_temp"
+        shutil.rmtree(temp, ignore_errors=True)
+        temp.mkdir()
+        return str(temp)
+
+    def report(self) -> str:
+        """What the last step kept on the runner instead of printing: the hook's
+        and the verifier's own output, which name manifest entries."""
+        return "".join(
+            p.read_text() for p in sorted((self.root / "_temp").glob("verify-dumps.*/*.log"))
+        )
+
     def outputs(self) -> dict[str, str]:
         """What the last step wrote to $GITHUB_OUTPUT, as GitHub would read it."""
         path = self.root / "_github_output"
@@ -339,6 +353,7 @@ class Checkout:
             "ZOO_WEIGHTS_CREDENTIALS": credentials,
             # A real file, fresh per run, exactly as the runner provides one.
             "GITHUB_OUTPUT": str(self.root / "_github_output"),
+            "RUNNER_TEMP": self._fresh_runner_temp(),
         }
         (self.root / "_github_output").write_text("")
         return subprocess.run(
@@ -351,16 +366,18 @@ class Checkout:
 
 
     def run_verify_step(
-        self, not_fetched: str, *, engine_pin_blocked: bool = False
+        self, not_fetched: str, *, engine_pin_blocked: bool = False, script: str | None = None
     ) -> subprocess.CompletedProcess:
         """Run the VERIFIER step's own shell, extracted from the workflow, with
         ``not_fetched`` as the fetch step's output would hand it over.
 
         ``engine_pin_blocked=True`` makes its ``python3`` the import-refusing
-        interpreter — what that step has when the install was skipped."""
-        script = _run_script(
-            _step_block(WORKFLOW.read_text(), VERIFY_STEP_NAME), VERIFIER_REL.as_posix()
-        )
+        interpreter — what that step has when the install was skipped.
+        ``script`` replaces the extracted shell, for a mutation row."""
+        if script is None:
+            script = _run_script(
+                _step_block(WORKFLOW.read_text(), VERIFY_STEP_NAME), VERIFIER_REL.as_posix()
+            )
         bin_dir = self.root / "_bin_verify"
         bin_dir.mkdir(exist_ok=True)
         if engine_pin_blocked:
@@ -379,6 +396,7 @@ class Checkout:
             "HOME": str(self.root),
             # An absent step output renders as the empty string.
             "DUMPS_NOT_FETCHED": not_fetched,
+            "RUNNER_TEMP": self._fresh_runner_temp(),
         }
         return subprocess.run(
             ["bash", "-c", script], cwd=self.root, env=env, capture_output=True, text=True
@@ -411,15 +429,15 @@ def test_no_manifest_says_no_manifest(checkout: Checkout):
     )
     # …and the SAME failure mode one level up. This branch used to be taken on
     # every run, because nothing in the job put a manifest here; the job now
-    # downloads the dump-manifest artifact first, so reaching it in CI is a
-    # FAULT, and the message must say so rather than read as a pending state.
+    # checks the manifest out and copies it here first, so reaching it in CI is
+    # a FAULT, and the message must say so rather than read as a pending state.
     # (Premise changed by the schema reconciliation: this assertion used to
     # require "STRUCTURAL".)
     assert "FAULT" in proc.stdout, (
         f"an absent manifest is now a fault in CI, not a pending state:\n{proc.stdout}"
     )
     assert "STRUCTURAL" not in proc.stdout, proc.stdout
-    assert "dump-manifest" in proc.stdout, (
+    assert "tools/offline_weights" in proc.stdout, (
         f"the message must name where the manifest actually is:\n{proc.stdout}"
     )
     assert "--require-manifest" in proc.stdout, (
@@ -495,9 +513,13 @@ def test_happy_path_fetches_every_declared_dump(checkout: Checkout):
     assert (checkout.root / "dist" / "resnet_50_weights.pkl").read_bytes() == (
         b"resnet-dump-bytes"
     )
-    assert "fetched + verified 2 dump(s)" in proc.stdout, proc.stdout
+    assert "fetched + verified 2 dump(s)" in checkout.report(), checkout.report()
+    assert "dumps fetched:" in proc.stdout, proc.stdout
     for marker in ("SKIP (no manifest)", "SKIP (no sync tool)", "SKIP (no store URI)"):
         assert marker not in proc.stdout, proc.stdout
+    for name in ("bert_base_uncased", "resnet_50", STORE_URI):
+        assert name not in proc.stdout + proc.stderr, f"the public log names {name}"
+        assert name in checkout.report(), f"the report should hold {name}: the negative control"
 
 
 def test_corrupted_object_fails_the_step_and_leaves_nothing(checkout: Checkout):
@@ -507,7 +529,8 @@ def test_corrupted_object_fails_the_step_and_leaves_nothing(checkout: Checkout):
     checkout.stage("bert_base_uncased", b"bert-dump-bytes", serve=b"tampered")
     proc = checkout.run(store_uri=STORE_URI)
     assert proc.returncode != 0, proc.stdout
-    assert "sha256 mismatch" in proc.stderr, f"{proc.stdout}\n{proc.stderr}"
+    assert "DUMP FETCH FAILED" in proc.stdout, proc.stdout
+    assert "sha256 mismatch" in checkout.report(), checkout.report()
     assert not (checkout.root / "dist" / "bert_base_uncased_weights.pkl").exists()
 
 
@@ -520,7 +543,7 @@ def test_manifest_with_no_entries_fails_the_step(checkout: Checkout):
     )
     proc = checkout.run(store_uri=STORE_URI)
     assert proc.returncode != 0, proc.stdout
-    assert "declares no" in proc.stderr, f"{proc.stdout}\n{proc.stderr}"
+    assert "declares no" in checkout.report(), checkout.report()
 
 
 # --------------------------------------------------------------------------
@@ -636,6 +659,11 @@ def _linear_template(out_features: int) -> str:
     )
 
 
+#: The entry names `_stage_canonical` declares: manifest content, so no public
+#: log line may carry one.
+_ENTRY_NAMES = ("alpha", "twin", "detr")
+
+
 def _stage_canonical(checkout: Checkout, payloads: dict[str, bytes], built_with: dict) -> dict:
     """The three-shape manifest over this checkout, and its store objects.
 
@@ -673,8 +701,11 @@ def test_fetch_all_fetches_live_entries_and_never_a_retired_one(checkout: Checko
     _stage_canonical(checkout, {"alpha": b"alpha-bytes", "twin": b"twin-bytes"}, {})
     proc = checkout.run(store_uri=STORE_URI)
     assert proc.returncode == 0, f"{proc.stdout}\n{proc.stderr}"
-    assert "fetched + verified 2 dump(s)" in proc.stdout, proc.stdout
-    assert "NOT FETCHED: 1 retired entr(ies)" in proc.stdout and "detr" in proc.stdout
+    report = checkout.report()
+    assert "fetched + verified 2 dump(s)" in report, report
+    assert "NOT FETCHED: 1 retired entr(ies)" in report and "detr" in report
+    for name in _ENTRY_NAMES:
+        assert name not in proc.stdout + proc.stderr, f"the public log names {name}"
     assert sorted(p.name for p in (checkout.root / "dist").iterdir()) == [
         "alpha_weights.pkl",
         "twin_weights.pkl",
@@ -692,7 +723,7 @@ def test_a_manifest_of_only_retired_entries_reddens_the_fetch_step(checkout: Che
     )
     proc = checkout.run(store_uri=STORE_URI)
     assert proc.returncode != 0, proc.stdout
-    assert "no LIVE entries" in proc.stderr, proc.stderr
+    assert "no LIVE entries" in checkout.report(), checkout.report()
 
 
 def test_an_undefined_status_reddens_the_fetch_step(checkout: Checkout):
@@ -707,7 +738,7 @@ def test_an_undefined_status_reddens_the_fetch_step(checkout: Checkout):
     )
     proc = checkout.run(store_uri=STORE_URI)
     assert proc.returncode != 0, proc.stdout
-    assert "'retried'" in proc.stderr, proc.stderr
+    assert "'retried'" in checkout.report(), checkout.report()
     assert not (checkout.root / "dist" / "alpha_weights.pkl").exists()
 
 
@@ -742,9 +773,13 @@ def test_one_canonical_manifest_takes_both_steps_green(checkout: Checkout):
     fetch = checkout.run(store_uri=STORE_URI)
     assert fetch.returncode == 0, f"{fetch.stdout}\n{fetch.stderr}"
     gate = checkout.run_verify_step(checkout.outputs().get("not_fetched", ""))
-    assert gate.returncode == 0, f"{gate.stdout}\n{gate.stderr}"
-    assert "All 2 live dump(s) verify against the engine pin" in gate.stdout, gate.stdout
-    assert "NOT GATED: 1 retired entr(ies)" in gate.stdout and "detr" in gate.stdout
+    assert gate.returncode == 0, f"{gate.stdout}\n{gate.stderr}\n{checkout.report()}"
+    assert "dumps OK:" in gate.stdout, gate.stdout
+    report = checkout.report()
+    assert "All 2 live dump(s) verify against the engine pin" in report, report
+    assert "NOT GATED: 1 retired entr(ies)" in report and "detr" in report
+    for name in _ENTRY_NAMES:
+        assert name not in gate.stdout + gate.stderr, f"the public log names {name}"
 
     # Anchor: drop the recorded category and the same bytes no longer have ONE
     # template — the green above depended on `category` being read.
@@ -752,7 +787,8 @@ def test_one_canonical_manifest_takes_both_steps_green(checkout: Checkout):
     checkout.write_manifest(manifest)
     gate = checkout.run_verify_step("")
     assert gate.returncode == 1, f"{gate.stdout}\n{gate.stderr}"
-    assert "NO_TEMPLATE" in gate.stdout and "twin" in gate.stdout, gate.stdout
+    assert "DUMP VERIFICATION FAILED" in gate.stdout, gate.stdout
+    assert "NO_TEMPLATE" in checkout.report() and "twin" in checkout.report(), checkout.report()
 
 
 def test_a_dumps_only_manifest_is_refused_by_both_steps(checkout: Checkout):
@@ -769,7 +805,7 @@ def test_a_dumps_only_manifest_is_refused_by_both_steps(checkout: Checkout):
         "the fetch step accepted a manifest it cannot read, and would have left "
         f"dist/ empty for the gate to call MISSING:\n{fetch.stdout}"
     )
-    assert "entries" in fetch.stderr, f"{fetch.stdout}\n{fetch.stderr}"
+    assert "entries" in checkout.report(), checkout.report()
     assert not (checkout.root / "dist" / "bert_base_uncased_weights.pkl").exists()
 
     gate = checkout.run_verifier()
@@ -793,17 +829,21 @@ def test_a_named_skip_reaches_the_verifier_and_it_loads_nothing(checkout: Checko
     assert "fork" not in reason, reason
 
     gate = checkout.run_verify_step(reason, engine_pin_blocked=True)
-    assert gate.returncode == 0, f"{gate.stdout}\n{gate.stderr}"
-    assert "BLOCKED" not in gate.stderr, gate.stderr
+    assert gate.returncode == 0, f"{gate.stdout}\n{gate.stderr}\n{checkout.report()}"
+    report = checkout.report()
+    assert "BLOCKED" not in report, report
     assert f"SKIP (dumps not fetched): {reason}" in gate.stdout, gate.stdout
-    assert "all 2 live entr(ies) resolve to a template" in gate.stdout, gate.stdout
+    assert "all 2 live entr(ies) resolve to a template" in report, report
     assert "This is not a pass" in gate.stdout, gate.stdout
-    assert "NOT GATED: 1 retired" in gate.stdout, gate.stdout
+    assert "NOT GATED: 1 retired" in report, report
+    assert "NOT GATED" not in gate.stdout + gate.stderr, gate.stdout
+    for name in _ENTRY_NAMES:
+        assert name not in gate.stdout + gate.stderr, f"the public log names {name}"
 
     # Anchor 1: WITHOUT the reason, the same step on the same interpreter tries
     # to sweep — so the green above is the not-fetched mode, not an inert gate.
     swept = checkout.run_verify_step("", engine_pin_blocked=True)
-    assert swept.returncode != 0 and "BLOCKED: torch" in swept.stderr, swept.stderr
+    assert swept.returncode != 0 and "BLOCKED: torch" in checkout.report(), checkout.report()
 
     # Anchor 2: a structural defect is still RED on the skip path — a live entry
     # that maps to no template is not excused by the store being unconfigured.
@@ -812,7 +852,54 @@ def test_a_named_skip_reaches_the_verifier_and_it_loads_nothing(checkout: Checko
     checkout.write_manifest(manifest)
     ghost = checkout.run_verify_step(reason, engine_pin_blocked=True)
     assert ghost.returncode == 1, f"{ghost.stdout}\n{ghost.stderr}"
-    assert "NO_TEMPLATE" in ghost.stdout and "ghost" in ghost.stdout, ghost.stdout
+    assert "NO_TEMPLATE" in checkout.report() and "ghost" in checkout.report(), checkout.report()
+    assert "ghost" not in ghost.stdout + ghost.stderr, ghost.stdout
+
+
+# --------------------------------------------------------------------------
+# MUTATION ROWS for the public log. Each runs the real step and sees no entry
+# name in its output, prints the report instead, asserts the change applied,
+# and sees the leak the tests above assert against.
+# --------------------------------------------------------------------------
+def _mutate(text: str, old: str, new: str) -> str:
+    assert text.count(old) == 1, f"mutation anchor is not there exactly once: {old!r}"
+    mutant = text.replace(old, new)
+    assert mutant != text, "the mutation did not apply, so it proves nothing"
+    return mutant
+
+
+def _named(proc: subprocess.CompletedProcess) -> list[str]:
+    return [name for name in _ENTRY_NAMES if name in proc.stdout + proc.stderr]
+
+
+def test_MUTATION_the_hook_report_printed_to_the_log_is_caught(tmp_path: Path, guard_script: str):
+    for name in ("clean", "mutant"):
+        (tmp_path / name).mkdir()
+    clean = Checkout(tmp_path / "clean", guard_script)
+    clean.install_real_tool()
+    _stage_canonical(clean, {"alpha": b"a", "twin": b"t"}, {})
+    assert _named(clean.run(store_uri=STORE_URI)) == []
+    mutant = Checkout(
+        tmp_path / "mutant",
+        _mutate(guard_script, '> "$report" 2>&1 || status=$?', '2>&1 | tee "$report" || status=$?'),
+    )
+    mutant.install_real_tool()
+    _stage_canonical(mutant, {"alpha": b"a", "twin": b"t"}, {})
+    assert _named(mutant.run(store_uri=STORE_URI))
+
+
+def test_MUTATION_the_verifier_report_printed_to_the_log_is_caught(checkout: Checkout):
+    checkout.install_real_verifier()
+    _stage_canonical(checkout, {"alpha": b"a", "twin": b"t"}, {})
+    reason = "no store URI"
+    assert _named(checkout.run_verify_step(reason, engine_pin_blocked=True)) == []
+    shell = _run_script(_step_block(WORKFLOW.read_text(), VERIFY_STEP_NAME), VERIFIER_REL.as_posix())
+    mutant = _mutate(
+        shell,
+        '"$DUMPS_NOT_FETCHED" \\\n    > "$work/verify.log" 2>&1 || status=$?',
+        '"$DUMPS_NOT_FETCHED" \\\n    2>&1 | tee "$work/verify.log" || status=$?',
+    )
+    assert _named(checkout.run_verify_step(reason, engine_pin_blocked=True, script=mutant))
 
 
 def test_the_verifier_refuses_an_unnamed_skip(checkout: Checkout):
@@ -854,7 +941,7 @@ def test_the_gates_absent_manifest_message_promises_no_sweep(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ):
     """The branch CI USED to take on every run. Premise changed (the schema
-    reconciliation): the job now downloads the canonical manifest first, so
+    reconciliation): the job now copies the canonical manifest in first, so
     this message must say the branch is NOT the expected CI path, name where
     the manifest comes from and the key it carries — and still promise no
     sweep. (Its earlier assertions — "STRUCTURAL", the two outstanding
@@ -871,10 +958,10 @@ def test_the_gates_absent_manifest_message_promises_no_sweep(
     assert rc == 0
     out = capsys.readouterr().out
     assert "not the expected path" in out, (
-        f"in CI a manifest is always downloaded here; an absent one is a fault:\n{out}"
+        f"in CI a manifest is always copied here; an absent one is a fault:\n{out}"
     )
     assert "STRUCTURAL" not in out, out
-    for needle in ("dump-manifest", "'entries'"):
+    for needle in ("tools/offline_weights", "'entries'"):
         assert needle in out, f"{needle} not named in the no-op message:\n{out}"
     # The exact overclaim this replaced. It is asserted as an absence because
     # the sentence was true of the author's intent and of nothing else.
@@ -917,10 +1004,10 @@ def test_neither_the_shell_nor_the_gate_claims_arming_on_a_manifest(
             )
         # Premise changed (the schema reconciliation): this used to require
         # "STRUCTURAL" — the branch was taken on every run. The job now
-        # downloads the manifest, so both sites must instead point at the
-        # artifact whose absence put them here.
-        assert "dump-manifest" in out, (
-            f"{label} does not name the artifact that should have supplied it:\n{out}"
+        # copies the manifest in, so both sites must instead point at where
+        # it comes from.
+        assert "tools/offline_weights" in out, (
+            f"{label} does not name where the manifest should have come from:\n{out}"
         )
 
 
@@ -1203,54 +1290,54 @@ def test_the_install_steps_are_gated_on_the_manifest_and_the_verdict_steps_are_n
     installs = [s for s in steps if "actions/setup-python@" in s or ENGINE_PIN_INSTALL in s]
     verdicts = [s for s in steps if STEP_NAME in s or VERIFIER_REL.name in s]
     checkouts = [s for s in steps if "actions/checkout@" in s]
-    downloads = [s for s in steps if _ARTIFACT_DOWNLOAD.search(s)]
+    mints = [s for s in steps if "create-github-app-token@" in s]
+    manifest_file = _install_gate_file(installs)
+    producers = [s for s in steps if _manifest_mentions_that_are_not_reads(s, manifest_file)]
     assert len(installs) == 2, f"expected setup-python + the pip install, got:\n{installs}"
     assert len(verdicts) == 2, f"expected the fetch step + the verifier, got:\n{verdicts}"
-    assert len(checkouts) == 1, checkouts
-    assert len(downloads) == 1, downloads
+    assert len(checkouts) == 2, checkouts
+    assert len(mints) == 1, mints
+    assert len(producers) == 1, producers
 
     manifest = _install_gate_file(installs)
     assert f"[ ! -f {manifest} ]" in guard_script, (
         f"the install is gated on {manifest!r} but the fetch step tests a "
         f"different path:\n{guard_script[:300]}"
     )
-    # The checkout must run for hashFiles to see the file at all, the manifest
-    # download must run for there to BE a file, and the two verdict steps must
-    # run so the verdict stays the tools' on every path.
-    for step in checkouts + downloads + verdicts:
+    # The checkouts and the token must run for hashFiles to see the file at
+    # all, the copy must run for there to BE a file, and the two verdict steps
+    # must run so the verdict stays the tools' on every path.
+    for step in checkouts + mints + producers + verdicts:
         assert _folded_condition(step) is None, (
             f"a step that must run on every path carries a condition:\n{step}"
         )
 
 
-# `hashFiles` sees only what is in the checkout when the condition is evaluated.
-# That is why this test used to forbid ANY artifact download into this job: a
-# download's natural home is beside the fetch step -- AFTER both installs --
-# and in that arrangement the installs skip, the manifest then exists, and the
-# verifier's first `import torch` raises under the runner's bare python3.
-#
-# The job now DOES download the dump-manifest artifact (the schema
-# reconciliation), so the rule is narrowed to what it was protecting: EXACTLY
-# ONE step may produce the gated file -- the dump-manifest download, into the
-# checkout root -- and it must come before EVERY step whose condition reads the
-# file. Anything else mentioning the file other than the known READS (the
-# conditions and the fetch step's presence test) -- or messages that merely
-# talk about it -- is a finding; an unrecognised form fails rather than being
-# guessed benign.
-_ARTIFACT_DOWNLOAD = re.compile(r"^\s*(?:- )?uses:\s*\S*download-artifact", re.MULTILINE)
-_MANIFEST_ARTIFACT = "dump-manifest"
+# `hashFiles` sees only what is in the checkout when the condition is evaluated,
+# so a step that produced the gated file AFTER the installs would leave them
+# skipped while the manifest then exists, and the verifier's first `import
+# torch` would raise under the runner's bare python3. So EXACTLY ONE step may
+# write the gated file -- the copy of the canonical manifest the job checked
+# out -- and it must come before EVERY step whose condition reads the file.
+# Anything else mentioning the file other than the known READS (the conditions
+# and the fetch step's presence test) is a write, and a finding; an
+# unrecognised form fails rather than being guessed benign.
+_STANDALONE = r"(?<![\w/.-]){}(?![\w-])"
+_COPY = re.compile(r"^\s*(?:- )?run:\s*cp (\S+) (\S+)\s*$", re.MULTILINE)
 
 
 def _manifest_mentions_that_are_not_reads(step: str, manifest: str) -> list[str]:
+    """Lines that name `manifest` as a path of its own, other than to read it.
+    A longer path that merely ends in the same name (the checkout's sparse
+    path) is a different file."""
     reads = (f"hashFiles('{manifest}')", f"[ ! -f {manifest} ]")
+    standalone = re.compile(_STANDALONE.format(re.escape(manifest)))
     hits: list[str] = []
     for line in step.splitlines():
-        if manifest not in line:
-            continue
         rest = line.strip()
         for read in reads:
             rest = rest.replace(read, "")
-        if manifest not in rest:
+        if not standalone.search(rest):
             continue
         if rest.startswith("echo ") and ">" not in rest:
             continue  # a message about the file, with nowhere to write it
@@ -1258,40 +1345,44 @@ def _manifest_mentions_that_are_not_reads(step: str, manifest: str) -> list[str]
     return hits
 
 
+def _checked_out_manifest(steps: list[str]) -> str:
+    """The canonical manifest's path in the job: its checkout's `path:` plus
+    its one sparse path, read from the YAML."""
+    found = [s for s in steps if "actions/checkout@" in s and "token:" in s]
+    assert len(found) == 1, f"expected ONE token checkout in {VERIFY_JOB}: {found}"
+    path = re.search(r"^\s*path:\s*(\S+)\s*$", found[0], re.MULTILINE)
+    sparse = re.search(r"^\s*sparse-checkout:\s*(\S+)\s*$", found[0], re.MULTILINE)
+    assert path and sparse, f"the manifest checkout names no path or no single sparse path:\n{found[0]}"
+    return f"{path.group(1)}/{sparse.group(1)}"
+
+
 def _producer_violations(steps: list[str], manifest: str) -> list[str]:
     """Why the job's producers of `manifest` are unsafe, or [] if they are not.
 
-    The one allowed producer is a download of the dump-manifest artifact into
-    the checkout root, ahead of every step whose condition reads the file."""
+    The one allowed producer copies the checked-out canonical manifest to
+    `manifest`, ahead of every step whose condition reads the file."""
     problems: list[str] = []
+    source = _checked_out_manifest(steps)
     readers = [
         i
         for i, st in enumerate(steps)
         if f"hashFiles('{manifest}')" in (_folded_condition(st) or "")
     ]
-    producers = [i for i, st in enumerate(steps) if _ARTIFACT_DOWNLOAD.search(st)]
+    producers = [i for i, st in enumerate(steps) if _manifest_mentions_that_are_not_reads(st, manifest)]
     if not readers:
         problems.append("no step's condition reads the manifest -- wrong file?")
     if len(producers) != 1:
-        problems.append(f"expected exactly one artifact download, found {len(producers)}")
+        problems.append(f"expected exactly one step that writes {manifest!r}, found {len(producers)}")
     for i in producers:
         st = steps[i]
-        if not re.search(rf"^\s+name: {_MANIFEST_ARTIFACT}\s*$", st, re.MULTILINE):
-            problems.append(f"a download that is not the {_MANIFEST_ARTIFACT} artifact:\n{st}")
-        if not re.search(r"^\s+path: \.\s*$", st, re.MULTILINE):
-            problems.append(f"the manifest download does not land in the checkout root:\n{st}")
+        copy = _COPY.search(st)
+        if not copy or copy.groups() != (source, manifest):
+            problems.append(f"a write that is not the copy of {source}:\n{st}")
         late = [r for r in readers if r < i]
         if late:
             problems.append(
-                f"the download runs AFTER {len(late)} step(s) whose condition reads "
+                f"the copy runs AFTER {len(late)} step(s) whose condition reads "
                 f"{manifest!r} -- they were decided before the file existed:\n{st}"
-            )
-    for st in steps:
-        hits = _manifest_mentions_that_are_not_reads(st, manifest)
-        if hits:
-            problems.append(
-                f"a step touches {manifest!r} in a form this test does not know to "
-                "be a read:\n" + "\n".join(hits)
             )
     return problems
 
@@ -1305,22 +1396,17 @@ def test_the_one_producer_of_the_gated_file_precedes_every_step_that_reads_it():
     # Anchors -- the same detector on the shapes it exists to catch, built by
     # rearranging the REAL steps, so a green run above means "nothing found",
     # not "nothing looked for".
-    (dl,) = [i for i, st in enumerate(steps) if _ARTIFACT_DOWNLOAD.search(st)]
-    moved = steps[:dl] + steps[dl + 1 :]
+    (cp,) = [i for i, st in enumerate(steps) if _COPY.search(st)]
+    moved = steps[:cp] + steps[cp + 1 :]
     fetch_at = next(i for i, st in enumerate(moved) if f"- name: {STEP_NAME}" in st)
-    late = moved[:fetch_at] + [steps[dl]] + moved[fetch_at:]
+    late = moved[:fetch_at] + [steps[cp]] + moved[fetch_at:]
     assert any("AFTER" in p for p in _producer_violations(late, manifest))
-    assert any("exactly one" in p for p in _producer_violations(steps + [steps[dl]], manifest))
-    other = steps[dl].replace(f"name: {_MANIFEST_ARTIFACT}", "name: engine-pin")
+    assert any("exactly one" in p for p in _producer_violations(steps + [steps[cp]], manifest))
+    other = steps[cp].replace(_checked_out_manifest(steps), "dist/manifest.json")
+    assert other != steps[cp]
     assert any(
-        "not the" in p for p in _producer_violations(steps[:dl] + [other] + steps[dl + 1 :], manifest)
+        "not the copy" in p for p in _producer_violations(steps[:cp] + [other] + steps[cp + 1 :], manifest)
     )
-    elsewhere = steps[dl].replace("path: .", "path: _manifest")
-    assert any(
-        "checkout root" in p
-        for p in _producer_violations(steps[:dl] + [elsewhere] + steps[dl + 1 :], manifest)
-    )
-    assert _ARTIFACT_DOWNLOAD.search("      - if: always()\n        uses: actions/download-artifact@v5")
     for write in (
         f"          curl -fsSL $URL -o {manifest}",
         f"          python3 tools/mint.py > {manifest}",
@@ -1331,18 +1417,23 @@ def test_the_one_producer_of_the_gated_file_precedes_every_step_that_reads_it():
     assert not _manifest_mentions_that_are_not_reads(
         f"      - run: pip install\n        if: hashFiles('{manifest}') != ''", manifest
     )
+    assert not _manifest_mentions_that_are_not_reads(
+        f"          sparse-checkout: tools/offline_weights/{manifest}", manifest
+    )
 
 
-def test_the_verify_job_needs_the_job_that_mints_the_manifest():
-    """The download names an artifact another job uploads; without `needs:` it
-    races that job and fails, or -- worse -- a re-run reads a stale one."""
+def test_the_verify_job_mints_its_own_token_before_it_checks_the_manifest_out():
+    """No other job hands this one the manifest: it needs only the pin guard,
+    and the token it mints is read by the one checkout that follows it."""
     block = _job_block(VERIFY_JOB)
     m = re.search(r"^    needs: \[([^\]]+)\]\s*$", block, re.MULTILINE)
     assert m, f"verify-dumps has no list-form needs:\n{block[:400]}"
-    needs = {n.strip() for n in m.group(1).split(",")}
-    assert {"engine-pin-drift-guard", "fetch-dump-manifest"} <= needs, needs
-    uploader = _job_block("fetch-dump-manifest")
-    assert f"name: {_MANIFEST_ARTIFACT}" in uploader and "upload-artifact@" in uploader
+    assert {n.strip() for n in m.group(1).split(",")} == {"engine-pin-drift-guard"}
+    steps = _verify_job_steps()
+    mint = next(i for i, st in enumerate(steps) if "create-github-app-token@" in st)
+    checkout = next(i for i, st in enumerate(steps) if "token:" in st and "actions/checkout@" in st)
+    (cp,) = [i for i, st in enumerate(steps) if _COPY.search(st)]
+    assert mint < checkout < cp, (mint, checkout, cp)
 
 
 def test_no_manifest_json_is_committed_at_the_repo_root():
@@ -1480,7 +1571,7 @@ def test_the_no_manifest_fetch_branch_invokes_no_python(checkout: Checkout):
     # the stub was inert.
     checkout.stage("bert_base_uncased", b"dump-bytes")
     proc = checkout.run(store_uri=STORE_URI)
-    assert proc.returncode == 99, f"{proc.stdout}\n{proc.stderr}"
+    assert proc.returncode != 0 and "fetch hook exited 99" in proc.stdout, f"{proc.stdout}\n{proc.stderr}"
 
 
 # --------------------------------------------------------------------------
@@ -1585,10 +1676,10 @@ def test_all_preconditions_met_without_credentials_is_red(checkout: Checkout):
         proc = checkout.run(store_uri=STORE_URI, credentials=outcome)
         assert proc.returncode != 0, f"outcome={outcome!r}:\n{proc.stdout}"
         assert CREDS_STEP_NAME in proc.stderr, proc.stderr
-        assert "fetched + verified" not in proc.stdout, proc.stdout
+        assert "fetched + verified" not in checkout.report(), checkout.report()
     # Anchor: the same checkout with the step's success fetches.
     ok = checkout.run(store_uri=STORE_URI)
-    assert ok.returncode == 0 and "fetched + verified 1 dump(s)" in ok.stdout, ok.stdout
+    assert ok.returncode == 0 and "fetched + verified 1 dump(s)" in checkout.report(), ok.stdout
 
 
 def test_an_unreadable_trust_flag_fails_closed(checkout: Checkout):
@@ -1702,7 +1793,7 @@ def test_id_token_write_is_scoped_to_the_verify_job_only():
         f"workflow-level permissions widened: {top.group(1)!r}"
     )
     jobs = re.findall(r"^  ([A-Za-z0-9_-]+):\n    ", text.split("\njobs:\n", 1)[1], re.MULTILINE)
-    assert VERIFY_JOB in jobs and len(jobs) >= 5, jobs
+    assert VERIFY_JOB in jobs and len(jobs) >= 4, jobs
     with_id_token = [j for j in jobs if "id-token: write" in _job_permissions(j)]
     assert with_id_token == [VERIFY_JOB], (
         f"id-token: write must be granted to {VERIFY_JOB} alone, got {with_id_token}"
