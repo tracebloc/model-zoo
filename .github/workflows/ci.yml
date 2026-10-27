@@ -110,7 +110,7 @@ jobs:
   # with itself.
   #
   # 1) Fetch in an ISOLATED job that runs none of this repo's code -- the same
-  #    shape as verify-dumps-engine-pin.yml's fetch-engine-pin. The producer is a
+  #    shape as verify-dumps-engine-pin.yml's fetch-dump-manifest. The producer is a
   #    private repo, so GITHUB_TOKEN cannot read it; the App token is minted,
   #    scoped to that one repo and contents:read, and used ONLY here. Only the
   #    schema file crosses to the job that runs the tests.
