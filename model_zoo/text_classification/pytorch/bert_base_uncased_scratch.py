@@ -21,8 +21,8 @@ main_class = "MyModel"
 category = "text_classification"
 model_type = ""
 tokenizer_file = "bert_base_uncased_scratch_tokenizer.json"
-batch_size = 512
-sequence_length = 5
+batch_size = 16
+sequence_length = 512
 output_classes = 5
 
 # Architecture config for bert-base-uncased, inlined so the model builds
