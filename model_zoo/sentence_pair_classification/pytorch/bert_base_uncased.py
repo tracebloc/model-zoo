@@ -37,8 +37,8 @@ main_class = "MyModel"
 category = "sentence_pair_classification"
 model_type = ""
 tokenizer_file = "bert_base_uncased_tokenizer.json"
-batch_size = 512
-sequence_length = 5
+batch_size = 16
+sequence_length = 512
 # Sentence-pair defaults are typically binary (paraphrase / duplicate) or
 # ternary (NLI: entailment / neutral / contradiction). This is only a default;
 # the client passes the dataset's real label count as ``num_classes``.
