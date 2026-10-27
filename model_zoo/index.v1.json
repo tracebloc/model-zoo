@@ -1130,7 +1130,7 @@
       "framework": "pytorch",
       "model_type": "",
       "label": "BERT Base Uncased",
-      "batch": 512,
+      "batch": 16,
       "params": 109483778,
       "averageable": true
     },
@@ -1647,7 +1647,7 @@
       "framework": "pytorch",
       "model_type": "",
       "label": "BERT Base Uncased",
-      "batch": 512,
+      "batch": 16,
       "params": 109486085,
       "averageable": true
     },
@@ -1658,7 +1658,7 @@
       "framework": "pytorch",
       "model_type": "",
       "label": "BERT Base Uncased Scratch",
-      "batch": 512,
+      "batch": 16,
       "params": 109486085,
       "averageable": true
     },
@@ -1669,7 +1669,7 @@
       "framework": "pytorch",
       "model_type": "",
       "label": "DistilBERT",
-      "batch": 512,
+      "batch": 16,
       "params": 66957317,
       "averageable": true
     },
@@ -1680,7 +1680,7 @@
       "framework": "pytorch",
       "model_type": "",
       "label": "DistilBERT Scratch",
-      "batch": 512,
+      "batch": 16,
       "params": 66957317,
       "averageable": true
     },
