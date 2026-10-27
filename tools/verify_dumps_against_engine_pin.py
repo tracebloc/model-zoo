@@ -38,8 +38,8 @@ engine's ``use_cases/requirements.txt`` — see the CI workflow
 
 ONE SCHEMA: the canonical manifest's ``entries``
 ------------------------------------------------
-The manifest lives in ``backend`` under ``tools/offline_weights`` and reaches
-CI as the ``dump-manifest`` artifact. It is the shape
+The manifest lives in ``backend`` under ``tools/offline_weights``, and CI reads
+it only in the jobs that check it out. It is the shape
 ``tools/sync_zoo_weights.py`` writes and its ``fetch-all`` reads:
 
     {
@@ -576,15 +576,15 @@ def run_sweep(
     if not manifest_path.exists():
         # The branch a checkout with no manifest takes. It used to be the branch
         # CI took on EVERY run, because nothing in the verify-dumps job put a
-        # manifest here (the arming overclaim); the workflow now downloads the
-        # canonical one, so in CI this is the exception rather than the rule.
+        # manifest here (the arming overclaim); the workflow now copies the
+        # canonical one here, so in CI this is the exception rather than the rule.
         msg = (
             f"no manifest at {manifest_path}: no weight dumps are declared here, "
             "so there is nothing to verify. In CI this is not the expected path: "
-            "the verify-dumps job downloads the canonical manifest (keyed "
-            "'entries', from backend tools/offline_weights, via the dump-manifest "
-            "artifact) to this path before this step runs — so reaching this "
-            "branch there means that download did not land where this tool reads."
+            "the verify-dumps job checks the canonical manifest (keyed "
+            "'entries') out of backend tools/offline_weights and copies it to "
+            "this path before this step runs — so reaching this branch there "
+            "means that copy did not land where this tool reads."
         )
         if require_manifest:
             print(f"FAIL (fail-closed): {msg}", file=sys.stderr)

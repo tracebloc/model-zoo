@@ -47,8 +47,11 @@ class DeepNarrowMLM(nn.Module):
             batch_first=True,
             norm_first=True,
         )
-        self.encoder = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
-        self.encoder.enable_nested_tensor = False
+        # Constructor argument, not a later attribute set: see
+        # tests/test_encoder_padding_mask_fast_path.py.
+        self.encoder = nn.TransformerEncoder(
+            encoder_layer, num_layers=num_layers, enable_nested_tensor=False
+        )
 
         self.final_layer_norm = nn.LayerNorm(hidden_size, eps=1e-12)
         self.lm_decoder = nn.Linear(hidden_size, vocab_size, bias=False)

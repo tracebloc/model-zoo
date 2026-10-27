@@ -46,6 +46,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 WORKFLOW = REPO_ROOT / ".github" / "workflows" / "verify-dumps-engine-pin.yml"
 CHECKER_REL = "tools/check_engine_pin_drift.py"
@@ -206,9 +208,9 @@ def _triggers(path: str, event: str) -> bool:
     return any(_glob_matches(p, path) for p in _event_paths(event))
 
 
-def _job_block(job: str = GUARD_JOB) -> str:
+def _job_block(job: str = GUARD_JOB, text: str | None = None) -> str:
     """One job's YAML as text, sliced to the next top-level key at its indent."""
-    text = WORKFLOW.read_text()
+    text = WORKFLOW.read_text() if text is None else text
     key = f"  {job}:\n"
     assert "\n" + key in text, f"no job named {job!r} in {WORKFLOW}"
     start = text.index("\n" + key) + 1
@@ -221,6 +223,17 @@ def _job_block(job: str = GUARD_JOB) -> str:
             break
         offset += len(line)
     return rest[:end]
+
+
+def _strip_comments(text: str) -> str:
+    """Text without its full-line comments, so prose cannot satisfy a check."""
+    return "\n".join(ln for ln in text.splitlines() if not ln.strip().startswith("#"))
+
+
+def _checkout_steps(job: str = GUARD_JOB) -> list[str]:
+    """The job's `actions/checkout` steps, each as comment-free text."""
+    steps = re.split(r"(?m)^      - ", _strip_comments(_job_block(job)))[1:]
+    return [s for s in steps if "actions/checkout@" in s]
 
 
 def _guard_step_shell() -> str:
@@ -464,12 +477,8 @@ def _shift_minor(version: str, delta: int) -> str:
 
 
 def _write_engine_pin(dest: Path, pins: dict[str, str]) -> None:
-    """The engine-pin artifact, at the layout the workflow actually downloads.
-
-    NOT A FLAT DIRECTORY OF TWO FILES ANY MORE (internal ref). The artifact
-    now carries the whole derivation search space, so `upload-artifact` roots
-    it at `_engine/` rather than `_engine/use_cases/` and every requirements
-    path keeps its `use_cases/` segment.
+    """An engine checkout, at the layout the guard job's sparse checkout makes:
+    root-level Dockerfiles, and requirements files under `use_cases/`.
 
     ALL TEN REAL CANDIDATE NAMES, split the way the engine really splits them:
     seven carry a literal `pkg==ver`, and the three GPU Dockerfiles carry none
@@ -620,17 +629,35 @@ def test_the_tools_mirror_check_can_STILL_fail(tmp_path):
 # LEG 2, THE STEP ITSELF — run the workflow's own shell.
 #
 # The tests above prove the checker refuses and that the YAML names both
-# mirrors. This one runs the extracted step against a synthetic engine pin, so
-# a step that named both files but could not actually fail on the second — a
-# `set -e` that returns after the first, a typo in the loop — is caught.
+# mirrors. These run the extracted step against a synthetic engine, so a step
+# that named both files but could not actually fail on the second — a `set -e`
+# that returns after the first, a typo in the loop — is caught.
 # --------------------------------------------------------------------------
-def _stage_repo(tmp_path: Path) -> Path:
-    """A minimal checkout the guard step can run in: the two tools it imports,
-    plus every mirror, at their real relative paths.
+def _engine_dir() -> str:
+    """Where the guard job checks the engine out, read from the YAML.
 
-    Both known mirrors are staged even if the step stopped iterating one, so a
-    step that dropped a mirror fails on the assertion about its report rather
-    than on a FileNotFoundError from the staging helper.
+    The `path:` of the job's one checkout that is handed the engine token, so
+    the staged engine lands wherever the step's `--engine-root` looks.
+    """
+    engine = [s for s in _checkout_steps() if "token:" in s]
+    assert len(engine) == 1, f"expected ONE engine checkout in {GUARD_JOB}: {engine}"
+    m = re.search(r"^\s*path:\s*(\S+)\s*$", engine[0], re.MULTILINE)
+    assert m, f"the engine checkout declares no path:\n{engine[0]}"
+    return m.group(1)
+
+
+def _git(root: Path, *args: str) -> None:
+    subprocess.run(["git", "-C", str(root), *args], check=True, capture_output=True)
+
+
+def _stage_repo(tmp_path: Path, base_branch: str = "develop") -> Path:
+    """A git checkout the guard step can run in, committed on `origin/<base>`.
+
+    The two tools the checker needs plus every mirror, at their real relative
+    paths. A git repo because the step takes its checker out of git at the
+    merge base, never from the working tree. Both known mirrors are staged
+    even if the step stopped iterating one, so a step that dropped a mirror
+    fails on the assertion about its verdict, not on a FileNotFoundError here.
     """
     root = tmp_path / "checkout"
     wanted = dict.fromkeys(
@@ -640,31 +667,88 @@ def _stage_repo(tmp_path: Path) -> Path:
         dst = root / rel
         dst.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(REPO_ROOT / rel, dst)
+    _git(root, "init", "-q", "-b", base_branch)
+    _git(root, "config", "user.email", "t@t.invalid")
+    _git(root, "config", "user.name", "t")
+    _git(root, "add", "-A")
+    _git(root, "commit", "-q", "-m", "base")
+    # `origin/<base>` is what the step resolves against; a local ref of that
+    # name is enough and needs no remote.
+    _git(root, "update-ref", f"refs/remotes/origin/{base_branch}", "HEAD")
     return root
 
 
-def _run_guard_step(root: Path) -> subprocess.CompletedProcess:
+def _commit_pr_change(root: Path, rel: str, text: str) -> None:
+    """One commit on top of the base: what the PR changed."""
+    (root / rel).write_text(text)
+    _git(root, "add", rel)
+    _git(root, "commit", "-q", "-m", f"change {rel}")
+
+
+def _run_guard_step(
+    root: Path, base_ref: str = "", shell: str | None = None
+) -> subprocess.CompletedProcess:
+    """The extracted step, or a mutant of it, run the way the job runs it.
+
+    `base_ref` is `github.base_ref`: the base branch on a pull_request, empty
+    on push and schedule. `RUNNER_TEMP` is emptied and set on every run, so
+    the reports read back are this run's and nothing is written to /tmp.
+    """
     script = root / "guard_step.sh"
-    script.write_text(_guard_step_shell())
+    script.write_text(_guard_step_shell() if shell is None else shell)
     # `python3` in the workflow must be THIS interpreter, not whatever the
     # ambient PATH offers — the shim idiom tests/test_dump_fetch_guard.py uses.
     # PREPENDED to the real PATH rather than replacing it: the step's shell also
-    # needs `bash` itself, and hard-coding a minimal PATH assumes where that
-    # lives.
+    # needs `bash`, `git` and `tar`, and hard-coding a minimal PATH assumes
+    # where those live.
     shim_dir = root / "_bin"
     shim_dir.mkdir(exist_ok=True)
     shim = shim_dir / "python3"
     shim.write_text(f'#!/bin/sh\nexec "{sys.executable}" "$@"\n')
     shim.chmod(0o755)
+    temp = root / "_temp"
+    shutil.rmtree(temp, ignore_errors=True)
+    temp.mkdir()
     env = dict(os.environ)
     env["PATH"] = f"{shim_dir}{os.pathsep}{env.get('PATH', '')}"
+    env["BASE_REF"] = base_ref
+    env["RUNNER_TEMP"] = str(temp)
     return subprocess.run(
-        ["bash", str(script)],
-        cwd=str(root),
-        capture_output=True,
-        text=True,
-        env=env,
+        ["bash", str(script)], cwd=str(root), capture_output=True, text=True, env=env
     )
+
+
+def _public(proc: subprocess.CompletedProcess) -> str:
+    """Everything the step prints. On a public repo, anyone can read it."""
+    return proc.stdout + proc.stderr
+
+
+def _reports(root: Path) -> str:
+    """The checker's own reports, which the step keeps on the runner."""
+    return "".join(
+        p.read_text()
+        for p in sorted((root / "_temp").glob("engine-pin.*/reports/*.log"))
+    )
+
+
+#: The one line the log gives a mirror for each outcome, written out here
+#: independently of the step so a reworded or missing verdict is a failure.
+_VERDICT_LINES = {
+    "OK": "engine pin OK: {mirror} matches the engine's pin",
+    "DRIFT": "ENGINE PIN DRIFT — {mirror} disagrees with the engine's pin",
+    "NONE": "ENGINE PIN CHECK FAILED — no verdict for {mirror}",
+}
+
+
+def _verdict(public: str, mirror: str) -> str:
+    """The verdict the log gives `mirror`: exactly one, or this fails."""
+    found = [
+        kind
+        for kind, line in _VERDICT_LINES.items()
+        if line.format(mirror=mirror) in public
+    ]
+    assert len(found) == 1, f"{mirror} got {found or 'no'} verdict(s):\n{public}"
+    return found[0]
 
 
 def test_the_guard_step_passes_when_every_mirror_is_aligned(tmp_path):
@@ -672,11 +756,11 @@ def test_the_guard_step_passes_when_every_mirror_is_aligned(tmp_path):
     pins: dict[str, str] = {}
     for mirror in _guarded_mirrors():
         pins.update(_engine_pins_for(mirror))
-    _write_engine_pin(root / "_engine_pin", pins)
+    _write_engine_pin(root / _engine_dir(), pins)
     proc = _run_guard_step(root)
-    assert proc.returncode == 0, f"aligned mirrors were refused:\n{proc.stdout}{proc.stderr}"
+    assert proc.returncode == 0, f"aligned mirrors were refused:\n{_public(proc)}"
     for mirror in _guarded_mirrors():
-        assert mirror in proc.stdout, f"the step never mentioned {mirror}"
+        assert _verdict(_public(proc), mirror) == "OK"
 
 
 def test_THE_STEP_REPORTS_EVERY_DRIFTED_MIRROR_NOT_JUST_THE_FIRST(tmp_path):
@@ -686,14 +770,13 @@ def test_THE_STEP_REPORTS_EVERY_DRIFTED_MIRROR_NOT_JUST_THE_FIRST(tmp_path):
     pins: dict[str, str] = {}
     for mirror in _guarded_mirrors():
         pins.update(_engine_pins_for(mirror, shift=-2, only=("transformers",)))
-    _write_engine_pin(root / "_engine_pin", pins)
+    _write_engine_pin(root / _engine_dir(), pins)
     proc = _run_guard_step(root)
-    combined = proc.stdout + proc.stderr
-    assert proc.returncode != 0, f"the step went green on drifted mirrors:\n{combined}"
+    assert proc.returncode != 0, f"the step went green on drifted mirrors:\n{_public(proc)}"
     for mirror in _guarded_mirrors():
-        assert f"ENGINE PIN DRIFT — {mirror}" in combined, (
+        assert _verdict(_public(proc), mirror) == "DRIFT", (
             f"the step did not report drift for {mirror} — it stopped at the "
-            f"first failure:\n{combined}"
+            f"first failure:\n{_public(proc)}"
         )
 
 
@@ -707,7 +790,7 @@ def test_THE_STEP_GOES_RED_ON_A_PYTORCH_TXT_ONLY_DRIFT(tmp_path):
     tools/ mirror, which is correct here.
     """
     root = _stage_repo(tmp_path)
-    _write_engine_pin(root / "_engine_pin", _engine_pins_for(TOOLS_MIRROR))
+    _write_engine_pin(root / _engine_dir(), _engine_pins_for(TOOLS_MIRROR))
 
     # The dependabot bump: pytorch.txt alone moves ahead of the engine.
     ci = root / CI_MIRROR
@@ -719,21 +802,20 @@ def test_THE_STEP_GOES_RED_ON_A_PYTORCH_TXT_ONLY_DRIFT(tmp_path):
     bumped = _exact_pins(text)
 
     proc = _run_guard_step(root)
-    combined = proc.stdout + proc.stderr
+    public = _public(proc)
     assert proc.returncode != 0, (
         "a pytorch.txt-only bump two minors ahead of the engine went GREEN — "
-        f"(internal ref) is back:\n{combined}"
+        f"(internal ref) is back:\n{public}"
     )
-    assert f"ENGINE PIN DRIFT — {CI_MIRROR}" in combined, (
-        f"the step did not name {CI_MIRROR} as drifted:\n{combined}"
+    assert _verdict(public, CI_MIRROR) == "DRIFT", public
+    assert _verdict(public, TOOLS_MIRROR) == "OK", (
+        f"the step accused the tools/ mirror, which agrees with the engine here:\n{public}"
     )
-    assert f"ENGINE PIN DRIFT — {TOOLS_MIRROR}" not in combined, (
-        "the step accused the tools/ mirror, which agrees with the engine "
-        f"here:\n{combined}"
-    )
+    # Which packages drifted is the checker's report, kept on the runner.
+    report = _reports(root)
     for pkg in ("torch", "transformers"):
-        assert f"{pkg}: mirror pins =={bumped[pkg]}" in combined, (
-            f"the refusal does not name {pkg}'s bumped version:\n{combined}"
+        assert f"{pkg}: mirror pins =={bumped[pkg]}" in report, (
+            f"the report does not name {pkg}'s bumped version:\n{report}"
         )
 
 
@@ -987,151 +1069,347 @@ def test_the_header_no_longer_calls_the_mirror_STALE(tmp_path):
 
 
 # --------------------------------------------------------------------------
-# THE WORKFLOW HALF. The checker can derive a direction; the step has to
-# actually hand it the evidence, and the checkout has to be deep enough for
-# `git show <merge base>:<mirror>` to resolve. A step that named the flag but
-# ran against a shallow tip would be (internal ref)'s shape again: wired but unable to
-# look.
+# THE PUBLIC BOUNDARY. This repo is public and the engine is not. The guard
+# job holds the engine token and the engine's files, so it must not run the
+# PR's code and must not publish what it read. Each property is RUN below,
+# and each has a mutation row further down that breaks it and sees it caught.
 # --------------------------------------------------------------------------
+ENGINE_REPO = "tracebloc-engine"
+
+#: Engine versions in these scenarios are moved by a margin no mirror
+#: carries, so such a version in the log can only have come from the engine.
+_ENGINE_ONLY_SHIFT = 7
+
+
 def _guard_job_checkout_is_deep() -> bool:
-    """`fetch-depth: 0` on the guard job's checkout, read out of the YAML."""
-    block = _job_block()
-    head = block[: block.index("- name: Download the engine pin")]
-    return "fetch-depth: 0" in head
-
-
-def test_THE_GUARD_STEP_PASSES_THE_MERGE_BASE_EVIDENCE(tmp_path):
-    shell = _guard_step_shell()
-    assert "--mirror-at-base" in shell, (
-        "the guard step never passes --mirror-at-base, so every PR report falls "
-        "back to 'both remedies' even though the evidence is one `git show` "
-        "away (internal ref)"
-    )
-    assert "git merge-base" in shell, shell
+    """`fetch-depth: 0` on the guard job's checkout of this repo."""
+    own = [s for s in _checkout_steps() if "repository:" not in s]
+    assert len(own) == 1, f"expected ONE checkout of this repo in {GUARD_JOB}: {own}"
+    return "fetch-depth: 0" in own[0]
 
 
 def test_THE_GUARD_CHECKOUT_IS_DEEP_ENOUGH_TO_RESOLVE_THE_MERGE_BASE():
     assert _guard_job_checkout_is_deep(), (
-        "the drift-guard job checks out at the default shallow depth, so "
-        "`git merge-base origin/<base> HEAD` cannot resolve and the step's "
-        "own `set -e` would red the job for a reason unrelated to any drift"
+        "the drift-guard job checks this repo out at the default shallow "
+        "depth, so `git merge-base origin/<base> HEAD` cannot resolve and the "
+        "step's own `set -e` reds the job before any mirror is checked"
     )
 
 
-def _stage_git_repo(tmp_path: Path, base_branch: str = "develop") -> Path:
-    """A real git repo the extracted step can run `git merge-base` in.
-
-    The mirrors and tools are committed on `origin/<base_branch>`, then the
-    checkout advances one commit. Whatever the caller writes into the mirror
-    afterwards is therefore "changed by this PR" and the step must derive it.
-    """
-    root = _stage_repo(tmp_path)
-    git = ["git", "-C", str(root)]
-    subprocess.run([*git, "init", "-q", "-b", base_branch], check=True)
-    subprocess.run([*git, "config", "user.email", "t@t.invalid"], check=True)
-    subprocess.run([*git, "config", "user.name", "t"], check=True)
-    subprocess.run([*git, "add", "-A"], check=True)
-    subprocess.run(
-        [*git, "commit", "-q", "-m", "base"], check=True, capture_output=True
-    )
-    # `origin/<base>` is what the step resolves against; a local ref of that
-    # name is enough and needs no remote.
-    subprocess.run(
-        [*git, "update-ref", f"refs/remotes/origin/{base_branch}", "HEAD"], check=True
-    )
-    return root
-
-
-def _run_guard_step_in_repo(root: Path, base_ref: str) -> subprocess.CompletedProcess:
-    script = root / "guard_step.sh"
-    script.write_text(_guard_step_shell())
-    shim_dir = root / "_bin"
-    shim_dir.mkdir(exist_ok=True)
-    shim = shim_dir / "python3"
-    shim.write_text(f'#!/bin/sh\nexec "{sys.executable}" "$@"\n')
-    shim.chmod(0o755)
-    env = dict(os.environ)
-    env["PATH"] = f"{shim_dir}{os.pathsep}{env.get('PATH', '')}"
-    env["BASE_REF"] = base_ref
-    env["RUNNER_TEMP"] = str(root / "_temp")
-    (root / "_temp").mkdir(exist_ok=True)
-    return subprocess.run(
-        ["bash", str(script)], cwd=str(root), capture_output=True, text=True, env=env
-    )
-
-
-def test_THE_STEP_DERIVES_MIRROR_MOVED_FROM_A_REAL_MERGE_BASE(tmp_path, capsys):
-    """(internal ref) replayed as a git history, which is the whole ticket end to end.
-
-    The engine and both mirrors agree at the merge base; then this "PR" raises
-    pytorch.txt two minors, exactly as the mirror bump did. The step must go
-    red (the detection is untouched) AND must tell the author to land the
-    engine bump first rather than to regenerate the mirror.
-    """
-    root = _stage_git_repo(tmp_path)
-    _write_engine_pin(root / "_engine_pin", _engine_pins_for(TOOLS_MIRROR))
-
-    ci = root / CI_MIRROR
-    text = ci.read_text()
-    for pkg in ("torch", "transformers"):
-        was = _exact_pins(text)[pkg]
-        text = text.replace(f"{pkg}=={was}", f"{pkg}=={_shift_minor(was, +2)}")
-    ci.write_text(text)
-    subprocess.run(["git", "-C", str(root), "add", CI_MIRROR], check=True)
-    subprocess.run(
-        ["git", "-C", str(root), "commit", "-q", "-m", "bump the mirror"],
-        check=True,
-        capture_output=True,
-    )
-
-    proc = _run_guard_step_in_repo(root, "develop")
-    combined = proc.stdout + proc.stderr
-    assert proc.returncode != 0, f"a real skew went green:\n{combined}"
-    assert f"ENGINE PIN DRIFT — {CI_MIRROR}" in combined, combined
-    assert "The mirror CHANGED in this PR" in combined, (
-        "the step did not derive the direction from the merge base, so it fell "
-        f"back to both remedies:\n{combined}"
-    )
-    assert "Do NOT regenerate the mirror" in combined
-    assert _ATTRIBUTION not in combined
-    # The tools/ mirror is untouched by this PR and agrees with the engine, so
-    # it must not be accused — (internal ref)'s property, still holding.
-    assert f"ENGINE PIN DRIFT — {TOOLS_MIRROR}" not in combined
-    with capsys.disabled():
-        print("\n--- (internal ref): the real step, real git history, (internal ref) ---")
-        print(combined.rstrip())
-
-
-def test_THE_STEP_DERIVES_ENGINE_MOVED_WHEN_THE_PR_TOUCHED_NO_MIRROR(tmp_path):
-    """The ordinary case: nothing in the PR moved, the engine did. Same
-    history, but the skew is put in the ENGINE pin instead of the mirror."""
-    root = _stage_git_repo(tmp_path)
-    pins: dict[str, str] = {}
-    for mirror in _guarded_mirrors():
-        pins.update(_engine_pins_for(mirror, shift=+1, only=("transformers",)))
-    _write_engine_pin(root / "_engine_pin", pins)
-    proc = _run_guard_step_in_repo(root, "develop")
-    combined = proc.stdout + proc.stderr
-    assert proc.returncode != 0, combined
-    assert "the ENGINE moved" in combined, combined
-    assert "Regenerate the mirror AND the dumps built against it" in combined
-    assert "Do NOT regenerate the mirror" not in combined
-
-
-def test_THE_STEP_STILL_WORKS_WITH_NO_BASE_REF(tmp_path):
-    """push/schedule runs have no merge base. The step must skip the
-    derivation and still check both mirrors, rather than dying on an unset
-    variable under `set -u`."""
-    root = _stage_git_repo(tmp_path)
+def _aligned_pins() -> dict[str, str]:
     pins: dict[str, str] = {}
     for mirror in _guarded_mirrors():
         pins.update(_engine_pins_for(mirror))
-    _write_engine_pin(root / "_engine_pin", pins)
-    proc = _run_guard_step_in_repo(root, "")
-    combined = proc.stdout + proc.stderr
-    assert proc.returncode == 0, f"aligned mirrors were refused:\n{combined}"
+    return pins
+
+
+#: Every state the guard can meet, and the verdict the log must give each
+#: mirror in it: agreement, the engine moving, a PR moving one mirror, the
+#: engine's own sources disagreeing (exit 2), and the checker crashing.
+_SCENARIOS = {
+    "aligned": {TOOLS_MIRROR: "OK", CI_MIRROR: "OK"},
+    "engine-moved": {TOOLS_MIRROR: "DRIFT", CI_MIRROR: "DRIFT"},
+    "mirror-moved": {TOOLS_MIRROR: "OK", CI_MIRROR: "DRIFT"},
+    "engine-disagrees": {TOOLS_MIRROR: "NONE", CI_MIRROR: "NONE"},
+    "crash": {TOOLS_MIRROR: "OK", CI_MIRROR: "NONE"},
+}
+
+
+def _stage_scenario(tmp_path: Path, kind: str) -> tuple[Path, str]:
+    """A checkout and an engine in state `kind`, and the `base_ref` to run under."""
+    assert kind in _SCENARIOS, kind
+    root = _stage_repo(tmp_path)
+    engine = root / _engine_dir()
+    pins = _aligned_pins()
+    if kind == "engine-moved":
+        pins = {
+            p: _shift_minor(v, _ENGINE_ONLY_SHIFT) if p in ("torch", "transformers") else v
+            for p, v in pins.items()
+        }
+    _write_engine_pin(engine, pins)
+    if kind == "mirror-moved":
+        text = (root / CI_MIRROR).read_text()
+        was = _exact_pins(text)["transformers"]
+        _commit_pr_change(
+            root,
+            CI_MIRROR,
+            text.replace(f"transformers=={was}", f"transformers=={_shift_minor(was, +2)}"),
+        )
+        return root, "develop"
+    if kind == "engine-disagrees":
+        _skew_one_source(
+            engine,
+            CV_GPU_REQUIREMENTS,
+            "torch",
+            _shift_minor(pins["torch"], _ENGINE_ONLY_SHIFT),
+        )
+    if kind == "crash":
+        (root / CI_MIRROR).unlink()
+    return root, ""
+
+
+def _engine_secrets(root: Path) -> list[str]:
+    """What the log must never carry: each staged engine file's path and name,
+    and each version the engine pins that no mirror pins."""
+    engine = root / _engine_dir()
+    files = sorted(p for p in engine.rglob("*") if p.is_file())
+    assert files, f"no engine staged under {engine}"
+    mirrors = "".join(
+        path.read_text()
+        for m in _guarded_mirrors()
+        for path in (REPO_ROOT / m, root / m)
+        if path.is_file()
+    )
+    secrets: set[str] = set()
+    for p in files:
+        secrets.update({p.relative_to(engine).as_posix(), p.name})
+        secrets.update(v for v in _exact_pins(p.read_text()).values() if v not in mirrors)
+    return sorted(secrets)
+
+
+def _leaks(text: str, secrets: list[str]) -> list[str]:
+    return [s for s in secrets if s in text]
+
+
+@pytest.mark.parametrize("kind", sorted(_SCENARIOS))
+def test_THE_LOG_GIVES_A_VERDICT_PER_MIRROR_AND_NOTHING_FROM_THE_ENGINE(tmp_path, kind):
+    root, base_ref = _stage_scenario(tmp_path, kind)
+    secrets = _engine_secrets(root)
+    proc = _run_guard_step(root, base_ref)
+    public = _public(proc)
+    assert _leaks(public, secrets) == [], (
+        f"the public log names engine files or versions:\n{public}"
+    )
+    # THE NEGATIVE CONTROL. The checker did read the engine and did name it;
+    # the step withheld it. A report with no engine detail would make the
+    # clean log above prove nothing.
+    assert _leaks(_reports(root), secrets), (
+        f"the private reports hold no engine detail:\n{_reports(root)}"
+    )
+    verdicts = {mirror: _verdict(public, mirror) for mirror in _guarded_mirrors()}
+    assert verdicts == _SCENARIOS[kind], public
+    assert (proc.returncode == 0) == all(v == "OK" for v in verdicts.values()), (
+        proc.returncode,
+        public,
+    )
+
+
+_IMPOSTOR_MARKER = "THE PR'S CHECKER RAN"
+
+
+def _stage_impostor(tmp_path: Path) -> Path:
+    """A PR that rewrites the checker to print the engine and pass, against an
+    engine that has moved, so the real checker must say DRIFT."""
+    root, _ = _stage_scenario(tmp_path, "engine-moved")
+    impostor = (
+        "import pathlib\n"
+        f"print({_IMPOSTOR_MARKER!r})\n"
+        f"for p in sorted(pathlib.Path({_engine_dir()!r}).rglob('*')):\n"
+        "    if p.is_file():\n"
+        "        print(p, p.read_text())\n"
+    )
+    _commit_pr_change(root, CHECKER_REL, impostor)
+    return root
+
+
+def _isolation_findings(proc: subprocess.CompletedProcess, root: Path) -> list[str]:
+    findings = []
+    if _IMPOSTOR_MARKER in _public(proc) + _reports(root):
+        findings.append("the PR's checker ran in the token job")
+    if proc.returncode == 0:
+        findings.append("an engine that moved went green")
+    return findings
+
+
+def test_THE_TOKEN_JOB_RUNS_THE_MERGE_BASE_CHECKER_NEVER_THE_PRS(tmp_path):
+    root = _stage_impostor(tmp_path)
+    proc = _run_guard_step(root, "develop")
+    assert _isolation_findings(proc, root) == [], _public(proc)
     for mirror in _guarded_mirrors():
-        assert mirror in proc.stdout, f"the step never mentioned {mirror}:\n{combined}"
+        assert _verdict(_public(proc), mirror) == "DRIFT", _public(proc)
+
+
+def _jobs(text: str) -> list[str]:
+    body = text.split("\njobs:\n", 1)[1]
+    jobs = re.findall(r"^  ([A-Za-z0-9_-]+):\n", body, re.MULTILINE)
+    assert GUARD_JOB in jobs, jobs
+    return jobs
+
+
+def _engine_token_jobs(text: str) -> list[str]:
+    """Jobs that mint a token for the engine repo or read the minted one."""
+    found = []
+    for job in _jobs(text):
+        code = _strip_comments(_job_block(job, text))
+        if f"repositories: {ENGINE_REPO}" in code or "steps.engine-token." in code:
+            found.append(job)
+    return found
+
+
+def test_THE_ENGINE_TOKEN_IS_IN_THE_GUARD_JOB_ALONE():
+    assert _engine_token_jobs(WORKFLOW.read_text()) == [GUARD_JOB]
+
+
+#: Ways a job hands what it holds to something that outlives it or to
+#: another job, every one of them readable from a public repo's run.
+_PUBLISHERS = ("upload-artifact", "actions/cache", "GITHUB_STEP_SUMMARY", "outputs:")
+
+
+def _publishers(job_text: str) -> list[str]:
+    code = _strip_comments(job_text)
+    return [marker for marker in _PUBLISHERS if marker in code]
+
+
+def test_NOTHING_LEAVES_THE_TOKEN_JOB():
+    assert _publishers(_job_block()) == [], (
+        f"{GUARD_JOB} holds the engine's files and hands something on"
+    )
+
+
+def test_NO_OTHER_JOB_READS_AN_ENGINE_FILE():
+    """The jobs that run the PR's code install this repo's mirror, which the
+    guard proved equal to the engine; none of them needs the engine itself."""
+    text = WORKFLOW.read_text()
+    engine = re.compile(rf"(?<![\w-]){re.escape(_engine_dir())}(?![\w-])")
+    readers = [
+        job
+        for job in _jobs(text)
+        if job != GUARD_JOB and engine.search(_strip_comments(_job_block(job, text)))
+    ]
+    assert readers == [], readers
+    assert not re.search(r"name:\s*engine-pin\s*$", _strip_comments(text), re.MULTILINE), (
+        "an `engine-pin` artifact is named again"
+    )
+
+
+def _run_bodies(job_text: str) -> list[str]:
+    """Every `run:` body in a job, comment-free."""
+    lines = job_text.splitlines()
+    bodies = []
+    for i, line in enumerate(lines):
+        m = re.match(r"^(\s*)(?:- )?run:\s*(.*)$", line)
+        if not m:
+            continue
+        indent, rest = len(m.group(1)), m.group(2).strip()
+        if rest not in ("|", "|-", ">", ">-"):
+            bodies.append(rest)
+            continue
+        body = []
+        for nxt in lines[i + 1 :]:
+            if nxt.strip() and len(nxt) - len(nxt.lstrip()) <= indent:
+                break
+            body.append(nxt)
+        bodies.append(_strip_comments("\n".join(body)))
+    return bodies
+
+
+def _untrusted_runs(job_text: str) -> list[str]:
+    """Interpreter runs and installs in a job that are not the trusted copy."""
+    found = []
+    for body in _run_bodies(job_text):
+        for m in re.finditer(r"\bpython3?((?:\s+-\w+)*)\s+(\S+)", body):
+            if not m.group(2).startswith('"$trusted/'):
+                found.append(m.group(0))
+        found += [m.group(0) for m in re.finditer(r"\bpip3?\s+install\b[^\n]*", body)]
+    return found
+
+
+def test_EVERY_INTERPRETER_RUN_IN_THE_TOKEN_JOB_IS_THE_TRUSTED_COPY():
+    job = _job_block()
+    assert any('"$trusted/' in body for body in _run_bodies(job)), (
+        "the token job runs no trusted checker at all, so this test reads nothing"
+    )
+    assert _untrusted_runs(job) == []
+
+
+# --------------------------------------------------------------------------
+# MUTATION ROWS for the boundary. Each starts from the real workflow and sees
+# it clean, applies one change, asserts the change applied, and asserts the
+# detector the tests above call names it.
+# --------------------------------------------------------------------------
+def _mutate(text: str, old: str, new: str) -> str:
+    assert text.count(old) == 1, f"mutation anchor is not there exactly once: {old!r}"
+    mutant = text.replace(old, new)
+    assert mutant != text, "the mutation did not apply, so it proves nothing"
+    return mutant
+
+
+def test_MUTATION_the_report_printed_to_the_log_is_caught(tmp_path):
+    root, base_ref = _stage_scenario(tmp_path, "engine-moved")
+    secrets = _engine_secrets(root)
+    assert _leaks(_public(_run_guard_step(root, base_ref)), secrets) == []
+    mutant = _mutate(
+        _guard_step_shell(),
+        '> "$report" 2>&1 || status=$?',
+        '2>&1 | tee "$report" || status=$?',
+    )
+    proc = _run_guard_step(root, base_ref, shell=mutant)
+    assert _leaks(_public(proc), secrets), (
+        f"the mutant printed the report and no leak was found:\n{_public(proc)}"
+    )
+
+
+def test_MUTATION_running_the_prs_checker_is_caught(tmp_path):
+    root = _stage_impostor(tmp_path)
+    assert _isolation_findings(_run_guard_step(root, "develop"), root) == []
+    trusted, untrusted = '"$trusted/tools/check_engine_pin_drift.py"', CHECKER_REL
+    proc = _run_guard_step(
+        root, "develop", shell=_mutate(_guard_step_shell(), trusted, untrusted)
+    )
+    assert "the PR's checker ran in the token job" in _isolation_findings(proc, root)
+    assert _untrusted_runs(_mutate(_job_block(), trusted, untrusted))
+
+
+def test_MUTATION_trusting_the_prs_head_is_caught(tmp_path):
+    root = _stage_impostor(tmp_path)
+    assert _isolation_findings(_run_guard_step(root, "develop"), root) == []
+    mutant = _mutate(
+        _guard_step_shell(), 'git merge-base "origin/$BASE_REF" HEAD', "git rev-parse HEAD"
+    )
+    proc = _run_guard_step(root, "develop", shell=mutant)
+    assert "the PR's checker ran in the token job" in _isolation_findings(proc, root)
+
+
+def test_MUTATION_a_crash_read_as_drift_is_caught(tmp_path):
+    root, base_ref = _stage_scenario(tmp_path, "crash")
+    assert _verdict(_public(_run_guard_step(root, base_ref)), CI_MIRROR) == "NONE"
+    mutant = _mutate(
+        _guard_step_shell(),
+        """[ "$status" -eq 1 ] && ! grep -q '^Traceback ' "$report\"""",
+        '[ "$status" -eq 1 ]',
+    )
+    proc = _run_guard_step(root, base_ref, shell=mutant)
+    assert _verdict(_public(proc), CI_MIRROR) == "DRIFT", _public(proc)
+
+
+def test_MUTATION_an_artifact_from_the_token_job_is_caught():
+    job = _job_block()
+    assert _publishers(job) == []
+    mutant = _mutate(
+        job,
+        "          sparse-checkout-cone-mode: false\n",
+        "          sparse-checkout-cone-mode: false\n"
+        "      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2\n"
+        "        with:\n"
+        "          name: engine-pin\n"
+        f"          path: {_engine_dir()}/use_cases/requirements*.txt\n",
+    )
+    assert _publishers(mutant) == ["upload-artifact"]
+
+
+def test_MUTATION_the_engine_token_in_a_second_job_is_caught():
+    text = WORKFLOW.read_text()
+    assert _engine_token_jobs(text) == [GUARD_JOB]
+    mint = re.search(
+        r"^      - name: Mint an engine-read token\n(?:        .*\n)+", text, re.MULTILINE
+    )
+    assert mint, "no engine mint step to copy"
+    mutant = _mutate(
+        text,
+        "  seed-contract-drift:\n    needs: engine-pin-drift-guard\n",
+        "  seed-contract-drift:\n    needs: engine-pin-drift-guard\n    steps:\n" + mint.group(0),
+    )
+    assert _engine_token_jobs(mutant) == [GUARD_JOB, "seed-contract-drift"]
 
 
 # --------------------------------------------------------------------------
@@ -1418,8 +1696,8 @@ def test_AN_ENGINE_ROOT_WHOSE_GLOB_MATCHES_NOTHING_IS_REFUSED(tmp_path):
         (engine / rel).unlink()
     proc = _run_checker(TOOLS_MIRROR, engine)
     assert proc.returncode == 2, (
-        "an engine-source glob that matched nothing means the artifact did not "
-        f"arrive intact; that is not agreement:\n{proc.stdout}{proc.stderr}"
+        "an engine-source glob that matched nothing means the checkout is "
+        f"incomplete; that is not agreement:\n{proc.stdout}{proc.stderr}"
     )
     assert "Dockerfile.base.*" in proc.stderr, proc.stderr
 
@@ -1518,18 +1796,18 @@ def test_THE_OK_LINE_STATES_ITS_OWN_COVERAGE(tmp_path):
 
 # --------------------------------------------------------------------------
 # THE WORKFLOW HALF. The globs are the only hand-kept claim left, and they are
-# written down in THREE places — the sparse-checkout, the artifact path, and
-# the module constant. Three copies of one claim is how (internal ref) happened.
+# written down twice — the engine checkout's sparse-checkout and the module
+# constant — so the two are held equal here.
 # --------------------------------------------------------------------------
 def _engine_fetch_with(key: str) -> list[str]:
-    """A block-scalar `with:` value from the fetch-engine-pin job, as a list."""
-    block = _job_block("fetch-engine-pin")
+    """A block-scalar `with:` value from the guard job's engine checkout, as a list."""
+    block = _job_block()
     marker = f"{key}: |"
     # EXACTLY ONCE. Two occurrences means `.index()` silently picks the first
     # and this helper would report a different key's patterns as this one's.
     assert block.count(marker) == 1, (
         f"{marker!r} appears {block.count(marker)} times in the "
-        "fetch-engine-pin job; .index() would pick one arbitrarily"
+        f"{GUARD_JOB} job; .index() would pick one arbitrarily"
     )
     body = block[block.index(marker) + len(marker) :]
     out = []
@@ -1545,24 +1823,24 @@ def test_THE_GUARD_STEP_DERIVES_THE_ENGINE_SET_RATHER_THAN_LISTING_IT():
     # THE COMMENT-STRIPPED VIEW, deliberately. Read raw, the positive
     # assertion below greens on a step whose command was deleted and merely
     # described in a comment, and the negative one reds when a comment
-    # explains the flag it forbids. This PR's own workflow comments discuss
-    # `--engine` at length, which is exactly the hazard.
+    # explains the flag it forbids.
     shell = _guard_step_code()
-    assert "--engine-root _engine_pin" in shell, (
-        "the guard step still hands the checker a LIST of engine files. That "
-        "list was the coverage claim and it named two of seven, and the "
-        "reducer resolved a disagreement between them by argument order "
-        "(internal ref). Pass --engine-root and let the set be derived.\n"
+    engine = _engine_dir()
+    assert f"--engine-root {engine}" in shell, (
+        "the guard step does not hand the checker the engine checkout to "
+        "derive its sources from. A hand-kept LIST of engine files was the "
+        "coverage claim, it named two of seven, and the reducer resolved a "
+        "disagreement between them by argument order. Pass --engine-root.\n"
         f"{shell}"
     )
-    assert "--engine _engine_pin" not in shell, (
+    assert f"--engine {engine}" not in shell, (
         "a hand-listed --engine path is back alongside --engine-root, which "
         f"reintroduces the list that rots:\n{shell}"
     )
 
 
-def test_THE_SPARSE_CHECKOUT_THE_ARTIFACT_AND_THE_MODULE_ALL_DECLARE_ONE_SPACE():
-    """The three copies of the search space must be the same search space."""
+def test_THE_SPARSE_CHECKOUT_AND_THE_MODULE_DECLARE_ONE_SPACE():
+    """The two copies of the search space must be the same search space."""
     mod = _checker_module()
     globs = list(mod._ENGINE_SOURCE_GLOBS)
     assert len(globs) == 2, globs
@@ -1578,27 +1856,6 @@ def test_THE_SPARSE_CHECKOUT_THE_ARTIFACT_AND_THE_MODULE_ALL_DECLARE_ONE_SPACE()
             "sub/Dockerfile.base.cpu that Path.glob on the consuming side then "
             "does not match"
         )
-
-    artifact = _engine_fetch_with("path")
-    assert len(artifact) == len(globs), (artifact, globs)
-    assert [p.removeprefix("_engine/") for p in artifact] == globs, (artifact, globs)
-
-
-def test_THE_ARTIFACT_KEEPS_A_ROOT_LEVEL_PATTERN_SO_THE_LAYOUT_DOES_NOT_FLATTEN():
-    """`upload-artifact` roots the archive at the least common ancestor of the
-    paths it is given. Drop the root-level Dockerfile pattern and the LCA
-    collapses to `_engine/use_cases`, the `use_cases/` segment disappears from
-    every downloaded path, and `--engine-root` globs nothing — a coverage
-    failure arriving as a layout change."""
-    artifact = _engine_fetch_with("path")
-    root_level = [p for p in artifact if "/" not in p.removeprefix("_engine/")]
-    assert root_level, (
-        "no root-level `_engine/<file>` pattern is uploaded any more, so the "
-        f"artifact re-roots at _engine/use_cases and flattens: {artifact}"
-    )
-    assert any(
-        p.removeprefix("_engine/").startswith("use_cases/") for p in artifact
-    ), artifact
 
 
 def test_EVERY_DERIVABLE_ENGINE_SOURCE_IS_INSIDE_THE_DECLARED_SEARCH_SPACE():
@@ -1844,7 +2101,7 @@ def test_THE_STEP_ASSERTIONS_CANNOT_BE_SATISFIED_BY_A_COMMENT():
     comments discuss `--engine` and `--engine-root` at length, so the hazard is
     not hypothetical here.
     """
-    needle = "--engine-root _engine_pin"
+    needle = f"--engine-root {_engine_dir()}"
     raw = _guard_step_shell()
     code = _guard_step_code()
 
@@ -1880,11 +2137,11 @@ def test_THE_STEP_ASSERTIONS_CANNOT_BE_SATISFIED_BY_A_COMMENT():
 def test_THE_NEGATIVE_STEP_ASSERTION_IS_NOT_REDDENED_BY_PROSE():
     """The other direction, which is the one people forget.
 
-    `"--engine _engine_pin" not in shell` reds a HEALTHY tree the moment a
+    `"--engine <engine dir>" not in shell` reds a HEALTHY tree the moment a
     comment explains the hand-listed form it forbids. Written against the raw
     text that is a latent false failure; against the stripped view it is not.
     """
-    forbidden = "--engine _engine_pin"
+    forbidden = f"--engine {_engine_dir()}"
     raw_with_prose = _guard_step_shell().replace(
         "# `--engine-root`, NOT A LIST",
         f"# it no longer passes {forbidden}/requirements.txt, NOT A LIST",
