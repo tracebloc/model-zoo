@@ -79,17 +79,31 @@ env:
   ENGINE_REF: ${{ github.event.inputs.engine-ref || 'develop' }}
 
 jobs:
-  # 1a) Fetch the engine's pin files in an ISOLATED job that runs NO PR-controlled
-  #     code. The contents:read App token for private tracebloc-engine is minted
-  #     and used ONLY here, alongside trusted actions (create-github-app-token,
-  #     checkout, upload-artifact). Because nothing from the PR executes in this
-  #     job, the token — even as it sits in the runner's step-output files — is
-  #     never reachable by PR code. The two pin files are handed to the guard
-  #     job below as an artifact; the token itself never leaves this job.
-  fetch-engine-pin:
+  # 1) The mirrors must EQUAL the engine's live pin, checked in the one job that
+  #    can read the private engine. Two rules, both pinned by
+  #    tests/test_engine_pin_drift_guard.py:
+  #
+  #    NOTHING THE PR CONTROLS RUNS HERE. The engine token sits in the runner's
+  #    step-output files, readable by any code in the job, so the checker is
+  #    `tools/` at the merge base (develop itself on push and schedule),
+  #    extracted outside the checkout. The PR's mirrors are read as data only.
+  #    A PR's own copy of the checker runs in ci.yml's tests instead.
+  #
+  #    NOTHING FROM THE ENGINE LEAVES HERE. This repo is public, and so are its
+  #    run logs and artifacts. The checker's report names engine files and
+  #    versions, so it goes to a file on the runner and the log gets one
+  #    verdict per mirror. The jobs below read no engine file: they install
+  #    `tools/requirements-engine-pin.txt`, which this job proves equal.
+  engine-pin-drift-guard:
     timeout-minutes: 10
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # `git merge-base` needs history, not a shallow tip: it is where the
+          # trusted checker is extracted from.
+          fetch-depth: 0
+          persist-credentials: false
       # tracebloc-engine is a separate private repo; GITHUB_TOKEN cannot read it.
       # Mint an installation token scoped to that one repo, contents:read only
       # (same App as add-to-kanban.yml, least-privilege per (internal ref)).
@@ -109,8 +123,7 @@ jobs:
           ref: ${{ env.ENGINE_REF }}
           token: ${{ steps.engine-token.outputs.token }}
           path: _engine
-          # Belt and braces: don't persist the token into _engine/.git/config
-          # either. The real isolation is that no PR code runs in this job.
+          # Don't persist the token into _engine/.git/config either.
           persist-credentials: false
           # THE SEARCH SPACE, NOT A FILE LIST (internal ref). These two
           # patterns used to be two exact paths, `use_cases/requirements.txt`
@@ -140,55 +153,9 @@ jobs:
             /Dockerfile.base.*
             /use_cases/requirements*.txt
           sparse-checkout-cone-mode: false
-      - name: Upload the engine pin files
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        with:
-          name: engine-pin
-          # Only the pin files — never _engine/.git — cross to the
-          # PR-controlled job.
-          #
-          # `_engine/Dockerfile.base.*` IS LOAD-BEARING FOR THE LAYOUT, not
-          # only for coverage: upload-artifact roots the archive at the least
-          # common ancestor of the paths it is given. With only
-          # `_engine/use_cases/...` that was `_engine/use_cases`, and the guard
-          # job saw `_engine_pin/requirements.txt`; with a root-level
-          # Dockerfile pattern it is `_engine`, so the paths keep their
-          # `use_cases/` segment and `--engine-root _engine_pin` globs the same
-          # relative shape the engine has. Dropping the Dockerfile pattern
-          # would silently re-flatten it.
-          path: |
-            _engine/Dockerfile.base.*
-            _engine/use_cases/requirements*.txt
-          if-no-files-found: error
-          retention-days: 1
-
-  # 1b) The mirror tools/requirements-engine-pin.txt must EQUAL the engine's live
-  #     pin. This job runs the PR-controlled drift checker (check_engine_pin_drift
-  #     imports verify_dumps_against_engine_pin), but holds NO engine token — it
-  #     only receives the two pin files as an artifact from the isolated fetch job
-  #     above. So even PR-modified code here has nothing to reach private
-  #     tracebloc-engine with. This is what makes the mirror safe to install from
-  #     and what turns an engine `transformers` bump red until the mirror (and
-  #     then the dumps) are regenerated.
-  engine-pin-drift-guard:
-    needs: fetch-engine-pin
-    timeout-minutes: 10
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          # `git show <merge base>:<mirror>` needs history, not a shallow tip.
-          # It is what lets the drift report DERIVE which side moved instead of
-          # asserting one (internal ref); see the base-extraction step below.
-          fetch-depth: 0
-      - name: Download the engine pin files
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
-        with:
-          name: engine-pin
-          path: _engine_pin
       # ONE INVOCATION PER MIRROR, deliberately, rather than one multi-mirror
-      # call: the failure header names the file it was handed, so a red job
-      # says WHICH copy drifted instead of that "a" copy did.
+      # call: each verdict names the file it was handed, so a red job says
+      # WHICH copy drifted instead of that "a" copy did.
       #
       # AND THE LOOP DOES NOT STOP AT THE FIRST FAILURE. An engine bump moves
       # both mirrors at once, so `set -e` on the first check would report half
@@ -200,62 +167,54 @@ jobs:
       # fails if a file under .github/requirements/ mirrors an engine pin
       # without appearing here.
       #
-      # `--mirror-at-base` IS WHAT MAKES THE DIAGNOSIS DERIVED RATHER THAN
-      # ASSERTED (internal ref). Two pins cannot say which side moved, and
-      # the old message asserted "the engine moved" in both directions — which
-      # on a mirror-moved PR sent you to regenerate the mirror back down to
-      # the engine's older pin and silently revert the bump (internal ref). The
-      # mirror's own value at the merge base does settle it, so it is handed
-      # over on a pull_request and OMITTED on push/schedule, where there is no
-      # merge base and the honest verdict is "unknown, here are both
-      # remedies".
-      #
-      # A merge-base extraction that FAILS is a hard error, not a fallback to
-      # the unknown branch: a checker that quietly stopped using its evidence
-      # is this ticket's own shape one level up.
+      # THE VERDICT IS READ FROM THE EXIT STATUS ALONE: 0 agrees, 1 disagrees,
+      # 2 could not establish the engine's pin. Python also exits 1 on an
+      # uncaught exception, so a report holding a traceback is no verdict
+      # rather than a drift. Which pins differ and which side moved are in the
+      # report, which stays on the runner; the last echo says how to read it.
       - name: Assert every mirror matches the engine's pin
         env:
           BASE_REF: ${{ github.base_ref }}
         run: |
           set -euo pipefail
+          if [ -n "${BASE_REF:-}" ]; then
+            trusted_rev="$(git merge-base "origin/$BASE_REF" HEAD)"
+          else
+            trusted_rev="$(git rev-parse HEAD)"
+          fi
+          work="$(mktemp -d "${RUNNER_TEMP:-/tmp}/engine-pin.XXXXXX")"
+          trusted="$work/checker"
+          reports="$work/reports"
+          mkdir -p "$trusted" "$reports"
+          git archive "$trusted_rev" tools | tar -x -C "$trusted"
+          echo "drift checker: tools/ at $trusted_rev"
           rc=0
           for mirror in tools/requirements-engine-pin.txt .github/requirements/pytorch.txt; do
             echo "::group::$mirror"
-            base_arg=""
-            if [ -n "${BASE_REF:-}" ]; then
-              base_file="${RUNNER_TEMP:-/tmp}/$(basename "$mirror").base"
-              merge_base="$(git merge-base "origin/$BASE_REF" HEAD)"
-              # A mirror ADDED by this PR does not exist at the merge base.
-              # That is determinate — the PR added the pin, so the PR moved —
-              # and an empty base file derives exactly that, so it is written
-              # rather than treated as a failure.
-              git show "$merge_base:$mirror" > "$base_file" 2>/dev/null \
-                || : > "$base_file"
-              base_arg="--mirror-at-base $base_file"
-            fi
-            # A deliberate word-split, the same idiom as `${only:+--only $only}`
-            # in the seed-contract job below, and preferred over an array
-            # because `"${a[@]}"` on an EMPTY array is an unbound-variable
-            # error under `set -u` in bash 3.2 — which is what the extracted
-            # step runs under in tests/test_engine_pin_drift_guard.py on macOS.
-            # shellcheck disable=SC2086
-            # `--engine-root`, NOT A LIST OF `--engine` PATHS (internal ref).
-            # Two things were wrong with the list. It was incomplete — it named
-            # two of the engine's seven pin-carrying files and missed
-            # `use_cases/requirements_vision_cv_cuda.txt` entirely — and the
-            # checker reduced whatever it was given with `dict.update`, which
-            # is last-write-wins, so the ORDER of these lines decided the
-            # verdict whenever two sources disagreed. The same three files in a
-            # different order produced a red and a green. Deriving the set
-            # removes both: there is no order to get wrong and no list to keep
-            # up to date, and a disagreement between engine sources is now
-            # refused with exit 2 instead of resolved by argument position.
-            python3 tools/check_engine_pin_drift.py \
+            report="$reports/$(printf '%s' "$mirror" | tr '/' '_').log"
+            status=0
+            # `--engine-root`, NOT A LIST of `--engine` paths: the engine's
+            # source set is derived (`_ENGINE_SOURCE_GLOBS`), never hand-kept.
+            python3 -I "$trusted/tools/check_engine_pin_drift.py" \
               --mirror "$mirror" \
-              --engine-root _engine_pin \
-              $base_arg || rc=1
+              --engine-root _engine \
+              > "$report" 2>&1 || status=$?
+            if [ "$status" -eq 0 ]; then
+              echo "engine pin OK: $mirror matches the engine's pin"
+            elif [ "$status" -eq 1 ] && ! grep -q '^Traceback ' "$report"; then
+              echo "::error file=$mirror::ENGINE PIN DRIFT — $mirror disagrees with the engine's pin"
+              rc=1
+            else
+              echo "::error file=$mirror::ENGINE PIN CHECK FAILED — no verdict for $mirror (exit $status)"
+              rc=1
+            fi
             echo "::endgroup::"
           done
+          if [ "$rc" -ne 0 ]; then
+            echo "The checker's report names engine files and versions, so it is not printed here."
+            echo "To read it, run tools/check_engine_pin_drift.py against an engine checkout:"
+            echo "  --mirror <mirror> --engine-root <engine checkout> --mirror-at-base <the mirror at the merge base>"
+          fi
           exit "$rc"
 
   # 2) Rebuild each shipped template under the engine pin and strict-load its
@@ -271,7 +230,7 @@ jobs:
     # `id-token: write` IS SCOPED TO THIS JOB, never the workflow: it is what
     # lets the credential step below exchange GitHub's OIDC token for the
     # zoo-weights READ role. The two token-minting jobs above and below
-    # (`fetch-engine-pin`, `fetch-dump-manifest`) and every other job keep the
+    # (`engine-pin-drift-guard`, `fetch-dump-manifest`) and every other job keep the
     # workflow-level `contents: read` and cannot request an OIDC token at all.
     # A job-level block REPLACES the workflow-level one, so `contents: read` is
     # restated here or the checkout loses it.
@@ -372,9 +331,10 @@ jobs:
       #     workflow already extends to the engine-pin job's App token;
       #   * the real bound is the role's trust policy, which should admit only
       #     `repo:tracebloc/model-zoo` subjects, and its read-only scope.
-      # The job split `fetch-engine-pin` uses (a token job that runs no PR code)
-      # is not reused here on purpose: its point is to hand the PR job FILES,
-      # and the files here are only knowable from the manifest this job reads.
+      # The job split `fetch-dump-manifest` uses (a token job that runs no PR
+      # code) is not reused here on purpose: its point is to hand the PR job
+      # FILES, and the files here are only knowable from the manifest this job
+      # reads.
       #
       # THE CONDITION IS SPELLED TWICE, in the `if:` and in the fetch step's
       # ZOO_WEIGHTS_TRUSTED_EVENT, and the shell refuses the one disagreement
@@ -671,9 +631,8 @@ jobs:
   #     but NOT out of the runner's step-output files, so it is reachable from
   #     any code running in the same job.
   #
-  #     This is exactly the `fetch-engine-pin` / `engine-pin-drift-guard` pair
-  #     above, for the same reason and with the same shape — "the real isolation
-  #     is that no PR code runs in this job". The first revision of (internal ref)
+  #     The same rule as `engine-pin-drift-guard` above: a job that holds a
+  #     token runs no PR-controlled code. The first revision of (internal ref)
   #     armed the manifest read inside the coverage job and reintroduced the
   #     hazard that pattern exists to prevent; Cursor Bugbot caught it on a
   #     learned rule naming this repo's own token-split convention.

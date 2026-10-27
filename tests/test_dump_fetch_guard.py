@@ -1702,7 +1702,7 @@ def test_id_token_write_is_scoped_to_the_verify_job_only():
         f"workflow-level permissions widened: {top.group(1)!r}"
     )
     jobs = re.findall(r"^  ([A-Za-z0-9_-]+):\n    ", text.split("\njobs:\n", 1)[1], re.MULTILINE)
-    assert VERIFY_JOB in jobs and len(jobs) >= 6, jobs
+    assert VERIFY_JOB in jobs and len(jobs) >= 5, jobs
     with_id_token = [j for j in jobs if "id-token: write" in _job_permissions(j)]
     assert with_id_token == [VERIFY_JOB], (
         f"id-token: write must be granted to {VERIFY_JOB} alone, got {with_id_token}"
@@ -1719,7 +1719,7 @@ def test_the_permission_matcher_sees_a_job_block():
     """Anchor for the test above: `_job_permissions` finds a planted block and
     reports none where there is none, so `== [VERIFY_JOB]` is a measurement."""
     assert "id-token: write" in _job_permissions(VERIFY_JOB)
-    assert _job_permissions("fetch-engine-pin") == ""
+    assert _job_permissions("engine-pin-drift-guard") == ""
 
 
 # --------------------------------------------------------------------------

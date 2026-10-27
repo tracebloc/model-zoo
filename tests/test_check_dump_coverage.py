@@ -778,9 +778,8 @@ def test_the_manifest_presence_is_asserted_rather_than_assumed():
 # `_backend/.git/config` but NOT out of the runner's step-output files, so a PR
 # that edited `tools/check_dump_coverage.py` could have read private `backend`.
 # Cursor Bugbot caught it at high severity on a learned rule naming this repo's
-# own convention, and the convention was already in this very workflow:
-# `fetch-engine-pin` holds the engine token and runs no PR code,
-# `engine-pin-drift-guard` runs the PR code and holds no token.
+# own convention, and the convention was already in this very workflow: a
+# job that holds a cross-repo token runs no PR-controlled code.
 #
 # The fix is a two-job split, so these tests pin the SPLIT rather than the flag.
 # Re-collapsing the jobs is a small, plausible YAML tidy-up that would restore
