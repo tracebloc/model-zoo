@@ -47,10 +47,8 @@ class PreNormMLM(nn.Module):
             batch_first=True,
             norm_first=True,
         )
-        # A constructor argument, not an attribute set afterwards: forward reads
-        # the flag __init__ derives from it. Off, an eval forward with a padding
-        # mask skips the nested-tensor fast path, whose mask check has no Apple
-        # GPU (MPS) kernel.
+        # Constructor argument, not a later attribute set: see
+        # tests/test_encoder_padding_mask_fast_path.py.
         self.encoder = nn.TransformerEncoder(
             encoder_layer, num_layers=num_layers, enable_nested_tensor=False
         )
