@@ -109,17 +109,31 @@ jobs:
   # the producer's develop, because a check against a stale vendored file agrees
   # with itself.
   #
-  # 1) Fetch in an ISOLATED job that runs none of this repo's code -- the same
-  #    shape as verify-dumps-engine-pin.yml's fetch-dump-manifest. The producer is a
-  #    private repo, so GITHUB_TOKEN cannot read it; the App token is minted,
-  #    scoped to that one repo and contents:read, and used ONLY here. Only the
-  #    schema file crosses to the job that runs the tests.
-  fetch-ingest-schema:
+  # 1) The vendored enum must EQUAL the producer's, checked in the one job that
+  #    can read the private producer. Two rules, both pinned by
+  #    tests/test_ingest_schema_guard.py:
+  #
+  #    NOTHING THE PR CONTROLS RUNS HERE. The producer token sits in the
+  #    runner's step-output files, readable by any code in the job, so the
+  #    comparison runs `tools/` at the merge base (develop itself on push),
+  #    extracted outside the checkout. The PR's vendored file is read as data.
+  #
+  #    NOTHING FROM THE PRODUCER LEAVES HERE. This repo is public, and so are
+  #    its run logs and artifacts. The comparison's report names the
+  #    producer's categories, so it goes to a file on the runner and the log
+  #    gets one verdict.
+  ingest-schema-guard:
     timeout-minutes: 10
     runs-on: ubuntu-latest
     permissions:
       contents: read
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # `git merge-base` needs history, not a shallow tip: it is where the
+          # trusted comparison is extracted from.
+          fetch-depth: 0
+          persist-credentials: false
       - name: Mint an ingestor-read token
         id: ingestor-token
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
@@ -139,43 +153,83 @@ jobs:
           persist-credentials: false
           # EVERY CANDIDATE PATH, newest first -- the producer moved its schema
           # into a contracts/ package and not every branch has moved yet. A path
-          # the checkout does not produce is that candidate's 404; the test job
-          # picks the newest present and refuses, naming every path, if none is.
+          # the checkout does not produce is that candidate's 404; the
+          # comparison picks the newest present and refuses if none is.
           # Kept equal to CANDIDATE_PATHS in tools/ingest_category_contract.py
-          # by tests/test_zoo_category_contract.py. Leading slashes anchor the
+          # by tests/test_ingest_schema_guard.py. Leading slashes anchor the
           # patterns at the producer's root (non-cone patterns are
           # gitignore-style and would otherwise match at any depth).
           sparse-checkout: |
             /tracebloc_ingestor/contracts/schema/ingest.v1.json
             /tracebloc_ingestor/schema/ingest.v1.json
           sparse-checkout-cone-mode: false
-      # The commit the comparison ran against, for the failure message -- and
-      # LOAD-BEARING FOR THE LAYOUT: upload-artifact roots the archive at the
-      # least common ancestor of what it uploads. With only the one schema file
-      # present that would be its own directory, and the test job would see a
-      # bare ingest.v1.json at neither candidate path. A file at _producer/
-      # pins the root there, so the candidate paths survive the round trip.
-      - name: Record the producer commit
-        run: git -C _producer rev-parse HEAD > _producer/PRODUCER_COMMIT
-      - name: Upload the producer's ingest schema
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        with:
-          name: ingest-schema
-          path: |
-            _producer/PRODUCER_COMMIT
-            _producer/tracebloc_ingestor/contracts/schema/ingest.v1.json
-            _producer/tracebloc_ingestor/schema/ingest.v1.json
-          if-no-files-found: error
-          retention-days: 1
+      # THE VERDICT IS READ FROM THE EXIT STATUS ALONE: 0 agrees, 1 disagrees,
+      # 2 could not read a schema. Python also exits 1 on an uncaught
+      # exception, so a report holding a traceback is no verdict rather than a
+      # drift. The comparison composes the tool's own helpers, so the merge
+      # base's copy of each is what decides.
+      - name: Assert the vendored category enum matches the producer's
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          set -euo pipefail
+          vendored=tests/contracts/tracebloc_ingestor/ingest_categories.v1.json
+          if [ -n "${BASE_REF:-}" ]; then
+            trusted_rev="$(git merge-base "origin/$BASE_REF" HEAD)"
+          else
+            trusted_rev="$(git rev-parse HEAD)"
+          fi
+          work="$(mktemp -d "${RUNNER_TEMP:-/tmp}/ingest-schema.XXXXXX")"
+          trusted="$work/checker"
+          report="$work/report.log"
+          mkdir -p "$trusted"
+          git archive "$trusted_rev" tools | tar -x -C "$trusted"
+          # The blob, never the working-tree path, which could be a symlink.
+          git cat-file blob "HEAD:$vendored" > "$work/vendored.json"
+          echo "category comparison: tools/ at $trusted_rev"
+          status=0
+          python3 -I - "$trusted/tools" _producer "$work/vendored.json" \
+            > "$report" 2>&1 <<'PY' || status=$?
+          import sys
+          from pathlib import Path
 
-  # 2) Run the gate. `if: !cancelled()` IS THE FAIL-CLOSED HALF: a job skipped
-  #    because a job it `needs` failed reports SKIPPED, and a skipped check reads
-  #    as passing. So this job runs whether or not the fetch succeeded, and when
-  #    the fetch did not (a fork PR has no secrets; a revoked App; the producer
-  #    unreachable) the download below finds nothing and the marked test FAILS
-  #    naming what it could not read. "Could not look" is red, never green.
+          tools, producer, vendored = sys.argv[1:4]
+          sys.path.insert(0, tools)
+          import ingest_category_contract as gate
+
+          try:
+              rel, body = gate.select_from_tree(Path(producer))
+              published = gate.categories_from(body, rel)
+              ours = gate.load_vendored(Path(vendored))
+          except gate.Refusal as refusal:
+              print(refusal, file=sys.stderr)
+              sys.exit(2)
+          findings = gate.compare(published, ours, "the producer", "the vendored copy")
+          for finding in findings:
+              print(f"DRIFT: {finding}", file=sys.stderr)
+          sys.exit(1 if findings else 0)
+          PY
+          if [ "$status" -eq 0 ]; then
+            echo "ingest schema OK: $vendored matches the producer's category enum"
+            exit 0
+          elif [ "$status" -eq 1 ] && ! grep -q '^Traceback ' "$report"; then
+            echo "::error file=$vendored::INGEST CATEGORY DRIFT — $vendored disagrees with the producer's category enum"
+          else
+            echo "::error file=$vendored::INGEST CATEGORY CHECK FAILED — no verdict for $vendored (exit $status)"
+          fi
+          echo "The report names the producer's categories, so it is not printed here."
+          echo "To read it, run tools/ingest_category_contract.py with read access to the producer."
+          exit 1
+
+  # 2) The tree half, and the one check branch protection requires for both.
+  #    It runs the PR's tests and holds no token. `if: !cancelled()` IS THE
+  #    FAIL-CLOSED HALF: a job skipped because a job it `needs` failed reports
+  #    SKIPPED, and a skipped check reads as passing. So this job runs whether
+  #    or not the guard passed, and goes red unless the guard succeeded (a
+  #    fork PR has no secrets; a revoked App; the producer unreachable; a
+  #    drift). "Could not look" is red, never green.
   category-contract:
-    needs: fetch-ingest-schema
+    needs: ingest-schema-guard
     if: ${{ !cancelled() }}
     timeout-minutes: 10
     runs-on: ubuntu-latest
@@ -183,14 +237,6 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Download the producer's ingest schema
-        # A missing artifact must reach the test as a missing checkout, so the
-        # red names the cause instead of a download error.
-        continue-on-error: true
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
-        with:
-          name: ingest-schema
-          path: _producer
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.11"
@@ -199,11 +245,14 @@ jobs:
       - run: pip install pytest
       - name: model_zoo/ agrees with the vendored category enum
         run: pytest tests/test_zoo_category_contract.py -v
-      # Selected EXPLICITLY: the marker is deselected everywhere else (see
-      # tests/ingest_producer_marker.py). Runs even when the step above is red,
-      # so one run reports both layers.
+      # Runs even when the step above is red, so one run reports both layers.
       - name: The vendored category enum agrees with the producer's develop
         if: ${{ !cancelled() }}
         env:
-          INGEST_PRODUCER_CHECKOUT: _producer
-        run: pytest tests/test_zoo_category_contract.py -m ingest_producer -v
+          GUARD_RESULT: ${{ needs.ingest-schema-guard.result }}
+        run: |
+          if [ "$GUARD_RESULT" != "success" ]; then
+            echo "::error::ingest-schema-guard did not prove the vendored category enum equal to the producer's develop (result: ${GUARD_RESULT:-none}); its log gives the verdict."
+            exit 1
+          fi
+          echo "ingest-schema-guard: the vendored category enum equals the producer's develop"

@@ -19,12 +19,9 @@ THREE ASSERTIONS, KEPT APART so a red run names which one broke:
   ``category`` disagrees with the directory it sits in.
 
 Those three read the VENDORED enum and need no network. A check against a
-vendored copy agrees with itself the day the copy goes stale, so the fourth --
-``test_the_vendored_enum_equals_the_producers_develop`` -- holds the copy to
-the producer. It is marked ``ingest_producer``, deselected by default
-(``conftest.py``), and selected explicitly by ci.yml's ``category-contract``
-job, which hands it a checkout of the producer. With no checkout it FAILS: zero
-comparisons is not agreement.
+vendored copy agrees with itself the day the copy goes stale, so ci.yml's
+``ingest-schema-guard`` job holds the copy to the producer, inside the job that
+can read it; ``tests/test_ingest_schema_guard.py`` pins that job.
 
 The rest drive the helpers with synthetic inputs, and assert on WHICH failure
 fired -- a check that reddens for a different reason than the one under test is
@@ -36,7 +33,6 @@ from __future__ import annotations
 import importlib.util
 import io
 import json
-import os
 import pathlib
 import subprocess
 import sys
@@ -56,10 +52,6 @@ def _load():
 
 
 gate = _load()
-
-#: Env var naming a checkout of the producer at its ``develop``. Set only by the
-#: CI job that selects the marked test.
-PRODUCER_CHECKOUT_ENV = "INGEST_PRODUCER_CHECKOUT"
 
 DIRECTORIES = gate.zoo_directories()
 PUBLISHED = gate.load_vendored()
@@ -123,35 +115,6 @@ def test_each_model_declares_the_category_of_its_directory(rel):
     assert category == directory, (
         f"model_zoo/{rel} declares category = {category!r} but sits in model_zoo/{directory}/. "
         f"The directory is the category; the declaration must match it."
-    )
-
-
-# ── the vendored copy against the producer ─────────────────────────────────
-
-
-@pytest.mark.ingest_producer
-def test_the_vendored_enum_equals_the_producers_develop():
-    """The layer that stops a stale vendored copy from passing.
-
-    Reads a checkout of the producer, not the network: ci.yml mints the read
-    token and checks the producer out in a job that runs none of this repo's
-    code, and hands only the schema file across."""
-    root = os.environ.get(PRODUCER_CHECKOUT_ENV)
-    if not root:
-        pytest.fail(
-            f"could not look: {PRODUCER_CHECKOUT_ENV} is not set, so there is no producer "
-            f"checkout to compare {gate.VENDORED.name} against. This test is selected only "
-            f"where the producer is supposed to be available; its absence there is a failure, "
-            f"not a skip."
-        )
-    rel, body = gate.select_from_tree(pathlib.Path(root))
-    upstream = gate.categories_from(body, rel)
-    findings = gate.compare(upstream, PUBLISHED, f"the producer ({gate.PRODUCER_REF})", gate.VENDORED.name)
-    assert not findings, (
-        "the vendored category enum is STALE:\n  "
-        + "\n  ".join(findings)
-        + "\nRefresh it with `python3 tools/ingest_category_contract.py --write`, then reconcile "
-        "model_zoo/ against the other tests in this file."
     )
 
 
@@ -357,8 +320,8 @@ def _run_pytest(where, *args):
 
 
 def test_the_producer_test_is_deselected_unless_selected(tmp_path):
-    """The marked test must not run in the ordinary ``pytest tests/`` -- no job
-    but one has a producer checkout -- and must run, and FAIL without one, when
+    """A marked test must not run in the ordinary ``pytest tests/`` -- no job
+    has a producer checkout -- and must run, and FAIL without one, when
     selected. Driven through the real hook file in a throwaway session, not
     restated."""
     (tmp_path / "conftest.py").write_text((ROOT / "tests" / "ingest_producer_marker.py").read_text())
@@ -378,71 +341,13 @@ def test_the_producer_test_is_deselected_unless_selected(tmp_path):
     assert rc == 0 and "1 passed" in summary, summary
 
 
-# ── the CI wiring: read back out of ci.yml, not restated ───────────────────
-
-CI = (ROOT / ".github" / "workflows" / "ci.yml").read_text()
-
-
-def _job(name):
-    """The text of one top-level job in ci.yml. No PyYAML: this suite runs in
-    envs that do not install it."""
-    lines = CI.splitlines()
-    start = lines.index(f"  {name}:")
-    body = []
-    for line in lines[start + 1 :]:
-        if line.startswith("  ") and not line.startswith("   ") and line.strip() and not line.lstrip().startswith("#"):
-            break
-        body.append(line)
-    return "\n".join(body)
-
-
-def _block(job_text, key):
-    """The lines of a ``key: |`` literal block inside a job."""
-    lines = job_text.splitlines()
-    at = next(i for i, line in enumerate(lines) if line.strip() == f"{key}: |")
-    indent = None
-    out = []
-    for line in lines[at + 1 :]:
-        stripped = line.strip()
-        this = len(line) - len(line.lstrip())
-        if indent is None:
-            indent = this
-        if not stripped or this < indent:
-            break
-        out.append(stripped)
-    return out
-
-
-def test_the_fetch_checks_out_every_candidate_path_in_order():
-    """The workflow's sparse checkout is the only list of candidates besides
-    ``CANDIDATE_PATHS``. A path added to one and not the other is a candidate
-    the gate says it tries and does not fetch."""
-    got = _block(_job("fetch-ingest-schema"), "sparse-checkout")
-    assert got == ["/" + p for p in gate.CANDIDATE_PATHS], got
-
-
-def test_the_fetch_uploads_every_candidate_path_and_a_root_anchor():
-    got = _block(_job("fetch-ingest-schema"), "path")
-    assert got == ["_producer/PRODUCER_COMMIT"] + [f"_producer/{p}" for p in gate.CANDIDATE_PATHS], got
-
-
-def test_the_gate_job_runs_when_the_fetch_fails_and_selects_the_marker():
-    """A job skipped because a job it needs failed reports SKIPPED, which reads
-    as passing -- the fail-open this job exists to avoid."""
-    job = _job("category-contract")
-    assert "needs: fetch-ingest-schema" in job
-    assert "    if: ${{ !cancelled() }}" in job, "the job must run when the fetch failed"
-    assert "pytest tests/test_zoo_category_contract.py -m ingest_producer" in job
-    assert f"{PRODUCER_CHECKOUT_ENV}: _producer" in job
-
-
 # ── control ────────────────────────────────────────────────────────────────
 
 
 def test_the_instrument_can_disagree():
     """Every tree assertion above runs against a pairing that agrees today. If
-    ``compare`` returned [] unconditionally, the producer test would still pass.
-    This is the pair that cannot both hold -- synthetic, so it names the
-    instrument and nothing else when it fails."""
+    ``compare`` returned [] unconditionally, the producer comparison would
+    still pass. This is the pair that cannot both hold -- synthetic, so it
+    names the instrument and nothing else when it fails."""
     assert gate.compare(["a", "b"], ["b", "a"], "P", "Z") == []
     assert gate.compare(["a", "b"], ["a"], "P", "Z") != []

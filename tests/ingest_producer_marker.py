@@ -1,14 +1,13 @@
 """The ``ingest_producer`` marker: deselected unless a ``-m`` expression names it.
 
 A test carrying this marker reads a checkout of the producer (the ingestor):
-the vendored category enum is compared against it, and the stability-selection
-template is checked on its first-run example data. Only the CI jobs that check
-it out select these tests, so everywhere else they are DESELECTED -- reported in
-the summary as deselected, never collected and skipped, and never run to fail on
-a missing input they were never meant to have.
+the stability-selection template is checked on its first-run example data. Only
+a run that names the marker selects these tests, so everywhere else they are
+DESELECTED -- reported in the summary as deselected, never collected and
+skipped, and never run to fail on a missing input they were never meant to have.
 
 Where they ARE selected (``pytest -m ingest_producer``) they run, and without a
-producer checkout they FAIL: those jobs exist to look, and "could not look"
+producer checkout they FAIL: such a run exists to look, and "could not look"
 there is a red, not a pass.
 
 Kept in its own file so ``tests/test_zoo_category_contract.py`` can drive these

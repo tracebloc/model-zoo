@@ -702,8 +702,14 @@ def _job_block(job="dump-coverage"):
     return block.replace("\\\n", " ")
 
 
+GUARD_JOB = "dump-manifest-guard"
+
+
 def _coverage_job_block():
-    return _job_block("dump-coverage")
+    """The job that runs the coverage check. Its public boundary (a trusted
+    checker, nothing private in the log) is pinned in
+    tests/test_dump_manifest_guard.py; these tests pin the arming."""
+    return _job_block(GUARD_JOB)
 
 
 def _lines_with_offsets(text):
@@ -714,23 +720,25 @@ def _lines_with_offsets(text):
 
 
 def _coverage_invocation():
+    """The interpreter line that feeds the coverage checker, and the checker's
+    own lines in the driver it is handed."""
     return "\n".join(
         line
         for line in _coverage_job_block().splitlines()
-        if "check_dump_coverage.py" in line
+        if "check_dump_coverage" in line or "coverage.log" in line
     )
 
 
 def test_the_block_slicer_finds_the_job_and_stops_at_the_next_one():
     """The extractor itself, because every test below trusts its boundaries."""
     block = _coverage_job_block()
-    assert "check_dump_coverage.py" in block
-    assert "dump-coverage" not in block, "the slice re-included its own job key"
+    assert "check_dump_coverage" in block
+    assert f"  {GUARD_JOB}:" not in block, "the slice re-included its own job key"
     assert "\n  verify-dumps:" not in block, "the slice ran into a sibling job"
 
 
 def test_ci_invokes_the_coverage_tool_at_all():
-    assert "check_dump_coverage.py" in _coverage_invocation()
+    assert "check_dump_coverage.main(" in _coverage_invocation()
 
 
 def test_CI_ARMS_AN_INVENTORY_SO_THE_ORPHAN_BRANCH_EXECUTES():
@@ -744,19 +752,18 @@ def test_CI_ARMS_AN_INVENTORY_SO_THE_ORPHAN_BRANCH_EXECUTES():
 def test_the_manifest_it_arms_is_the_one_a_step_actually_puts_there():
     """The path passed to `--manifest` must be one a step actually populates.
 
-    A stale path would make the tool exit 1 on `--manifest does not exist` --
-    loud, so survivable -- but a path NOTHING writes to is how a cross-repo read
-    rots silently when the sibling repo moves its file. The path now comes from
-    a `download-artifact` rather than a checkout (see the token-split tests
-    below), so this reads `path:` wherever the job declares it.
+    A path NOTHING writes to is how a cross-repo read rots silently when the
+    sibling repo moves its file, so the `manifest=` the checker is handed must
+    sit under the `path:` a checkout fills.
     """
     block = _coverage_job_block()
     paths = re.findall(r"^\s*path:\s*(\S+)\s*$", block, re.MULTILINE)
-    invocation = _coverage_invocation()
+    assigned = re.findall(r"^\s*manifest=(\S+)\s*$", block, re.MULTILINE)
     assert paths, "no step puts a manifest anywhere for the checker to read"
-    assert any(
-        f"{path}/" in invocation for path in paths
-    ), f"--manifest path is not under any populated path {paths}"
+    assert '--manifest "$manifest"' in _coverage_invocation()
+    assert len(assigned) == 1 and any(
+        assigned[0].startswith(f"{path}/") for path in paths
+    ), f"manifest={assigned} is not under any populated path {paths}"
 
 
 def test_the_manifest_presence_is_asserted_rather_than_assumed():
@@ -767,89 +774,7 @@ def test_the_manifest_presence_is_asserted_rather_than_assumed():
     classification-only run that (internal ref) was invisible behind.
     """
     block = _coverage_job_block()
-    assert "manifest.json" in block and ("test -s" in block or "test -f" in block)
-
-
-# --------------------------------------------------------------------------
-# (internal ref) — THE TOKEN MUST STAY IN ITS OWN JOB.
-#
-# Arming the manifest read put a `backend`-scoped App token in the same job as
-# the PR-controlled checker. `persist-credentials: false` keeps it out of
-# `_backend/.git/config` but NOT out of the runner's step-output files, so a PR
-# that edited `tools/check_dump_coverage.py` could have read private `backend`.
-# Cursor Bugbot caught it at high severity on a learned rule naming this repo's
-# own convention, and the convention was already in this very workflow: a
-# job that holds a cross-repo token runs no PR-controlled code.
-#
-# The fix is a two-job split, so these tests pin the SPLIT rather than the flag.
-# Re-collapsing the jobs is a small, plausible YAML tidy-up that would restore
-# the vulnerability while leaving every other test here green.
-# --------------------------------------------------------------------------
-
-FETCH_JOB = "fetch-dump-manifest"
-
-TOKEN_MARKERS = ("create-github-app-token", "secrets.")
-
-
-def test_the_slicer_finds_the_fetch_job_too():
-    block = _job_block(FETCH_JOB)
-    assert "create-github-app-token" in block
-    assert FETCH_JOB not in block, "the slice re-included its own job key"
-    assert "\n  dump-coverage:" not in block, "the slice ran into the next job"
-
-
-def test_THE_COVERAGE_JOB_HOLDS_NO_TOKEN():
-    """The security property, stated directly. The job that runs PR-controlled
-    code must not be able to mint or see a cross-repo credential."""
-    block = _job_block("dump-coverage")
-    for marker in TOKEN_MARKERS:
-        assert marker not in block, (
-            f"the coverage job references {marker!r}: a PR that edits "
-            "check_dump_coverage.py could reach private backend"
-        )
-
-
-def test_the_fetch_job_runs_no_pr_controlled_code():
-    """The other half of the isolation. A token-holding job that also ran a
-    checked-in script would be the same hazard with the jobs merely renamed."""
-    block = _job_block(FETCH_JOB)
-    assert "python3 tools/" not in block
-    assert "check_dump_coverage.py" not in block
-
-
-def test_the_manifest_crosses_as_an_artifact_not_as_a_checkout():
-    """`needs:` plus a download is what makes the split load-bearing rather than
-    decorative -- without the dependency the coverage job would race a manifest
-    that is not there yet."""
-    coverage = _job_block("dump-coverage")
-    assert f"needs: {FETCH_JOB}" in coverage
-    assert "download-artifact" in coverage
-    assert "upload-artifact" in _job_block(FETCH_JOB)
-
-
-def test_only_the_manifest_crosses_the_boundary():
-    """Never `_backend/.git`. The UPLOAD's path must name the one JSON file, so
-    a widened glob cannot carry the token's credential store across.
-
-    Scoped to the upload step rather than to every `path:` in the job. A first
-    version read them all and excused `_backend` because the CHECKOUT legitimately
-    uses it -- which excused exactly the widening this test exists to catch, and
-    the mutation (`path: _backend` on the upload) passed. Read the one step whose
-    path decides what crosses.
-    """
-    block = _job_block(FETCH_JOB)
-    upload = block[block.index("upload-artifact") :]
-    uploaded = re.findall(r"^\s*path:\s*(\S+)\s*$", upload, re.MULTILINE)
-    assert uploaded == ["_backend/tools/offline_weights/manifest.json"], uploaded
-
-
-def test_both_jobs_refuse_an_absent_manifest():
-    """Fail-closed on each side of the hand-off: a sparse checkout that matched
-    nothing, and an artifact that arrived empty, are different failures and
-    neither may fall through to the classification-only run."""
-    for job in (FETCH_JOB, "dump-coverage"):
-        block = _job_block(job)
-        assert "test -s" in block or "test -f" in block, job
+    assert '[ ! -s "$manifest" ]' in block
 
 
 # --- a seed declaration the backbone norm cannot load -----------------------
