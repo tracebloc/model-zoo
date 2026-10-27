@@ -49,8 +49,13 @@ class NetMedGPTScratch(nn.Module):
             batch_first=True,
             norm_first=False,
         )
-        self.encoder = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
-        self.encoder.enable_nested_tensor = False
+        # A constructor argument, not an attribute set afterwards: forward reads
+        # the flag __init__ derives from it. Off, an eval forward with a padding
+        # mask skips the nested-tensor fast path, whose mask check has no Apple
+        # GPU (MPS) kernel.
+        self.encoder = nn.TransformerEncoder(
+            encoder_layer, num_layers=num_layers, enable_nested_tensor=False
+        )
         self.lm_transform = nn.Sequential(
             nn.Linear(hidden_size, hidden_size),
             nn.GELU(),
