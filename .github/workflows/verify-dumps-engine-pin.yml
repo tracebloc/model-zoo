@@ -79,17 +79,31 @@ env:
   ENGINE_REF: ${{ github.event.inputs.engine-ref || 'develop' }}
 
 jobs:
-  # 1a) Fetch the engine's pin files in an ISOLATED job that runs NO PR-controlled
-  #     code. The contents:read App token for private tracebloc-engine is minted
-  #     and used ONLY here, alongside trusted actions (create-github-app-token,
-  #     checkout, upload-artifact). Because nothing from the PR executes in this
-  #     job, the token — even as it sits in the runner's step-output files — is
-  #     never reachable by PR code. The two pin files are handed to the guard
-  #     job below as an artifact; the token itself never leaves this job.
-  fetch-engine-pin:
+  # 1) The mirrors must EQUAL the engine's live pin, checked in the one job that
+  #    can read the private engine. Two rules, both pinned by
+  #    tests/test_engine_pin_drift_guard.py:
+  #
+  #    NOTHING THE PR CONTROLS RUNS HERE. The engine token sits in the runner's
+  #    step-output files, readable by any code in the job, so the checker is
+  #    `tools/` at the merge base (develop itself on push and schedule),
+  #    extracted outside the checkout. The PR's mirrors are read as data only.
+  #    A PR's own copy of the checker runs in ci.yml's tests instead.
+  #
+  #    NOTHING FROM THE ENGINE LEAVES HERE. This repo is public, and so are its
+  #    run logs and artifacts. The checker's report names engine files and
+  #    versions, so it goes to a file on the runner and the log gets one
+  #    verdict per mirror. The jobs below read no engine file: they install
+  #    `tools/requirements-engine-pin.txt`, which this job proves equal.
+  engine-pin-drift-guard:
     timeout-minutes: 10
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # `git merge-base` needs history, not a shallow tip: it is where the
+          # trusted checker is extracted from.
+          fetch-depth: 0
+          persist-credentials: false
       # tracebloc-engine is a separate private repo; GITHUB_TOKEN cannot read it.
       # Mint an installation token scoped to that one repo, contents:read only
       # (same App as add-to-kanban.yml, least-privilege per (internal ref)).
@@ -109,8 +123,7 @@ jobs:
           ref: ${{ env.ENGINE_REF }}
           token: ${{ steps.engine-token.outputs.token }}
           path: _engine
-          # Belt and braces: don't persist the token into _engine/.git/config
-          # either. The real isolation is that no PR code runs in this job.
+          # Don't persist the token into _engine/.git/config either.
           persist-credentials: false
           # THE SEARCH SPACE, NOT A FILE LIST (internal ref). These two
           # patterns used to be two exact paths, `use_cases/requirements.txt`
@@ -140,55 +153,9 @@ jobs:
             /Dockerfile.base.*
             /use_cases/requirements*.txt
           sparse-checkout-cone-mode: false
-      - name: Upload the engine pin files
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        with:
-          name: engine-pin
-          # Only the pin files — never _engine/.git — cross to the
-          # PR-controlled job.
-          #
-          # `_engine/Dockerfile.base.*` IS LOAD-BEARING FOR THE LAYOUT, not
-          # only for coverage: upload-artifact roots the archive at the least
-          # common ancestor of the paths it is given. With only
-          # `_engine/use_cases/...` that was `_engine/use_cases`, and the guard
-          # job saw `_engine_pin/requirements.txt`; with a root-level
-          # Dockerfile pattern it is `_engine`, so the paths keep their
-          # `use_cases/` segment and `--engine-root _engine_pin` globs the same
-          # relative shape the engine has. Dropping the Dockerfile pattern
-          # would silently re-flatten it.
-          path: |
-            _engine/Dockerfile.base.*
-            _engine/use_cases/requirements*.txt
-          if-no-files-found: error
-          retention-days: 1
-
-  # 1b) The mirror tools/requirements-engine-pin.txt must EQUAL the engine's live
-  #     pin. This job runs the PR-controlled drift checker (check_engine_pin_drift
-  #     imports verify_dumps_against_engine_pin), but holds NO engine token — it
-  #     only receives the two pin files as an artifact from the isolated fetch job
-  #     above. So even PR-modified code here has nothing to reach private
-  #     tracebloc-engine with. This is what makes the mirror safe to install from
-  #     and what turns an engine `transformers` bump red until the mirror (and
-  #     then the dumps) are regenerated.
-  engine-pin-drift-guard:
-    needs: fetch-engine-pin
-    timeout-minutes: 10
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          # `git show <merge base>:<mirror>` needs history, not a shallow tip.
-          # It is what lets the drift report DERIVE which side moved instead of
-          # asserting one (internal ref); see the base-extraction step below.
-          fetch-depth: 0
-      - name: Download the engine pin files
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
-        with:
-          name: engine-pin
-          path: _engine_pin
       # ONE INVOCATION PER MIRROR, deliberately, rather than one multi-mirror
-      # call: the failure header names the file it was handed, so a red job
-      # says WHICH copy drifted instead of that "a" copy did.
+      # call: each verdict names the file it was handed, so a red job says
+      # WHICH copy drifted instead of that "a" copy did.
       #
       # AND THE LOOP DOES NOT STOP AT THE FIRST FAILURE. An engine bump moves
       # both mirrors at once, so `set -e` on the first check would report half
@@ -200,115 +167,119 @@ jobs:
       # fails if a file under .github/requirements/ mirrors an engine pin
       # without appearing here.
       #
-      # `--mirror-at-base` IS WHAT MAKES THE DIAGNOSIS DERIVED RATHER THAN
-      # ASSERTED (internal ref). Two pins cannot say which side moved, and
-      # the old message asserted "the engine moved" in both directions — which
-      # on a mirror-moved PR sent you to regenerate the mirror back down to
-      # the engine's older pin and silently revert the bump (internal ref). The
-      # mirror's own value at the merge base does settle it, so it is handed
-      # over on a pull_request and OMITTED on push/schedule, where there is no
-      # merge base and the honest verdict is "unknown, here are both
-      # remedies".
-      #
-      # A merge-base extraction that FAILS is a hard error, not a fallback to
-      # the unknown branch: a checker that quietly stopped using its evidence
-      # is this ticket's own shape one level up.
+      # THE VERDICT IS READ FROM THE EXIT STATUS ALONE: 0 agrees, 1 disagrees,
+      # 2 could not establish the engine's pin. Python also exits 1 on an
+      # uncaught exception, so a report holding a traceback is no verdict
+      # rather than a drift. Which pins differ and which side moved are in the
+      # report, which stays on the runner; the last echo says how to read it.
       - name: Assert every mirror matches the engine's pin
         env:
           BASE_REF: ${{ github.base_ref }}
         run: |
           set -euo pipefail
+          if [ -n "${BASE_REF:-}" ]; then
+            trusted_rev="$(git merge-base "origin/$BASE_REF" HEAD)"
+          else
+            trusted_rev="$(git rev-parse HEAD)"
+          fi
+          work="$(mktemp -d "${RUNNER_TEMP:-/tmp}/engine-pin.XXXXXX")"
+          trusted="$work/checker"
+          reports="$work/reports"
+          mkdir -p "$trusted" "$reports"
+          git archive "$trusted_rev" tools | tar -x -C "$trusted"
+          echo "drift checker: tools/ at $trusted_rev"
           rc=0
           for mirror in tools/requirements-engine-pin.txt .github/requirements/pytorch.txt; do
             echo "::group::$mirror"
-            base_arg=""
-            if [ -n "${BASE_REF:-}" ]; then
-              base_file="${RUNNER_TEMP:-/tmp}/$(basename "$mirror").base"
-              merge_base="$(git merge-base "origin/$BASE_REF" HEAD)"
-              # A mirror ADDED by this PR does not exist at the merge base.
-              # That is determinate — the PR added the pin, so the PR moved —
-              # and an empty base file derives exactly that, so it is written
-              # rather than treated as a failure.
-              git show "$merge_base:$mirror" > "$base_file" 2>/dev/null \
-                || : > "$base_file"
-              base_arg="--mirror-at-base $base_file"
-            fi
-            # A deliberate word-split, the same idiom as `${only:+--only $only}`
-            # in the seed-contract job below, and preferred over an array
-            # because `"${a[@]}"` on an EMPTY array is an unbound-variable
-            # error under `set -u` in bash 3.2 — which is what the extracted
-            # step runs under in tests/test_engine_pin_drift_guard.py on macOS.
-            # shellcheck disable=SC2086
-            # `--engine-root`, NOT A LIST OF `--engine` PATHS (internal ref).
-            # Two things were wrong with the list. It was incomplete — it named
-            # two of the engine's seven pin-carrying files and missed
-            # `use_cases/requirements_vision_cv_cuda.txt` entirely — and the
-            # checker reduced whatever it was given with `dict.update`, which
-            # is last-write-wins, so the ORDER of these lines decided the
-            # verdict whenever two sources disagreed. The same three files in a
-            # different order produced a red and a green. Deriving the set
-            # removes both: there is no order to get wrong and no list to keep
-            # up to date, and a disagreement between engine sources is now
-            # refused with exit 2 instead of resolved by argument position.
-            python3 tools/check_engine_pin_drift.py \
+            report="$reports/$(printf '%s' "$mirror" | tr '/' '_').log"
+            status=0
+            # `--engine-root`, NOT A LIST of `--engine` paths: the engine's
+            # source set is derived (`_ENGINE_SOURCE_GLOBS`), never hand-kept.
+            python3 -I "$trusted/tools/check_engine_pin_drift.py" \
               --mirror "$mirror" \
-              --engine-root _engine_pin \
-              $base_arg || rc=1
+              --engine-root _engine \
+              > "$report" 2>&1 || status=$?
+            if [ "$status" -eq 0 ]; then
+              echo "engine pin OK: $mirror matches the engine's pin"
+            elif [ "$status" -eq 1 ] && ! grep -q '^Traceback ' "$report"; then
+              echo "::error file=$mirror::ENGINE PIN DRIFT — $mirror disagrees with the engine's pin"
+              rc=1
+            else
+              echo "::error file=$mirror::ENGINE PIN CHECK FAILED — no verdict for $mirror (exit $status)"
+              rc=1
+            fi
             echo "::endgroup::"
           done
+          if [ "$rc" -ne 0 ]; then
+            echo "The checker's report names engine files and versions, so it is not printed here."
+            echo "To read it, run tools/check_engine_pin_drift.py against an engine checkout:"
+            echo "  --mirror <mirror> --engine-root <engine checkout> --mirror-at-base <the mirror at the merge base>"
+          fi
           exit "$rc"
 
-  # 2) Rebuild each shipped template under the engine pin and strict-load its
-  #    staged dump. Fails closed on any KEY_MISMATCH / BUILD_FAIL / provenance
-  #    drift. Runs only after the mirror is confirmed == the engine.
+  # 2) THE STRICT-LOAD SWEEP. Rebuild each shipped template under the engine
+  #    pin and strict-load its staged dump. Fails closed on any KEY_MISMATCH /
+  #    BUILD_FAIL / provenance drift. Runs only after the mirror is confirmed ==
+  #    the engine.
+  #
+  #    DEVELOP ONLY, NEVER A PULL REQUEST. Building a template runs its code,
+  #    and this job holds the backend token and the store's credentials, so it
+  #    runs develop's reviewed code alone: on the push, the schedule, and a
+  #    dispatch from develop. A PR gets `dump-manifest-guard`'s check that
+  #    every live entry resolves to a template. The sweep is off while the two
+  #    store variables are unset; once they are set, a template that breaks its
+  #    dump shows red on the develop push, not on the PR.
+  #
+  #    NOTHING FROM THE MANIFEST REACHES THE LOG. The fetch hook's and the
+  #    verifier's output name manifest entries, so each goes to a file on the
+  #    runner and the log gets a verdict. tests/test_dump_fetch_guard.py pins
+  #    both.
   verify-dumps:
-    # `fetch-dump-manifest` (4a, below) is needed for the canonical manifest,
-    # which this job now consumes as well as `dump-coverage` does — see the
-    # download step for why that is safe in a job that runs PR code.
-    needs: [engine-pin-drift-guard, fetch-dump-manifest]
+    needs: [engine-pin-drift-guard]
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/develop'
     timeout-minutes: 30
     runs-on: ubuntu-latest
     # `id-token: write` IS SCOPED TO THIS JOB, never the workflow: it is what
     # lets the credential step below exchange GitHub's OIDC token for the
-    # zoo-weights READ role. The two token-minting jobs above and below
-    # (`fetch-engine-pin`, `fetch-dump-manifest`) and every other job keep the
-    # workflow-level `contents: read` and cannot request an OIDC token at all.
-    # A job-level block REPLACES the workflow-level one, so `contents: read` is
-    # restated here or the checkout loses it.
+    # zoo-weights READ role. Every other job keeps the workflow-level
+    # `contents: read` and cannot request an OIDC token at all. A job-level
+    # block REPLACES the workflow-level one, so `contents: read` is restated
+    # here or the checkout loses it.
     permissions:
       contents: read
       id-token: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      # THE CANONICAL MANIFEST, AND IT MUST ARRIVE FIRST. Until this step
-      # existed nothing in this job put a manifest.json in the checkout, so
-      # every run took the "no manifest" branch by construction (the arming
-      # overclaim). It is 4a's `dump-manifest` artifact — backend's
-      # tools/offline_weights/manifest.json, the same file `dump-coverage`
-      # gates on — landed at ./manifest.json, which is where the fetch hook
-      # (`--staging .`) and the verifier (its `--manifest` default) both read.
-      #
-      # ORDER IS THE WHOLE CONSTRAINT. The install and credential steps below
-      # are conditioned on `hashFiles('manifest.json')`, and `hashFiles` sees
-      # only what is in the checkout when each condition is evaluated. A
-      # download placed beside the fetch step — after the installs — would
-      # leave them skipped while the manifest then exists, and the verifier
-      # would die on `import torch` under the runner's bare python3.
-      # tests/test_dump_fetch_guard.py used to forbid any download into this
-      # job for exactly that reason; it now pins the narrower rule that makes
-      # one safe: exactly one producer of the file, this one, ahead of every
-      # step whose condition reads it.
-      #
-      # WHY AN ARTIFACT IN A PR-CODE JOB IS FINE HERE. The artifact is written
-      # by 4a, which runs NO PR-controlled code, and it is the manifest alone —
-      # never `_backend/.git`, never the token. This job only READS it. The
-      # token boundary 4a exists for is unchanged: no backend credential ever
-      # enters this job, exactly as for `dump-coverage`.
-      - name: Download the dump manifest
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
-          name: dump-manifest
-          path: .
+          persist-credentials: false
+      - name: Mint a backend-read token
+        id: backend-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.RELEASE_TRAIN_APP_ID }}
+          private-key: ${{ secrets.RELEASE_TRAIN_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: backend
+          permission-contents: read
+      - name: Check out the dump manifest
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.repository_owner }}/backend
+          ref: develop
+          token: ${{ steps.backend-token.outputs.token }}
+          path: _backend
+          persist-credentials: false
+          sparse-checkout: tools/offline_weights/manifest.json
+          sparse-checkout-cone-mode: false
+      # THE CANONICAL MANIFEST, AND IT MUST ARRIVE FIRST, at ./manifest.json:
+      # where the fetch hook (`--staging .`) and the verifier (its `--manifest`
+      # default) both read. The install and credential steps below are
+      # conditioned on `hashFiles('manifest.json')`, which sees only what is in
+      # the checkout when each condition is evaluated, so this copy is the ONE
+      # producer of the file and precedes every step whose condition reads it
+      # (tests/test_dump_fetch_guard.py).
+      - name: Put the dump manifest where the hook and the verifier read it
+        run: cp _backend/tools/offline_weights/manifest.json manifest.json
       # THE INSTALL RUNS ONLY WHEN THE DUMPS WILL BE FETCHED. Its condition is
       # the credential step's, verbatim (tests/test_dump_fetch_guard.py holds
       # the three equal): with a manifest now always present, a condition on
@@ -355,26 +326,11 @@ jobs:
       # ONLY on `zoo-weights/*` is sufficient — the fetch is `s3 cp` from the
       # store into ./dist, and uploads are not this workflow's job.
       #
-      # WHO GETS CREDENTIALS. This job runs PR-controlled code (the fetch hook
-      # and the verifier are the PR's own copies), and the credentials this
-      # step exports are visible to every later step. So the step runs only on
-      # a push, the schedule, a dispatch, or a pull request whose head is in
-      # THIS repository; a fork's pull request is refused credentials and says
-      # so by name. That is belt and braces rather than the whole boundary, and
-      # it is worth being exact about which is which:
-      #   * GitHub already withholds an OIDC token from a fork's pull_request
-      #     (`id-token: write` is a write permission, and a fork gets a
-      #     read-only token unless the repo opts in to sending write tokens
-      #     to fork PRs), so the `if:` below makes the refusal explicit and
-      #     keeps a fork run on a named SKIP instead of a failed assume;
-      #   * a same-repo PR's author has write access and could edit this file,
-      #     so no condition in it restrains them — that is the same trust this
-      #     workflow already extends to the engine-pin job's App token;
-      #   * the real bound is the role's trust policy, which should admit only
-      #     `repo:tracebloc/model-zoo` subjects, and its read-only scope.
-      # The job split `fetch-engine-pin` uses (a token job that runs no PR code)
-      # is not reused here on purpose: its point is to hand the PR job FILES,
-      # and the files here are only knowable from the manifest this job reads.
+      # WHO GETS CREDENTIALS. The job's own `if:` already keeps every pull
+      # request out. The fork clause below repeats that refusal at the step,
+      # so widening the job's `if:` alone cannot hand a fork credentials; the
+      # real bound is the role's trust policy, which should admit only
+      # `repo:tracebloc/model-zoo` subjects, and its read-only scope.
       #
       # THE CONDITION IS SPELLED TWICE, in the `if:` and in the fetch step's
       # ZOO_WEIGHTS_TRUSTED_EVENT, and the shell refuses the one disagreement
@@ -448,11 +404,11 @@ jobs:
           if [ ! -f manifest.json ]; then
             echo "SKIP (no manifest): no manifest.json in this checkout, so no"
             echo "  dumps are declared for verification here. In CI this is a"
-            echo "  FAULT, not a pending state: the job's first step downloads"
-            echo "  the dump-manifest artifact (backend tools/offline_weights) to"
-            echo "  this path, so its absence means that download did not land"
-            echo "  here. The verifier below runs with --require-manifest and"
-            echo "  reddens on it (see the arming overclaim)."
+            echo "  FAULT, not a pending state: the job's first steps check the"
+            echo "  manifest out of backend tools/offline_weights and copy it to"
+            echo "  this path, so its absence means that copy did not land here."
+            echo "  The verifier below runs with --require-manifest and reddens"
+            echo "  on it (see the arming overclaim)."
           elif [ ! -f tools/sync_zoo_weights.py ]; then
             echo "SKIP (no sync tool): manifest.json declares dumps, but the"
             echo "  fetch hook tools/sync_zoo_weights.py is NOT in this checkout."
@@ -499,7 +455,17 @@ jobs:
                 echo "::error::every fetch precondition holds, but the 'Assume the zoo-weights read role' step's outcome is '${ZOO_WEIGHTS_CREDENTIALS:-}', not success. Its if: and this step's preconditions disagree; refusing to fetch a private bucket without credentials." >&2
                 exit 1
               fi
-              python3 tools/sync_zoo_weights.py --staging . fetch-all --dest dist
+              # The hook names every entry it fetches, so its output stays
+              # on the runner.
+              report="$(mktemp -d "${RUNNER_TEMP:-/tmp}/verify-dumps.XXXXXX")/fetch.log"
+              status=0
+              python3 tools/sync_zoo_weights.py --staging . fetch-all --dest dist \
+                > "$report" 2>&1 || status=$?
+              if [ "$status" -ne 0 ]; then
+                echo "::error::DUMP FETCH FAILED — the fetch hook exited $status; its report names manifest entries, so it is not printed here."
+                exit 1
+              fi
+              echo "dumps fetched: every live entry's dump is in dist/, its sha256 checked"
             else
               echo "not_fetched=$missing" >> "$GITHUB_OUTPUT"
             fi
@@ -507,24 +473,45 @@ jobs:
       # The gate. Exits non-zero on any live dump that cannot strict-load into
       # its template under the engine pin, any built_with-vs-engine drift, any
       # live entry that maps to no template, or a manifest that is not the
-      # canonical shape. `--require-manifest` because the first step always
-      # supplies one: an absent manifest here is a fault, not "nothing to do".
+      # canonical shape. `--require-manifest` because the first steps always
+      # supply one: an absent manifest here is a fault, not "nothing to do".
       #
       # On a named skip (`not_fetched` set) it still parses the manifest and
       # resolves every live entry — red on a structural defect — but loads
-      # nothing and prints SKIP (dumps not fetched) with the reason, which is
-      # today's state while the two store variables are unset.
+      # nothing, and the log says SKIP (dumps not fetched) with the reason.
+      #
+      # THE VERDICT IS READ FROM THE EXIT STATUS ALONE: 0 passes, 1 is a
+      # finding, 2 a manifest it cannot read. Python also exits 1 on an
+      # uncaught exception, so a report holding a traceback is no verdict.
       - name: Verify the dumps against the engine pin
         env:
           DUMPS_NOT_FETCHED: ${{ steps.fetch-dumps.outputs.not_fetched }}
         run: |
           set -euo pipefail
+          work="$(mktemp -d "${RUNNER_TEMP:-/tmp}/verify-dumps.XXXXXX")"
+          status=0
           if [ -n "${DUMPS_NOT_FETCHED:-}" ]; then
             python3 tools/verify_dumps_against_engine_pin.py --require-manifest \
-              --dumps-not-fetched "$DUMPS_NOT_FETCHED"
+              --report "$work/verify.json" --dumps-not-fetched "$DUMPS_NOT_FETCHED" \
+              > "$work/verify.log" 2>&1 || status=$?
           else
-            python3 tools/verify_dumps_against_engine_pin.py --require-manifest
+            python3 tools/verify_dumps_against_engine_pin.py --require-manifest \
+              --report "$work/verify.json" > "$work/verify.log" 2>&1 || status=$?
           fi
+          if [ "$status" -eq 0 ] && [ -n "${DUMPS_NOT_FETCHED:-}" ]; then
+            echo "SKIP (dumps not fetched): $DUMPS_NOT_FETCHED. Every live entry resolves to a template, but no dump was strict-loaded and provenance was not compared. This is not a pass."
+            exit 0
+          elif [ "$status" -eq 0 ]; then
+            echo "dumps OK: every live dump strict-loads into its template under the engine pin"
+            exit 0
+          elif [ "$status" -eq 1 ] && ! grep -q '^Traceback ' "$work/verify.log"; then
+            echo "::error::DUMP VERIFICATION FAILED — a live dump does not load, is missing, or its provenance drifted"
+          else
+            echo "::error::DUMP VERIFICATION CHECK FAILED — no verdict (exit $status)"
+          fi
+          echo "The report names manifest entries, so it is not printed here."
+          echo "To read it, run tools/verify_dumps_against_engine_pin.py against a backend checkout's manifest."
+          exit 1
 
   # 3) SEED_EXCLUDED_PREFIXES must keep agreeing with what the template BUILDS.
   #
@@ -643,44 +630,39 @@ jobs:
             ${only:+--only $only}
           python3 tools/seed_contract.py --zoo . check --verdict seed_derived.json
 
-  # the hosting decision — THE COMPLEMENT DIRECTION. Every other gate in this workflow is
-  # keyed on the dumps that exist and asks "are they good?". None asks "is there
-  # one for every template that needs one?", so a template that was migrated but
-  # never prepped passes them all BY BEING ABSENT, and trains from random init on
-  # an edge while the migration's premise is that it does not. Two slipped
-  # through exactly this way: `faster_rcnn_resnet` and, found by this gate,
-  # `text_classification/bert_base_uncased`.
+  # 4) THE COMPLEMENT DIRECTION, and the manifest's one home. Every other gate
+  #    here is keyed on the dumps that exist and asks "are they good?". This one
+  #    asks "is there one for every template that needs one, and a template for
+  #    every live one?", so a template that was migrated but never prepped
+  #    cannot pass by being absent.
   #
-  # DELIBERATELY INDEPENDENT OF THE ENGINE PIN, and of every other job here bar
-  # its own manifest fetch. The check is template text and set arithmetic — no
-  # torch, no transformers, no build — so it runs in seconds on stdlib alone.
-  # Making it `needs:` a pin guard would let a slow or red pin hide a coverage
-  # answer that does not depend on the pin at all.
+  #    The manifest is private (`backend`), and this repo, its logs and its
+  #    artifacts are public. So the manifest is read only in this job, by the
+  #    same two rules as `engine-pin-drift-guard`, pinned by
+  #    tests/test_dump_manifest_guard.py:
   #
-  # It DOES now `needs:` job 4a below, and that is not a walk-back of the line
-  # above: 4a is a 10-second sparse checkout of one 9 KB JSON file, it carries
-  # no torch and no pin, and the dependency exists to keep the `backend` token
-  # out of this job rather than to order any work. The property being protected
-  # is which job the token lives in, not how fast the answer arrives.
-  # 4a) THE TOKEN LIVES IN ITS OWN JOB, and that split is the security boundary,
-  #     not a tidiness preference. This job mints a `backend`-scoped App token
-  #     and runs NO PR-controlled code; the coverage job below runs the
-  #     PR-controlled checker and holds NO token. Collapsing the two lets a PR
-  #     that edits `tools/check_dump_coverage.py` read private `backend`:
-  #     `persist-credentials: false` keeps the token out of `_backend/.git/config`
-  #     but NOT out of the runner's step-output files, so it is reachable from
-  #     any code running in the same job.
+  #    NOTHING THE PR CONTROLS RUNS HERE. The backend token sits in the
+  #    runner's step-output files, readable by any code in the job, so the
+  #    checkers are `tools/` at the merge base, extracted outside the checkout.
+  #    The PR's templates are read as data: neither checker imports them.
   #
-  #     This is exactly the `fetch-engine-pin` / `engine-pin-drift-guard` pair
-  #     above, for the same reason and with the same shape — "the real isolation
-  #     is that no PR code runs in this job". The first revision of (internal ref)
-  #     armed the manifest read inside the coverage job and reintroduced the
-  #     hazard that pattern exists to prevent; Cursor Bugbot caught it on a
-  #     learned rule naming this repo's own token-split convention.
-  fetch-dump-manifest:
+  #    NOTHING FROM THE MANIFEST LEAVES HERE. Each checker's report names
+  #    manifest entries, so it goes to a file on the runner and the log gets
+  #    one verdict per check. No artifact, no output.
+  #
+  #    DELIBERATELY INDEPENDENT OF THE ENGINE PIN: both checks are template
+  #    text and set arithmetic on stdlib alone, so a slow or red pin cannot
+  #    hide them.
+  dump-manifest-guard:
     timeout-minutes: 10
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # `git merge-base` needs history, not a shallow tip: it is where the
+          # trusted checkers are extracted from.
+          fetch-depth: 0
+          persist-credentials: false
       - name: Mint a backend-read token
         id: backend-token
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
@@ -697,75 +679,86 @@ jobs:
           ref: develop
           token: ${{ steps.backend-token.outputs.token }}
           path: _backend
-          # Belt and braces: don't persist the token into _backend/.git/config
-          # either. The real isolation is that no PR code runs in this job.
           persist-credentials: false
           sparse-checkout: tools/offline_weights/manifest.json
           sparse-checkout-cone-mode: false
-      # FAIL IF THE SPARSE CHECKOUT MATCHED NOTHING, here as well as in the
-      # consumer. A miss would otherwise upload an empty artifact and the
-      # failure would surface one job later as a confusing download error.
-      - name: The manifest must actually be present
-        run: test -s _backend/tools/offline_weights/manifest.json
-      - name: Upload the dump manifest
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        with:
-          name: dump-manifest
-          # Only manifest.json — never _backend/.git — crosses to the
-          # PR-controlled jobs. There are TWO consumers: `dump-coverage` (4b)
-          # and `verify-dumps` (2), which lands it at ./manifest.json for the
-          # fetch hook and the verifier. A single file, so the archive holds
-          # `manifest.json` at its root.
-          path: _backend/tools/offline_weights/manifest.json
-          if-no-files-found: error
-          retention-days: 1
-
-  # 4b) The coverage answer itself. Runs the PR-controlled checker with NO token
-  #     of any kind: the manifest arrives as an artifact from 4a, so even
-  #     PR-modified code here has nothing to reach private `backend` with.
-  dump-coverage:
-    needs: fetch-dump-manifest
-    timeout-minutes: 5
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
-        with:
-          python-version: "3.11"
-      # (internal ref) — THE ORPHAN HALF IS NOW ARMED, and the reason it had to be
-      # is that eight orphans accumulated while it was not. `check_dump_coverage`
-      # is fail-closed BOTH ways by its own docstring, but this step passed no
-      # `--manifest`, so `have_inventory` was false and the orphan branch never
-      # executed. THAT IS WHY A HUMAN HAD TO NOTICE the seven retired DETR seeds
-      # and `mask_rcnn`: the guard written to catch exactly this was here, green,
-      # and running only half of itself.
+      # THE VERDICT IS READ FROM THE EXIT STATUS ALONE. The coverage checker
+      # exits 0 or 1 (a finding); the verifier 0, 1 (an entry not OK) or 2
+      # (a manifest it cannot read). Python also exits 1 on an uncaught
+      # exception, so a report holding a traceback is no verdict.
       #
-      # The manifest lives in `backend`, not here, which is the whole reason it
-      # was left out: the previous comment said "on hosting, add --manifest",
-      # and hosting (the hosting decision) is not what supplies it — a cross-repo read
-      # is. Job 4a performs that read; this job only consumes its artifact.
-      #
-      # STILL NO `--dumps-dir`: the store's blobs are not reachable from CI.
-      # The hosting decision is made (a private S3 bucket under zoo-weights/);
-      # what is not done is the upload, which waits on write access to that
-      # bucket, and the two repo variables the verify-dumps job's fetch needs
-      # (TRACEBLOC_ZOO_WEIGHTS_URI, ZOO_WEIGHTS_READ_ROLE_ARN). The
-      # manifest is the right inventory to gate on anyway. It is the artifact a
-      # PR review can see, and (internal ref) is what happens when it and the
-      # store disagree: gate the reviewable side, and the store is reconciled to
-      # it by `tools/offline_weights/prune_dumps.py`.
-      - name: Download the dump manifest
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
-        with:
-          name: dump-manifest
-          path: _manifest
-      # FAIL IF THE MANIFEST IS NOT THERE, rather than falling through to the
-      # classification-only run. An artifact that silently arrived empty would
-      # restore the exact unarmed state this step exists to end, and it would
-      # read as green — which is the defect, not a degraded mode of it.
-      - name: The manifest must actually be present
-        run: test -s _manifest/manifest.json
-      - name: Every migrated template accounts for its seed, and every dump a template
+      # THE VERIFIER RUNS IN ITS NOT-FETCHED MODE: it parses the manifest and
+      # resolves every live entry to its template, and loads nothing. Loading
+      # builds the templates, which is running the PR's code, so the
+      # strict-load sweep is `verify-dumps`', on develop's own code.
+      - name: Assert the manifest and the templates account for each other
+        env:
+          BASE_REF: ${{ github.base_ref }}
         run: |
-          python3 tools/check_dump_coverage.py --zoo . \
-            --manifest _manifest/manifest.json
+          set -euo pipefail
+          manifest=_backend/tools/offline_weights/manifest.json
+          # A sparse checkout that matched nothing must not read as an empty
+          # inventory.
+          if [ ! -s "$manifest" ]; then
+            echo "::error::DUMP MANIFEST MISSING — the manifest checkout produced no file"
+            exit 1
+          fi
+          if [ -n "${BASE_REF:-}" ]; then
+            trusted_rev="$(git merge-base "origin/$BASE_REF" HEAD)"
+          else
+            trusted_rev="$(git rev-parse HEAD)"
+          fi
+          work="$(mktemp -d "${RUNNER_TEMP:-/tmp}/dump-manifest.XXXXXX")"
+          trusted="$work/checker"
+          mkdir -p "$trusted"
+          git archive "$trusted_rev" tools | tar -x -C "$trusted"
+          echo "dump checks: tools/ at $trusted_rev"
+          rc=0
+
+          # `--manifest` arms the orphan half: with no inventory the checker
+          # classifies templates only. It imports a sibling module, and `-I`
+          # keeps the script's own directory off sys.path, so tools/ goes there.
+          status=0
+          python3 -I - "$trusted/tools" --zoo . --manifest "$manifest" \
+            > "$work/coverage.log" 2>&1 <<'PY' || status=$?
+          import sys
+
+          sys.path.insert(0, sys.argv[1])
+          import check_dump_coverage
+
+          sys.exit(check_dump_coverage.main(sys.argv[2:]))
+          PY
+          if [ "$status" -eq 0 ]; then
+            echo "dump coverage OK: every seed-expecting template has a live dump, and every live dump a template"
+          elif [ "$status" -eq 1 ] && ! grep -q '^Traceback ' "$work/coverage.log"; then
+            echo "::error::DUMP COVERAGE FAILED — a template and the manifest disagree"
+            rc=1
+          else
+            echo "::error::DUMP COVERAGE CHECK FAILED — no verdict (exit $status)"
+            rc=1
+          fi
+
+          status=0
+          python3 -I "$trusted/tools/verify_dumps_against_engine_pin.py" \
+            --require-manifest --manifest "$manifest" --repo-root . \
+            --report "$work/resolve.json" \
+            --dumps-not-fetched "loading runs the templates, which this job never does" \
+            > "$work/resolve.log" 2>&1 || status=$?
+          if [ "$status" -eq 0 ]; then
+            echo "manifest OK: every live entry resolves to one template"
+          elif [ "$status" -eq 1 ] && ! grep -q '^Traceback ' "$work/resolve.log"; then
+            echo "::error::MANIFEST ENTRIES UNRESOLVED — a live entry maps to no template, or is malformed"
+            rc=1
+          else
+            echo "::error::MANIFEST CHECK FAILED — no verdict (exit $status)"
+            rc=1
+          fi
+
+          if [ "$rc" -ne 0 ]; then
+            echo "The reports name manifest entries, so they are not printed here."
+            echo "To read them, run tools/check_dump_coverage.py --manifest <manifest>"
+            echo "and tools/verify_dumps_against_engine_pin.py --manifest <manifest> --dumps-not-fetched local"
+            echo "against a backend checkout. tools/check_dump_coverage.py with no --manifest"
+            echo "lists the templates' side alone, which is public."
+          fi
+          exit "$rc"

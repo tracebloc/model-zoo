@@ -18,14 +18,14 @@ cannot be ingested, so a template in a category outside it can never train.
 
 ## What reads it
 
-`tests/test_zoo_category_contract.py`, in three layers, each its own test so a
-red names which one broke:
+`tests/test_zoo_category_contract.py` and ci.yml, in three layers, each its own
+check so a red names which one broke:
 
 | layer | asserts | runs in |
 |---|---|---|
 | tree ↔ this file | every category here has a `model_zoo/` directory, and every directory is a category here -- **two tests, one per direction** | every `test-*` job and `category-contract` |
 | module ↔ tree | each model module's `category = "..."` equals the directory it sits in (read from the AST, so a module this job cannot import is still checked) | same |
-| this file ↔ producer | this file equals the producer's `develop` enum, so a stale copy cannot pass the first layer by agreeing with itself | `category-contract` only (the `ingest_producer` marker) |
+| this file ↔ producer | this file equals the producer's `develop` enum, so a stale copy cannot pass the first layer by agreeing with itself | `ingest-schema-guard`, which `category-contract` requires; the log gives only a verdict |
 
 `tests/test_model_contract.py` also reads it, in place of the sixteen-entry
 literal it used to carry.

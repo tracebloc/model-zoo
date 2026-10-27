@@ -23,10 +23,11 @@ THREE LAYERS, each a separate assertion so a failure names which one broke:
 2. every model module's declared ``category = "..."`` equals the directory it
    sits in -- asserted INTO the directory set, read from the AST so a module
    that cannot be imported in this job is still checked.
-3. vendored enum == the producer's enum on its ``develop`` (the marked test,
-   run by ci.yml's ``category-contract`` job). A check that compares the tree
-   against a stale vendored file agrees with itself; this layer is what stops
-   the drift from moving one level up.
+3. vendored enum == the producer's enum on its ``develop`` (ci.yml's
+   ``ingest-schema-guard`` job, which runs this module's helpers as they stand
+   at the merge base). A check that compares the tree against a stale vendored
+   file agrees with itself; this layer is what stops the drift from moving one
+   level up.
 
 This module is the shared logic for all three plus the refresh that writes the
 vendored file. ``tools/`` is not a package; tests load it by path, as they do

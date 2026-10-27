@@ -45,8 +45,11 @@ class MediumMLM(nn.Module):
             activation="gelu",
             batch_first=True,
         )
-        self.encoder = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
-        self.encoder.enable_nested_tensor = False
+        # Constructor argument, not a later attribute set: see
+        # tests/test_encoder_padding_mask_fast_path.py.
+        self.encoder = nn.TransformerEncoder(
+            encoder_layer, num_layers=num_layers, enable_nested_tensor=False
+        )
         self.lm_decoder = nn.Linear(hidden_size, vocab_size, bias=False)
         self.lm_decoder.weight = self.word_embeddings.weight
         self.lm_bias = nn.Parameter(torch.zeros(vocab_size))

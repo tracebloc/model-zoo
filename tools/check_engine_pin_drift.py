@@ -69,10 +69,10 @@ the shape `(internal ref)` used to fix the identical defect in
 `_TORCH_SOURCES` tuple declared itself complete and listed four of five.
 
 Usage:
-    # CI: derive the engine's sources from the downloaded pin artifact.
+    # Derive the engine's sources from an engine checkout (what CI does).
     python tools/check_engine_pin_drift.py \
         --mirror tools/requirements-engine-pin.txt \
-        --engine-root _engine_pin \
+        --engine-root <engine checkout> \
         [--mirror-at-base /tmp/mirror-at-merge-base.txt]
 
     # By hand: name them yourself. Still refuses a disagreement between them.
@@ -161,7 +161,7 @@ def _candidates_under(root: Path) -> dict[str, str]:
     `sub/Dockerfile.base.cpu`.
 
     A GLOB THAT MATCHES NOTHING IS AN ERROR, not an empty result. It means the
-    pin artifact did not arrive intact or the engine renamed that family, and
+    engine checkout is incomplete or the engine renamed that family, and
     "I read no files and found no disagreement" is exactly the vacuous green
     this ticket is about.
     """
@@ -172,8 +172,8 @@ def _candidates_under(root: Path) -> dict[str, str]:
             raise EnginePinError(
                 f"the engine-source glob {pattern!r} matched NO file under "
                 f"{root}, so the search space is incomplete. Either the "
-                "engine-pin artifact did not arrive intact or the engine "
-                "renamed that family. Refusing: a search space this gate "
+                "engine checkout is incomplete or the engine renamed that "
+                "family. Refusing: a search space this gate "
                 "could not read is not one it agrees with."
             )
         for p in matched:
@@ -509,14 +509,14 @@ def _merge_engine_sources(paths: list[str], relevant: set[str]) -> dict[str, str
                 "it would report agreement it never established (internal ref)."
             ) from exc
         # A NAMED SOURCE THAT CONTRIBUTES NOTHING IS A BROKEN INVOCATION, not
-        # a benign no-op. It is what a sparse-checkout typo, a missing
-        # artifact, or a GPU Dockerfile handed to `--engine` looks like, and
+        # a benign no-op. It is what a sparse-checkout typo, an incomplete
+        # checkout, or a GPU Dockerfile handed to `--engine` looks like, and
         # every one of those reads 6 of 7 files and reports agreement.
         if not pins:
             raise EnginePinError(
                 f"{path} was named as an engine source but carries NO exact "
                 "pin at all, so it cannot contribute to the engine's side. "
-                "That is a broken invocation — a missing artifact, a "
+                "That is a broken invocation — an incomplete checkout, a "
                 "sparse-checkout that matched nothing, or a file that pins via "
                 "a wheel index rather than `pkg==ver` — and it must not pass "
                 "as a source that simply happened to agree (internal ref)."
