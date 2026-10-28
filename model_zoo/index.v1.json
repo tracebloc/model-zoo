@@ -9,6 +9,7 @@
       "model_type": "",
       "label": "DistilGPT2",
       "batch": 8,
+      "forecast_window": null,
       "params": 81912576,
       "averageable": true
     },
@@ -20,6 +21,7 @@
       "model_type": "",
       "label": "Medium Causal LM",
       "batch": 32,
+      "forecast_window": null,
       "params": 34835258,
       "averageable": true
     },
@@ -31,6 +33,7 @@
       "model_type": "",
       "label": "NanoGPT Style Scratch",
       "batch": 16,
+      "forecast_window": null,
       "params": 109313850,
       "averageable": true
     },
@@ -42,6 +45,7 @@
       "model_type": "",
       "label": "Simple Causal LM",
       "batch": 32,
+      "forecast_window": null,
       "params": 18948410,
       "averageable": true
     },
@@ -53,6 +57,7 @@
       "model_type": "",
       "label": "MiniLM",
       "batch": 16,
+      "forecast_window": null,
       "params": 22713216,
       "averageable": true
     },
@@ -64,6 +69,7 @@
       "model_type": "",
       "label": "Simple Text Encoder",
       "batch": 16,
+      "forecast_window": null,
       "params": 10053632,
       "averageable": true
     },
@@ -75,6 +81,7 @@
       "model_type": null,
       "label": "AIMv2",
       "batch": 16,
+      "forecast_window": null,
       "params": 309199874,
       "averageable": true
     },
@@ -86,6 +93,7 @@
       "model_type": null,
       "label": "ConvNeXt V2",
       "batch": 32,
+      "forecast_window": null,
       "params": 27868034,
       "averageable": true
     },
@@ -97,6 +105,7 @@
       "model_type": null,
       "label": "DINOv3",
       "batch": 16,
+      "forecast_window": null,
       "params": 85661954,
       "averageable": true
     },
@@ -108,6 +117,7 @@
       "model_type": null,
       "label": "EVA 02",
       "batch": 16,
+      "forecast_window": null,
       "params": 86350082,
       "averageable": true
     },
@@ -119,6 +129,7 @@
       "model_type": null,
       "label": "FastViT",
       "batch": 64,
+      "forecast_window": null,
       "params": 8450626,
       "averageable": true
     },
@@ -130,6 +141,7 @@
       "model_type": null,
       "label": "Hiera",
       "batch": 32,
+      "forecast_window": null,
       "params": 27142754,
       "averageable": true
     },
@@ -141,6 +153,7 @@
       "model_type": null,
       "label": "LeNet",
       "batch": 256,
+      "forecast_window": null,
       "params": 5406650,
       "averageable": true
     },
@@ -152,6 +165,7 @@
       "model_type": null,
       "label": "MambaOut",
       "batch": 32,
+      "forecast_window": null,
       "params": 24244706,
       "averageable": true
     },
@@ -163,6 +177,7 @@
       "model_type": null,
       "label": "MaxViT",
       "batch": 256,
+      "forecast_window": null,
       "params": 30408648,
       "averageable": true
     },
@@ -174,6 +189,7 @@
       "model_type": null,
       "label": "ResNet 18",
       "batch": 256,
+      "forecast_window": null,
       "params": 11177538,
       "averageable": true
     },
@@ -185,6 +201,7 @@
       "model_type": null,
       "label": "SigLIP2",
       "batch": 16,
+      "forecast_window": null,
       "params": 92885762,
       "averageable": true
     },
@@ -196,6 +213,7 @@
       "model_type": null,
       "label": "Simple CNN",
       "batch": 256,
+      "forecast_window": null,
       "params": 5406606,
       "averageable": true
     },
@@ -207,6 +225,7 @@
       "model_type": null,
       "label": "SqueezeNet",
       "batch": 256,
+      "forecast_window": null,
       "params": 736450,
       "averageable": true
     },
@@ -218,6 +237,7 @@
       "model_type": null,
       "label": "Swin Transformer",
       "batch": 16,
+      "forecast_window": null,
       "params": 27520892,
       "averageable": true
     },
@@ -229,6 +249,7 @@
       "model_type": null,
       "label": "VGG 16",
       "batch": 16,
+      "forecast_window": null,
       "params": 134268738,
       "averageable": true
     },
@@ -240,6 +261,7 @@
       "model_type": null,
       "label": "VGG Custom",
       "batch": 16,
+      "forecast_window": null,
       "params": 134277186,
       "averageable": true
     },
@@ -251,6 +273,7 @@
       "model_type": null,
       "label": "ViT",
       "batch": 16,
+      "forecast_window": null,
       "params": 86390786,
       "averageable": true
     },
@@ -262,6 +285,7 @@
       "model_type": null,
       "label": "ViT B 16",
       "batch": 16,
+      "forecast_window": null,
       "params": 85800194,
       "averageable": true
     },
@@ -273,6 +297,7 @@
       "model_type": null,
       "label": "ViT Google",
       "batch": 16,
+      "forecast_window": null,
       "params": 85800194,
       "averageable": true
     },
@@ -284,6 +309,7 @@
       "model_type": null,
       "label": "Wide ResNet 50 2",
       "batch": 16,
+      "forecast_window": null,
       "params": 66838338,
       "averageable": true
     },
@@ -295,6 +321,7 @@
       "model_type": "",
       "label": "AlphaPose",
       "batch": 128,
+      "forecast_window": null,
       "params": 32554752,
       "averageable": true
     },
@@ -306,6 +333,7 @@
       "model_type": "",
       "label": "CPM",
       "batch": 128,
+      "forecast_window": null,
       "params": 1883184,
       "averageable": true
     },
@@ -317,6 +345,7 @@
       "model_type": "heatmap",
       "label": "CPM Heatmap",
       "batch": 128,
+      "forecast_window": null,
       "params": 1879056,
       "averageable": true
     },
@@ -328,6 +357,7 @@
       "model_type": "",
       "label": "CPN",
       "batch": 128,
+      "forecast_window": null,
       "params": 27454832,
       "averageable": true
     },
@@ -339,6 +369,7 @@
       "model_type": "heatmap",
       "label": "CPN Heatmap",
       "batch": 128,
+      "forecast_window": null,
       "params": 27446608,
       "averageable": true
     },
@@ -350,6 +381,7 @@
       "model_type": "",
       "label": "DeepPose",
       "batch": 128,
+      "forecast_window": null,
       "params": 7508144,
       "averageable": true
     },
@@ -361,6 +393,7 @@
       "model_type": "",
       "label": "DSNT",
       "batch": 128,
+      "forecast_window": null,
       "params": 960896,
       "averageable": true
     },
@@ -372,6 +405,7 @@
       "model_type": "",
       "label": "Faster R-CNN SPPE",
       "batch": 128,
+      "forecast_window": null,
       "params": 26864752,
       "averageable": true
     },
@@ -383,6 +417,7 @@
       "model_type": "",
       "label": "HRNet",
       "batch": 128,
+      "forecast_window": null,
       "params": 1577520,
       "averageable": true
     },
@@ -394,6 +429,7 @@
       "model_type": "heatmap",
       "label": "HRNet Heatmap",
       "batch": 128,
+      "forecast_window": null,
       "params": 1561104,
       "averageable": true
     },
@@ -405,6 +441,7 @@
       "model_type": "rcnn",
       "label": "Keypoint R-CNN",
       "batch": 4,
+      "forecast_window": null,
       "params": 59190378,
       "averageable": true
     },
@@ -416,6 +453,7 @@
       "model_type": "",
       "label": "OpenPose",
       "batch": 128,
+      "forecast_window": null,
       "params": 13809872,
       "averageable": true
     },
@@ -427,6 +465,7 @@
       "model_type": "",
       "label": "ResNet 50",
       "batch": 128,
+      "forecast_window": null,
       "params": 34000208,
       "averageable": true
     },
@@ -438,6 +477,7 @@
       "model_type": "",
       "label": "ResNet SPPE",
       "batch": 128,
+      "forecast_window": null,
       "params": 23606384,
       "averageable": true
     },
@@ -449,6 +489,7 @@
       "model_type": "",
       "label": "RTMPose",
       "batch": 64,
+      "forecast_window": null,
       "params": 7949728,
       "averageable": true
     },
@@ -460,6 +501,7 @@
       "model_type": "direct",
       "label": "Sapiens",
       "batch": 16,
+      "forecast_window": null,
       "params": 85883955,
       "averageable": true
     },
@@ -471,6 +513,7 @@
       "model_type": "",
       "label": "SHG",
       "batch": 128,
+      "forecast_window": null,
       "params": 124161408,
       "averageable": true
     },
@@ -482,6 +525,7 @@
       "model_type": "heatmap",
       "label": "SHG Heatmap",
       "batch": 128,
+      "forecast_window": null,
       "params": 124095616,
       "averageable": true
     },
@@ -493,6 +537,7 @@
       "model_type": "direct",
       "label": "ViTPose",
       "batch": 32,
+      "forecast_window": null,
       "params": 85961489,
       "averageable": true
     },
@@ -504,6 +549,7 @@
       "model_type": "direct",
       "label": "ViTPose Plus",
       "batch": 32,
+      "forecast_window": null,
       "params": 125444625,
       "averageable": true
     },
@@ -515,6 +561,7 @@
       "model_type": "",
       "label": "BERT Large MLM",
       "batch": 8,
+      "forecast_window": null,
       "params": 335172410,
       "averageable": true
     },
@@ -526,6 +573,7 @@
       "model_type": "",
       "label": "Conv MLM",
       "batch": 64,
+      "forecast_window": null,
       "params": 47283002,
       "averageable": true
     },
@@ -537,6 +585,7 @@
       "model_type": "",
       "label": "Deep Narrow MLM",
       "batch": 32,
+      "forecast_window": null,
       "params": 40340538,
       "averageable": true
     },
@@ -548,6 +597,7 @@
       "model_type": "",
       "label": "Distil MLM",
       "batch": 32,
+      "forecast_window": null,
       "params": 66393402,
       "averageable": true
     },
@@ -559,6 +609,7 @@
       "model_type": "",
       "label": "Medium MLM",
       "batch": 32,
+      "forecast_window": null,
       "params": 34835258,
       "averageable": true
     },
@@ -570,6 +621,7 @@
       "model_type": "",
       "label": "NetMedGPT Style Scratch",
       "batch": 16,
+      "forecast_window": null,
       "params": 109512762,
       "averageable": true
     },
@@ -581,6 +633,7 @@
       "model_type": "",
       "label": "NetMedGPT Style Warmstart",
       "batch": 16,
+      "forecast_window": null,
       "params": 109514298,
       "averageable": true
     },
@@ -592,6 +645,7 @@
       "model_type": "",
       "label": "PreNorm MLM",
       "batch": 16,
+      "forecast_window": null,
       "params": 109514298,
       "averageable": true
     },
@@ -603,6 +657,7 @@
       "model_type": "",
       "label": "Relative Position MLM",
       "batch": 16,
+      "forecast_window": null,
       "params": 109119546,
       "averageable": true
     },
@@ -614,6 +669,7 @@
       "model_type": "",
       "label": "Simple MLM",
       "batch": 32,
+      "forecast_window": null,
       "params": 17897786,
       "averageable": true
     },
@@ -625,6 +681,7 @@
       "model_type": "",
       "label": "Tiny MLM",
       "batch": 64,
+      "forecast_window": null,
       "params": 8174906,
       "averageable": true
     },
@@ -636,6 +693,7 @@
       "model_type": "",
       "label": "Wide Mini MLM",
       "batch": 32,
+      "forecast_window": null,
       "params": 28795194,
       "averageable": true
     },
@@ -647,6 +705,7 @@
       "model_type": "torchvision_detection",
       "label": "ATSS ResNet",
       "batch": 8,
+      "forecast_window": null,
       "params": 32136529,
       "averageable": true
     },
@@ -658,6 +717,7 @@
       "model_type": "torchvision_detection",
       "label": "Cascade R-CNN",
       "batch": 4,
+      "forecast_window": null,
       "params": 69333266,
       "averageable": true
     },
@@ -669,6 +729,7 @@
       "model_type": "torchvision_detection",
       "label": "CenterNet ResNet",
       "batch": 8,
+      "forecast_window": null,
       "params": 27296081,
       "averageable": true
     },
@@ -680,6 +741,7 @@
       "model_type": "torchvision_detection",
       "label": "EfficientDet D0",
       "batch": 8,
+      "forecast_window": null,
       "params": 3857038,
       "averageable": true
     },
@@ -691,6 +753,7 @@
       "model_type": "torchvision_detection",
       "label": "Faster R-CNN ConvNeXt Small",
       "batch": 2,
+      "forecast_window": null,
       "params": 66739376,
       "averageable": true
     },
@@ -702,6 +765,7 @@
       "model_type": "torchvision_detection",
       "label": "Faster R-CNN MobileNet",
       "batch": 8,
+      "forecast_window": null,
       "params": 19011004,
       "averageable": true
     },
@@ -713,6 +777,7 @@
       "model_type": "torchvision_detection",
       "label": "Faster R-CNN MobileNet 320",
       "batch": 16,
+      "forecast_window": null,
       "params": 19011004,
       "averageable": true
     },
@@ -724,6 +789,7 @@
       "model_type": "rcnn",
       "label": "Faster R-CNN ResNet",
       "batch": 4,
+      "forecast_window": null,
       "params": 41408656,
       "averageable": true
     },
@@ -735,6 +801,7 @@
       "model_type": "torchvision_detection",
       "label": "Faster R-CNN ResNet V2",
       "batch": 2,
+      "forecast_window": null,
       "params": 43312528,
       "averageable": true
     },
@@ -746,6 +813,7 @@
       "model_type": "torchvision_detection",
       "label": "Faster R-CNN Swin T",
       "batch": 2,
+      "forecast_window": null,
       "params": 44804042,
       "averageable": true
     },
@@ -757,6 +825,7 @@
       "model_type": "torchvision_detection",
       "label": "FCOS",
       "batch": 8,
+      "forecast_window": null,
       "params": 32142930,
       "averageable": true
     },
@@ -768,6 +837,7 @@
       "model_type": "torchvision_detection",
       "label": "FCOS ConvNeXt Small",
       "batch": 2,
+      "forecast_window": null,
       "params": 57514610,
       "averageable": true
     },
@@ -779,6 +849,7 @@
       "model_type": "torchvision_detection",
       "label": "FCOS Swin T",
       "batch": 2,
+      "forecast_window": null,
       "params": 35579276,
       "averageable": true
     },
@@ -790,6 +861,7 @@
       "model_type": "torchvision_detection",
       "label": "GFL ResNet",
       "batch": 4,
+      "forecast_window": null,
       "params": 32286102,
       "averageable": true
     },
@@ -801,6 +873,7 @@
       "model_type": "torchvision_detection",
       "label": "RetinaNet",
       "batch": 8,
+      "forecast_window": null,
       "params": 32450009,
       "averageable": true
     },
@@ -812,6 +885,7 @@
       "model_type": "torchvision_detection",
       "label": "RetinaNet V2",
       "batch": 2,
+      "forecast_window": null,
       "params": 36580825,
       "averageable": true
     },
@@ -823,6 +897,7 @@
       "model_type": "torchvision_detection",
       "label": "RTMDet S",
       "batch": 8,
+      "forecast_window": null,
       "params": 8860995,
       "averageable": true
     },
@@ -834,6 +909,7 @@
       "model_type": "torchvision_detection",
       "label": "Sparse R-CNN",
       "batch": 2,
+      "forecast_window": null,
       "params": 106187574,
       "averageable": true
     },
@@ -845,6 +921,7 @@
       "model_type": "torchvision_detection",
       "label": "SSD VGG16",
       "batch": 16,
+      "forecast_window": null,
       "params": 25216190,
       "averageable": true
     },
@@ -856,6 +933,7 @@
       "model_type": "torchvision_detection",
       "label": "SSDLite MobileNet",
       "batch": 24,
+      "forecast_window": null,
       "params": 2358980,
       "averageable": true
     },
@@ -867,6 +945,7 @@
       "model_type": "torchvision_detection",
       "label": "TOOD ResNet",
       "batch": 4,
+      "forecast_window": null,
       "params": 31115730,
       "averageable": true
     },
@@ -878,6 +957,7 @@
       "model_type": "torchvision_detection",
       "label": "VFNet ResNet",
       "batch": 4,
+      "forecast_window": null,
       "params": 30967130,
       "averageable": true
     },
@@ -889,6 +969,7 @@
       "model_type": "torchvision_detection",
       "label": "YOLO11 S",
       "batch": 8,
+      "forecast_window": null,
       "params": 9432807,
       "averageable": true
     },
@@ -900,6 +981,7 @@
       "model_type": "yolo",
       "label": "YOLO V1",
       "batch": 64,
+      "forecast_window": null,
       "params": 267004093,
       "averageable": true
     },
@@ -911,6 +993,7 @@
       "model_type": "yolo",
       "label": "YOLO V5",
       "batch": 64,
+      "forecast_window": null,
       "params": 13376813,
       "averageable": true
     },
@@ -922,6 +1005,7 @@
       "model_type": "yolo",
       "label": "YOLO V8",
       "batch": 64,
+      "forecast_window": null,
       "params": 9021229,
       "averageable": true
     },
@@ -933,6 +1017,7 @@
       "model_type": "torchvision_detection",
       "label": "YOLOv10 S",
       "batch": 8,
+      "forecast_window": null,
       "params": 8076398,
       "averageable": true
     },
@@ -944,6 +1029,7 @@
       "model_type": "torchvision_detection",
       "label": "YOLOv12 S",
       "batch": 8,
+      "forecast_window": null,
       "params": 9258151,
       "averageable": true
     },
@@ -955,6 +1041,7 @@
       "model_type": "torchvision_detection",
       "label": "YOLOv8 S",
       "batch": 8,
+      "forecast_window": null,
       "params": 11140615,
       "averageable": true
     },
@@ -966,6 +1053,7 @@
       "model_type": "torchvision_detection",
       "label": "YOLOv9 S",
       "batch": 8,
+      "forecast_window": null,
       "params": 7292423,
       "averageable": true
     },
@@ -977,6 +1065,7 @@
       "model_type": "torchvision_detection",
       "label": "YOLOX S",
       "batch": 8,
+      "forecast_window": null,
       "params": 8942326,
       "averageable": true
     },
@@ -988,6 +1077,7 @@
       "model_type": null,
       "label": "DeepLab",
       "batch": 8,
+      "forecast_window": null,
       "params": 39633986,
       "averageable": true
     },
@@ -999,6 +1089,7 @@
       "model_type": null,
       "label": "DINOv3 Seg",
       "batch": 8,
+      "forecast_window": null,
       "params": 85661954,
       "averageable": true
     },
@@ -1010,6 +1101,7 @@
       "model_type": null,
       "label": "DPT",
       "batch": 4,
+      "forecast_window": null,
       "params": 343884292,
       "averageable": true
     },
@@ -1021,6 +1113,7 @@
       "model_type": null,
       "label": "FCN",
       "batch": 8,
+      "forecast_window": null,
       "params": 33606982,
       "averageable": true
     },
@@ -1032,6 +1125,7 @@
       "model_type": null,
       "label": "HRNet",
       "batch": 8,
+      "forecast_window": null,
       "params": 11737026,
       "averageable": true
     },
@@ -1043,6 +1137,7 @@
       "model_type": null,
       "label": "Mask2Former",
       "batch": 4,
+      "forecast_window": null,
       "params": 47403133,
       "averageable": true
     },
@@ -1054,6 +1149,7 @@
       "model_type": null,
       "label": "OneFormer",
       "batch": 4,
+      "forecast_window": null,
       "params": 50699902,
       "averageable": true
     },
@@ -1065,6 +1161,7 @@
       "model_type": null,
       "label": "SAM2",
       "batch": 2,
+      "forecast_window": null,
       "params": 27219650,
       "averageable": true
     },
@@ -1076,6 +1173,7 @@
       "model_type": null,
       "label": "SegFormer",
       "batch": 8,
+      "forecast_window": null,
       "params": 3714658,
       "averageable": true
     },
@@ -1087,6 +1185,7 @@
       "model_type": null,
       "label": "Segmenter",
       "batch": 8,
+      "forecast_window": null,
       "params": 3714658,
       "averageable": true
     },
@@ -1098,6 +1197,7 @@
       "model_type": null,
       "label": "SegNet",
       "batch": 8,
+      "forecast_window": null,
       "params": 24870384,
       "averageable": true
     },
@@ -1109,6 +1209,7 @@
       "model_type": null,
       "label": "U-Net",
       "batch": 8,
+      "forecast_window": null,
       "params": 31037698,
       "averageable": true
     },
@@ -1120,6 +1221,7 @@
       "model_type": null,
       "label": "UperNet",
       "batch": 4,
+      "forecast_window": null,
       "params": 81763236,
       "averageable": true
     },
@@ -1131,6 +1233,7 @@
       "model_type": "",
       "label": "BERT Base Uncased",
       "batch": 16,
+      "forecast_window": null,
       "params": 109483778,
       "averageable": true
     },
@@ -1142,6 +1245,7 @@
       "model_type": "",
       "label": "Simple Sentence Pair",
       "batch": 512,
+      "forecast_window": null,
       "params": 3923586,
       "averageable": true
     },
@@ -1153,6 +1257,7 @@
       "model_type": "",
       "label": "Simple Seq2Seq",
       "batch": 4,
+      "forecast_window": null,
       "params": 45578240,
       "averageable": true
     },
@@ -1164,6 +1269,7 @@
       "model_type": "",
       "label": "T5 Small",
       "batch": 8,
+      "forecast_window": null,
       "params": 60506624,
       "averageable": true
     },
@@ -1175,6 +1281,7 @@
       "model_type": "",
       "label": "CNN",
       "batch": 4096,
+      "forecast_window": null,
       "params": 215141,
       "averageable": true
     },
@@ -1186,6 +1293,7 @@
       "model_type": "",
       "label": "FCN",
       "batch": 4096,
+      "forecast_window": null,
       "params": 15109,
       "averageable": true
     },
@@ -1197,6 +1305,7 @@
       "model_type": "",
       "label": "FT Transformer",
       "batch": 512,
+      "forecast_window": null,
       "params": 156869,
       "averageable": true
     },
@@ -1208,6 +1317,7 @@
       "model_type": "",
       "label": "LSTM",
       "batch": 4096,
+      "forecast_window": null,
       "params": 100741,
       "averageable": true
     },
@@ -1219,6 +1329,7 @@
       "model_type": "",
       "label": "RNN",
       "batch": 4096,
+      "forecast_window": null,
       "params": 31621,
       "averageable": true
     },
@@ -1230,6 +1341,7 @@
       "model_type": "",
       "label": "TabM",
       "batch": 1024,
+      "forecast_window": null,
       "params": 38085,
       "averageable": true
     },
@@ -1241,6 +1353,7 @@
       "model_type": "catboost",
       "label": "CatBoost Classifier",
       "batch": 512,
+      "forecast_window": null,
       "params": null,
       "averageable": true
     },
@@ -1252,6 +1365,7 @@
       "model_type": "tree",
       "label": "Decision Tree",
       "batch": 4,
+      "forecast_window": null,
       "params": null,
       "averageable": false
     },
@@ -1263,6 +1377,7 @@
       "model_type": "tree",
       "label": "EBM Classifier",
       "batch": 4096,
+      "forecast_window": null,
       "params": null,
       "averageable": false
     },
@@ -1274,6 +1389,7 @@
       "model_type": "ensemble",
       "label": "Ensemble",
       "batch": 4,
+      "forecast_window": null,
       "params": null,
       "averageable": false
     },
@@ -1285,6 +1401,7 @@
       "model_type": "tree",
       "label": "GBM",
       "batch": 4,
+      "forecast_window": null,
       "params": null,
       "averageable": false
     },
@@ -1296,6 +1413,7 @@
       "model_type": "tree",
       "label": "Hist Gradient Boosting Classifier",
       "batch": 4096,
+      "forecast_window": null,
       "params": null,
       "averageable": false
     },
@@ -1307,6 +1425,7 @@
       "model_type": "clustering",
       "label": "KNN",
       "batch": 4,
+      "forecast_window": null,
       "params": null,
       "averageable": false
     },
@@ -1318,6 +1437,7 @@
       "model_type": "lightgbm",
       "label": "LightGBM Classifier",
       "batch": 512,
+      "forecast_window": null,
       "params": null,
       "averageable": true
     },
@@ -1329,6 +1449,7 @@
       "model_type": "linear",
       "label": "Logistic Regression",
       "batch": 4,
+      "forecast_window": null,
       "params": null,
       "averageable": true
     },
@@ -1340,6 +1461,7 @@
       "model_type": "linear",
       "label": "Logistic Regression Stability",
       "batch": 4,
+      "forecast_window": null,
       "params": null,
       "averageable": true
     },
@@ -1351,6 +1473,7 @@
       "model_type": "neural_network",
       "label": "MLP",
       "batch": 4,
+      "forecast_window": null,
       "params": null,
       "averageable": true
     },
@@ -1362,6 +1485,7 @@
       "model_type": "naive",
       "label": "Naive Bayes",
       "batch": 4,
+      "forecast_window": null,
       "params": null,
       "averageable": true
     },
@@ -1373,6 +1497,7 @@
       "model_type": "tree",
       "label": "Random Forest",
       "batch": 4,
+      "forecast_window": null,
       "params": null,
       "averageable": true
     },
@@ -1384,6 +1509,7 @@
       "model_type": "tree",
       "label": "Random Forest Stability",
       "batch": 4,
+      "forecast_window": null,
       "params": null,
       "averageable": true
     },
@@ -1395,6 +1521,7 @@
       "model_type": "svm",
       "label": "SVM",
       "batch": 4,
+      "forecast_window": null,
       "params": null,
       "averageable": false
     },
@@ -1406,6 +1533,7 @@
       "model_type": "xgboost",
       "label": "XGBoost Classifier",
       "batch": 512,
+      "forecast_window": null,
       "params": null,
       "averageable": true
     },
@@ -1417,6 +1545,7 @@
       "model_type": "",
       "label": "CNN",
       "batch": 512,
+      "forecast_window": null,
       "params": 79713,
       "averageable": true
     },
@@ -1428,6 +1557,7 @@
       "model_type": "",
       "label": "FCN",
       "batch": 512,
+      "forecast_window": null,
       "params": 10625,
       "averageable": true
     },
@@ -1439,6 +1569,7 @@
       "model_type": "",
       "label": "FT Transformer",
       "batch": 512,
+      "forecast_window": null,
       "params": 152385,
       "averageable": true
     },
@@ -1450,6 +1581,7 @@
       "model_type": "",
       "label": "MLP",
       "batch": 512,
+      "forecast_window": null,
       "params": 3457,
       "averageable": true
     },
@@ -1461,6 +1593,7 @@
       "model_type": "",
       "label": "RNN",
       "batch": 512,
+      "forecast_window": null,
       "params": 27137,
       "averageable": true
     },
@@ -1472,6 +1605,7 @@
       "model_type": "",
       "label": "TabM",
       "batch": 1024,
+      "forecast_window": null,
       "params": 32289,
       "averageable": true
     },
@@ -1483,6 +1617,7 @@
       "model_type": "tree",
       "label": "Decision Tree",
       "batch": 512,
+      "forecast_window": null,
       "params": null,
       "averageable": false
     },
@@ -1494,6 +1629,7 @@
       "model_type": "tree",
       "label": "EBM Regressor",
       "batch": 4096,
+      "forecast_window": null,
       "params": null,
       "averageable": false
     },
@@ -1505,6 +1641,7 @@
       "model_type": "linear",
       "label": "Elastic Net",
       "batch": 512,
+      "forecast_window": null,
       "params": null,
       "averageable": true
     },
@@ -1516,6 +1653,7 @@
       "model_type": "tree",
       "label": "Gradient Boosting",
       "batch": 512,
+      "forecast_window": null,
       "params": null,
       "averageable": false
     },
@@ -1527,6 +1665,7 @@
       "model_type": "tree",
       "label": "Hist Gradient Boosting Regressor",
       "batch": 4096,
+      "forecast_window": null,
       "params": null,
       "averageable": false
     },
@@ -1538,6 +1677,7 @@
       "model_type": "ensemble",
       "label": "KNN",
       "batch": 512,
+      "forecast_window": null,
       "params": null,
       "averageable": false
     },
@@ -1549,6 +1689,7 @@
       "model_type": "linear",
       "label": "Lasso",
       "batch": 512,
+      "forecast_window": null,
       "params": null,
       "averageable": true
     },
@@ -1560,6 +1701,7 @@
       "model_type": "lightgbm",
       "label": "LightGBM Regressor",
       "batch": 512,
+      "forecast_window": null,
       "params": null,
       "averageable": true
     },
@@ -1571,6 +1713,7 @@
       "model_type": "linear",
       "label": "Linear Regression",
       "batch": 128,
+      "forecast_window": null,
       "params": null,
       "averageable": true
     },
@@ -1582,6 +1725,7 @@
       "model_type": "neural_network",
       "label": "MLP",
       "batch": 128,
+      "forecast_window": null,
       "params": null,
       "averageable": true
     },
@@ -1593,6 +1737,7 @@
       "model_type": "tree",
       "label": "Random Forest",
       "batch": 128,
+      "forecast_window": null,
       "params": null,
       "averageable": true
     },
@@ -1604,6 +1749,7 @@
       "model_type": "linear",
       "label": "Ridge",
       "batch": 128,
+      "forecast_window": null,
       "params": null,
       "averageable": true
     },
@@ -1615,6 +1761,7 @@
       "model_type": "svm",
       "label": "SVM",
       "batch": 128,
+      "forecast_window": null,
       "params": null,
       "averageable": false
     },
@@ -1626,6 +1773,7 @@
       "model_type": "linear",
       "label": "Tweedie Regressor",
       "batch": 4096,
+      "forecast_window": null,
       "params": null,
       "averageable": false
     },
@@ -1637,6 +1785,7 @@
       "model_type": "xgboost",
       "label": "XGBoost Regressor",
       "batch": 128,
+      "forecast_window": null,
       "params": null,
       "averageable": true
     },
@@ -1648,6 +1797,7 @@
       "model_type": "",
       "label": "BERT Base Uncased",
       "batch": 16,
+      "forecast_window": null,
       "params": 109486085,
       "averageable": true
     },
@@ -1659,6 +1809,7 @@
       "model_type": "",
       "label": "BERT Base Uncased Scratch",
       "batch": 16,
+      "forecast_window": null,
       "params": 109486085,
       "averageable": true
     },
@@ -1670,6 +1821,7 @@
       "model_type": "",
       "label": "DistilBERT",
       "batch": 16,
+      "forecast_window": null,
       "params": 66957317,
       "averageable": true
     },
@@ -1681,6 +1833,7 @@
       "model_type": "",
       "label": "DistilBERT Scratch",
       "batch": 16,
+      "forecast_window": null,
       "params": 66957317,
       "averageable": true
     },
@@ -1692,6 +1845,7 @@
       "model_type": "",
       "label": "ELECTRA",
       "batch": 16,
+      "forecast_window": null,
       "params": 109486085,
       "averageable": true
     },
@@ -1703,6 +1857,7 @@
       "model_type": "",
       "label": "GTE ModernBERT",
       "batch": 4,
+      "forecast_window": null,
       "params": 149608709,
       "averageable": true
     },
@@ -1714,6 +1869,7 @@
       "model_type": "",
       "label": "ModernBERT",
       "batch": 16,
+      "forecast_window": null,
       "params": 149608709,
       "averageable": true
     },
@@ -1725,6 +1881,7 @@
       "model_type": "",
       "label": "Qwen2.5 0.5B",
       "batch": 8,
+      "forecast_window": null,
       "params": 494037248,
       "averageable": true
     },
@@ -1736,6 +1893,7 @@
       "model_type": "",
       "label": "Simple Text",
       "batch": 512,
+      "forecast_window": null,
       "params": 3923973,
       "averageable": true
     },
@@ -1747,6 +1905,7 @@
       "model_type": "",
       "label": "GRU",
       "batch": 512,
+      "forecast_window": null,
       "params": 160834,
       "averageable": true
     },
@@ -1758,6 +1917,7 @@
       "model_type": "",
       "label": "LSTM",
       "batch": 512,
+      "forecast_window": null,
       "params": 211650,
       "averageable": true
     },
@@ -1769,6 +1929,7 @@
       "model_type": "",
       "label": "Masked Pool MLP",
       "batch": 512,
+      "forecast_window": null,
       "params": 34370,
       "averageable": true
     },
@@ -1780,6 +1941,7 @@
       "model_type": "",
       "label": "TCN",
       "batch": 512,
+      "forecast_window": null,
       "params": 142466,
       "averageable": true
     },
@@ -1791,6 +1953,7 @@
       "model_type": "",
       "label": "Transformer",
       "batch": 512,
+      "forecast_window": null,
       "params": 274626,
       "averageable": true
     },
@@ -1802,6 +1965,10 @@
       "model_type": "",
       "label": "Bidirectional LSTM",
       "batch": 512,
+      "forecast_window": {
+        "sequence_length": 60,
+        "forecast_horizon": 1
+      },
       "params": 554113,
       "averageable": true
     },
@@ -1813,6 +1980,10 @@
       "model_type": "",
       "label": "GRU",
       "batch": 512,
+      "forecast_window": {
+        "sequence_length": 60,
+        "forecast_horizon": 1
+      },
       "params": 160769,
       "averageable": true
     },
@@ -1824,6 +1995,10 @@
       "model_type": "",
       "label": "iTransformer",
       "batch": 64,
+      "forecast_window": {
+        "sequence_length": 96,
+        "forecast_horizon": 24
+      },
       "params": 610584,
       "averageable": true
     },
@@ -1835,6 +2010,10 @@
       "model_type": "",
       "label": "LSTM",
       "batch": 512,
+      "forecast_window": {
+        "sequence_length": 60,
+        "forecast_horizon": 1
+      },
       "params": 211585,
       "averageable": true
     },
@@ -1846,6 +2025,10 @@
       "model_type": null,
       "label": "Patch TSMixer",
       "batch": 64,
+      "forecast_window": {
+        "sequence_length": 96,
+        "forecast_horizon": 24
+      },
       "params": 84312,
       "averageable": true
     },
@@ -1857,6 +2040,10 @@
       "model_type": "",
       "label": "Patch TST",
       "batch": 64,
+      "forecast_window": {
+        "sequence_length": 96,
+        "forecast_horizon": 24
+      },
       "params": 404120,
       "averageable": true
     },
@@ -1868,6 +2055,10 @@
       "model_type": "",
       "label": "RNN",
       "batch": 512,
+      "forecast_window": {
+        "sequence_length": 60,
+        "forecast_horizon": 1
+      },
       "params": 59137,
       "averageable": true
     },
@@ -1879,6 +2070,10 @@
       "model_type": "",
       "label": "TCN",
       "batch": 512,
+      "forecast_window": {
+        "sequence_length": 60,
+        "forecast_horizon": 1
+      },
       "params": 142401,
       "averageable": true
     },
@@ -1890,6 +2085,10 @@
       "model_type": "",
       "label": "TFT",
       "batch": 64,
+      "forecast_window": {
+        "sequence_length": 96,
+        "forecast_horizon": 24
+      },
       "params": 1428312,
       "averageable": true
     },
@@ -1901,6 +2100,10 @@
       "model_type": "",
       "label": "Time Mixer",
       "batch": 64,
+      "forecast_window": {
+        "sequence_length": 96,
+        "forecast_horizon": 24
+      },
       "params": 227661,
       "averageable": true
     },
@@ -1912,6 +2115,10 @@
       "model_type": "",
       "label": "TimesFM",
       "batch": 16,
+      "forecast_window": {
+        "sequence_length": 512,
+        "forecast_horizon": 128
+      },
       "params": 498828960,
       "averageable": true
     },
@@ -1923,6 +2130,10 @@
       "model_type": "",
       "label": "Transformer",
       "batch": 512,
+      "forecast_window": {
+        "sequence_length": 60,
+        "forecast_horizon": 1
+      },
       "params": 274561,
       "averageable": true
     },
@@ -1934,6 +2145,7 @@
       "model_type": "",
       "label": "Cox PH",
       "batch": 128,
+      "forecast_window": null,
       "params": null,
       "averageable": true
     },
@@ -1945,6 +2157,7 @@
       "model_type": "",
       "label": "Log Logistic AFT",
       "batch": 128,
+      "forecast_window": null,
       "params": null,
       "averageable": true
     },
@@ -1956,6 +2169,7 @@
       "model_type": "",
       "label": "Log Normal AFT",
       "batch": 128,
+      "forecast_window": null,
       "params": null,
       "averageable": true
     },
@@ -1967,6 +2181,7 @@
       "model_type": "",
       "label": "Weibull AFT",
       "batch": 128,
+      "forecast_window": null,
       "params": null,
       "averageable": true
     },
@@ -1978,6 +2193,7 @@
       "model_type": "",
       "label": "DeepHit",
       "batch": 256,
+      "forecast_window": null,
       "params": 5898,
       "averageable": true
     },
@@ -1989,6 +2205,7 @@
       "model_type": "",
       "label": "DeepSurv",
       "batch": 128,
+      "forecast_window": null,
       "params": 2945,
       "averageable": true
     },
@@ -2000,6 +2217,7 @@
       "model_type": "",
       "label": "Dynamic DeepHit",
       "batch": 128,
+      "forecast_window": null,
       "params": 19914,
       "averageable": true
     },
@@ -2011,6 +2229,7 @@
       "model_type": "",
       "label": "Multilayer Norm",
       "batch": 128,
+      "forecast_window": null,
       "params": 10369,
       "averageable": true
     },
@@ -2022,6 +2241,7 @@
       "model_type": "",
       "label": "Simple Linear",
       "batch": 128,
+      "forecast_window": null,
       "params": 13,
       "averageable": true
     },
@@ -2033,6 +2253,7 @@
       "model_type": "",
       "label": "Simple Neural",
       "batch": 128,
+      "forecast_window": null,
       "params": 2945,
       "averageable": true
     },
@@ -2044,6 +2265,7 @@
       "model_type": "",
       "label": "Surv Trace",
       "batch": 128,
+      "forecast_window": null,
       "params": 101770,
       "averageable": true
     },
@@ -2055,6 +2277,7 @@
       "model_type": "",
       "label": "Cox PH",
       "batch": 128,
+      "forecast_window": null,
       "params": null,
       "averageable": true
     },
@@ -2066,6 +2289,7 @@
       "model_type": "",
       "label": "Gradient Boosted Survival",
       "batch": 128,
+      "forecast_window": null,
       "params": null,
       "averageable": true
     },
@@ -2077,6 +2301,7 @@
       "model_type": "",
       "label": "Random Survival Forest",
       "batch": 128,
+      "forecast_window": null,
       "params": null,
       "averageable": true
     },
@@ -2088,6 +2313,7 @@
       "model_type": "",
       "label": "BERT Token",
       "batch": 32,
+      "forecast_window": null,
       "params": 108898569,
       "averageable": true
     },
@@ -2099,6 +2325,7 @@
       "model_type": "",
       "label": "DeBERTa V3 Token",
       "batch": 16,
+      "forecast_window": null,
       "params": 183838473,
       "averageable": true
     },
@@ -2110,6 +2337,7 @@
       "model_type": "",
       "label": "Distil Token",
       "batch": 64,
+      "forecast_window": null,
       "params": 66369801,
       "averageable": true
     },
@@ -2121,6 +2349,7 @@
       "model_type": "",
       "label": "ELECTRA Token",
       "batch": 32,
+      "forecast_window": null,
       "params": 108898569,
       "averageable": true
     },
@@ -2132,6 +2361,7 @@
       "model_type": "",
       "label": "ModernBERT Token",
       "batch": 16,
+      "forecast_window": null,
       "params": 149611785,
       "averageable": true
     },
@@ -2143,6 +2373,7 @@
       "model_type": "",
       "label": "RoBERTa Token",
       "batch": 32,
+      "forecast_window": null,
       "params": 124061961,
       "averageable": true
     },
@@ -2154,6 +2385,7 @@
       "model_type": "",
       "label": "Simple Token",
       "batch": 32,
+      "forecast_window": null,
       "params": 6554697,
       "averageable": true
     },
@@ -2165,6 +2397,7 @@
       "model_type": "",
       "label": "XLM RoBERTa Token",
       "batch": 16,
+      "forecast_window": null,
       "params": 277459977,
       "averageable": true
     }
