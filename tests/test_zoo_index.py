@@ -9,7 +9,7 @@ those facts has to carry the index change with it.
 
 Each CI job recomputes the rows its framework can build and carries the rest
 from the committed file (see the builder's docstring). The static fields --
-id, upload, category, framework, model_type, label, batch -- and the set of templates
+id, upload, category, framework, model_type, label, batch, forecast_window -- and the set of templates
 are checked in every job.
 """
 
@@ -68,9 +68,16 @@ def test_the_index_has_one_row_per_template_with_every_field() -> None:
     assert ids == sorted(ids) and len(ids) == len(set(ids))
     assert len(ids) == len(build_index.discover())
     fields = {"id", "upload", "category", "framework", "model_type", "label", "batch"}
+    fields |= {"forecast_window"}
     for row in index["templates"]:
         assert set(row) == fields | {"params", "averageable"}, row["id"]
         assert isinstance(row["averageable"], bool), row["id"]
+        if row["category"] == build_index.FORECASTING:
+            window = row["forecast_window"]
+            assert set(window) == {"sequence_length", "forecast_horizon"}, row["id"]
+            assert all(type(v) is int and v > 0 for v in window.values()), row["id"]
+        else:
+            assert row["forecast_window"] is None, row["id"]
         if row["framework"] == "pytorch":
             assert type(row["params"]) is int and row["params"] > 0, row["id"]
             assert row["averageable"] is True, row["id"]
@@ -249,3 +256,28 @@ def test_rewrites_its_pickle(monkeypatch, estimator, rewrites) -> None:
         build_index.copyreg.dispatch_table, _Registered, lambda obj: (dict, ())
     )
     assert build_index._rewrites_its_pickle(estimator) is rewrites
+
+
+@pytest.mark.parametrize(
+    ("declared", "error"),
+    [
+        ({"sequence_length": 60}, "`forecast_horizon` must be a positive int literal"),
+        ({"sequence_length": 0, "forecast_horizon": 1}, "`sequence_length` must be"),
+        ({"sequence_length": None, "forecast_horizon": 1}, "`sequence_length` must be"),
+        ({"sequence_length": True, "forecast_horizon": 1}, "`sequence_length` must be"),
+    ],
+)
+def test_a_forecaster_without_a_whole_window_is_refused(declared, error) -> None:
+    consts = {"category": build_index.FORECASTING, **declared}
+    with pytest.raises(ValueError, match=error):
+        build_index.forecast_window(pathlib.PurePosixPath("f.py"), consts)
+
+
+def test_the_forecast_window_is_the_templates_own() -> None:
+    lstm = build_index.MODEL_ROOT / "time_series_forecasting" / "pytorch" / "lstm.py"
+    consts = build_index._module_constants(lstm)
+    window = build_index.forecast_window(pathlib.PurePosixPath("lstm.py"), consts)
+    assert window == {
+        "sequence_length": consts["sequence_length"],
+        "forecast_horizon": consts["forecast_horizon"],
+    }
