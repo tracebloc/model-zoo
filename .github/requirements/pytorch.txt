@@ -21,7 +21,8 @@
 # file triggers that workflow, and `engine-pin-drift-guard` runs
 # tools/check_engine_pin_drift.py against this file as well, so a bump ahead of
 # the engine goes red here instead of reaching the edge.
-pytest
+#
+# pytest is not one of the engine's pins, so it is pinned in test.txt instead.
 # CPU wheel index for torch/torchvision, so CI on a CPU runner does not pull the
 # ~2 GB CUDA wheel. Versions stay engine-pinned at 2.14.1 / 0.29.1; the
 # engine-pin drift guard reads only the `pkg==ver` lines, not this option, so
