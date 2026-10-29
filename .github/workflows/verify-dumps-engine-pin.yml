@@ -19,8 +19,20 @@ name: Verify dumps against engine pin
 # (internal ref) is the proof case — as dependabot opened it, it touched only
 # pytorch.txt, sat two minors ahead of the engine, and was all green. Both
 # halves are fixed below: the trigger, and the invocation.
+#
+# NOT ON PULL REQUESTS. This workflow reads state that lives outside this
+# repository (the engine's live pin, the dump manifest), so its verdict can
+# change with no change here, and it posts no check a pull request is
+# required to pass. A check like that cannot gate a pull request, so it runs
+# on the develop push (the paths
+# below), on the weekday schedule and by dispatch. A pin bump that drifts from
+# the engine shows red on the develop push that lands it; a pull request's own
+# copy of the checker still runs in ci.yml's tests. The pull-request branches
+# below (`github.base_ref`, `github.event_name == 'pull_request'`) are dormant,
+# and keep their guards: these jobs hold tokens, so they stay safe should a
+# pull_request trigger come back.
 on:
-  pull_request:
+  push:
     branches: [develop]
     paths:
       - "model_zoo/**"
@@ -37,22 +49,6 @@ on:
       # that mirrors an engine pin must arrive INSIDE the trigger, or it
       # repeats (internal ref) exactly. The guard job checks only the files that
       # actually mirror the engine, and a test asserts that set is complete.
-      - ".github/requirements/**"
-      - "manifest.json"
-      - ".github/workflows/verify-dumps-engine-pin.yml"
-  push:
-    branches: [develop]
-    paths:
-      - "model_zoo/**"
-      - "tools/prep_offline_weights.py"
-      - "tools/verify_dumps_against_engine_pin.py"
-      - "tools/check_engine_pin_drift.py"
-      - "tools/derive_seed_excluded.py"
-      - "tools/seed_contract.py"
-      - "tools/seed_index.py"
-      - "tools/check_dump_coverage.py"
-      - "tools/sync_zoo_weights.py"
-      - "tools/requirements-engine-pin.txt"
       - ".github/requirements/**"
       - "manifest.json"
       - ".github/workflows/verify-dumps-engine-pin.yml"
@@ -225,8 +221,9 @@ jobs:
   #    DEVELOP ONLY, NEVER A PULL REQUEST. Building a template runs its code,
   #    and this job holds the backend token and the store's credentials, so it
   #    runs develop's reviewed code alone: on the push, the schedule, and a
-  #    dispatch from develop. A PR gets `dump-manifest-guard`'s check that
-  #    every live entry resolves to a template. The sweep is off while the two
+  #    dispatch from develop. The workflow has no pull_request trigger today;
+  #    this `if:` keeps the sweep off pull requests should one come back,
+  #    where `dump-manifest-guard` alone would run. The sweep is off while the two
   #    store variables are unset; once they are set, a template that breaks its
   #    dump shows red on the develop push, not on the PR.
   #
@@ -532,7 +529,9 @@ jobs:
   #    every PR is ~92 model builds -- slow enough that people would route around
   #    it. A PR re-derives only the templates it TOUCHES, which is exactly where
   #    drift is introduced; the scheduled run re-derives everything, which is
-  #    where a drift introduced any other way gets caught.
+  #    where a drift introduced any other way gets caught. While the workflow
+  #    has no pull_request trigger, every run (push, schedule, dispatch) is the
+  #    full sweep.
   seed-contract-drift:
     needs: engine-pin-drift-guard
     # 60, not 30, and the reason is the full-sweep path rather than the common
