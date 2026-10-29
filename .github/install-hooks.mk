@@ -15,8 +15,11 @@
 # `git push --no-verify` skips it. It is written into this clone's own hooks directory,
 # `git rev-parse --git-path hooks`, which in a linked worktree (where `.git` is a file)
 # is the main clone's, so one install serves every worktree. It never writes global git
-# config, and it refuses, exit 1, when `core.hooksPath` is set (git would read a
-# different directory) or when a pre-push hook that is not this one is already there.
+# config, and it refuses, exit 1, when `core.hooksPath` is set in a config file (git
+# would read a different directory) or when a pre-push hook that is not this one is
+# already there. A `core.hooksPath` set for one command only (`git -c`, GIT_CONFIG_*:
+# the review desk's install points it at a throwaway directory) is that caller's choice:
+# the install writes nothing and exits 0.
 #
 # GNU make 3.81 or later (macOS ships 3.81): `define` without an operator, target-specific
 # `export`, `.DEFAULT_GOAL`.
@@ -49,10 +52,16 @@ fi
 # fails. Clear them so make check runs as it does from a shell.
 unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_PREFIX GIT_COMMON_DIR GIT_OBJECT_DIRECTORY
 
-# The hook outlives the targets it names: an older branch may have no check target.
-if ! make -n check >/dev/null 2>&1; then
-  echo "pre-push: make cannot plan a check target in this checkout, so nothing ran; the push proceeds."
-  exit 0
+# The hook outlives the targets it names: only a branch with no check target passes unchecked.
+if ! plan_out="$$(LC_ALL=C make -n check 2>&1)"; then
+  case "$$plan_out" in
+    *"No rule to make target 'check'."*|*"No rule to make target \`check'."*)
+      echo "pre-push: this checkout has no check target, so nothing ran; the push proceeds."
+      exit 0 ;;
+  esac
+  printf '%s\n' "$$plan_out"
+  echo "pre-push: make cannot plan check (above), so the push is refused."
+  exit 1
 fi
 
 # guard-toolchain, where a repo has one, says whether the tools check needs are on PATH.
@@ -76,6 +85,10 @@ install-hooks:
 	  exit 0; \
 	fi; \
 	hp="$$(git config --get core.hooksPath || true)"; \
+	if [ -n "$$hp" ] && [ "$$(git config --show-scope --get core.hooksPath 2>/dev/null | cut -f1)" = command ]; then \
+	  echo "install-hooks: core.hooksPath is '$$hp' for this command alone (git -c or GIT_CONFIG_*), so its caller chose where hooks go; nothing installed"; \
+	  exit 0; \
+	fi; \
 	if [ -n "$$hp" ]; then \
 	  echo "install-hooks: core.hooksPath is set to '$$hp', so git would not read a hook installed in this clone." >&2; \
 	  echo "  Unset it (git config --unset core.hooksPath, with --global if it is set there), then run make install-hooks again." >&2; \
