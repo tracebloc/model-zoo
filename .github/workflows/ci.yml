@@ -45,7 +45,7 @@ jobs:
           python-version: "3.11"
           cache: pip
           cache-dependency-path: .github/requirements/pytorch.txt
-      - run: pip install -r .github/requirements/pytorch.txt
+      - run: pip install -r .github/requirements/test.txt -r .github/requirements/pytorch.txt
       - run: pytest tests/ -v
 
   test-sklearn:
@@ -58,7 +58,7 @@ jobs:
           python-version: "3.11"
           cache: pip
           cache-dependency-path: .github/requirements/sklearn.txt
-      - run: pip install -r .github/requirements/sklearn.txt
+      - run: pip install -r .github/requirements/test.txt -r .github/requirements/sklearn.txt
       - run: pytest tests/ -v
 
   test-survival:
@@ -71,7 +71,7 @@ jobs:
           python-version: "3.11"
           cache: pip
           cache-dependency-path: .github/requirements/survival.txt
-      - run: pip install -r .github/requirements/survival.txt
+      - run: pip install -r .github/requirements/test.txt -r .github/requirements/survival.txt
       - run: pytest tests/ -v
 
   # ── Every template uploads the way a user uploads it from a clone ──
@@ -94,7 +94,7 @@ jobs:
           cache-dependency-path: |
             .github/requirements/pytorch.txt
             .github/requirements/sdk.txt
-      - run: pip install -r .github/requirements/sdk.txt
+      - run: pip install -r .github/requirements/test.txt -r .github/requirements/sdk.txt
       - name: The pinned SDK's upload checks pass on every template as cloned
         env:
           MODEL_ZOO_SDK_UPLOAD: "1"
@@ -240,9 +240,8 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.11"
-      # Stdlib only beyond pytest; unpinned for the reason the framework
-      # requirement files give.
-      - run: pip install pytest
+      # Stdlib only beyond pytest, at test.txt's pin.
+      - run: pip install -r .github/requirements/test.txt
       - name: model_zoo/ agrees with the vendored category enum
         run: pytest tests/test_zoo_category_contract.py -v
       # Runs even when the step above is red, so one run reports both layers.
