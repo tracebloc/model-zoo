@@ -376,7 +376,8 @@ def _provenance_keys() -> tuple[str, ...]:
 
 
 # --------------------------------------------------------------------------
-# LEG 1 — THE TRIGGER. A pytorch.txt-only PR must fire the workflow.
+# LEG 1 — THE TRIGGER. A pytorch.txt-only change must fire the workflow on the
+# develop push, and no pull request may.
 # --------------------------------------------------------------------------
 def test_THE_WORKFLOW_RUNS_ON_NO_PULL_REQUEST():
     """It reads state outside this repository and posts no required check, so

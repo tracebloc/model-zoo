@@ -221,11 +221,11 @@ jobs:
   #    DEVELOP ONLY, NEVER A PULL REQUEST. Building a template runs its code,
   #    and this job holds the backend token and the store's credentials, so it
   #    runs develop's reviewed code alone: on the push, the schedule, and a
-  #    dispatch from develop. The workflow has no pull_request trigger today;
-  #    this `if:` keeps the sweep off pull requests should one come back,
-  #    where `dump-manifest-guard` alone would run. The sweep is off while the two
-  #    store variables are unset; once they are set, a template that breaks its
-  #    dump shows red on the develop push, not on the PR.
+  #    dispatch from develop. This `if:` keeps the sweep off pull requests
+  #    should a pull_request trigger come back, where `dump-manifest-guard`
+  #    alone would run. The sweep is off while the two store variables are
+  #    unset; once they are set, a template that breaks its dump shows red on
+  #    the develop push, not on the PR.
   #
   #    NOTHING FROM THE MANIFEST REACHES THE LOG. The fetch hook's and the
   #    verifier's output name manifest entries, so each goes to a file on the
