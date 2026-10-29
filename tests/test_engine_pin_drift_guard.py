@@ -27,6 +27,10 @@ survived. The trigger half reads the real ``paths:`` lists back out of the
 YAML and matches the real filename against them; the invocation half runs the
 step's own shell against a synthetic engine pin and requires it to REFUSE.
 
+The trigger is the develop push (with the weekday schedule), not the pull
+request: the workflow reads state outside this repository, so it cannot gate
+a pull request. A test below holds that it has no pull_request trigger.
+
 No PyYAML. This suite runs in all three CI framework envs
 (``.github/requirements/{pytorch,sklearn,survival}.txt``) and none installs
 it, so a test that imported it would skip in all three — i.e. never run, which
@@ -56,6 +60,9 @@ TOOLS_MIRROR = "tools/requirements-engine-pin.txt"
 CI_MIRROR = ".github/requirements/pytorch.txt"
 REQUIREMENTS_DIR = REPO_ROOT / ".github" / "requirements"
 GUARD_JOB = "engine-pin-drift-guard"
+#: The events whose ``paths:`` filter must fire the guard. The develop push
+#: alone: the workflow has no pull_request trigger (see the test below).
+PATH_EVENTS = ("push",)
 GUARD_STEP = "Assert every mirror matches the engine's pin"
 
 # The engine's torch/torchvision come from requirements_cuda.txt, everything
@@ -208,6 +215,22 @@ def _triggers(path: str, event: str) -> bool:
     return any(_glob_matches(p, path) for p in _event_paths(event))
 
 
+def _on_events(text: str | None = None) -> list[str]:
+    """The event keys of the top-level ``on:`` block, as written."""
+    lines = (WORKFLOW.read_text() if text is None else text).splitlines()
+    assert "on:" in lines, f"no top-level `on:` block in {WORKFLOW}"
+    events: list[str] = []
+    for line in lines[lines.index("on:") + 1 :]:
+        # A non-blank, non-comment line at column 0 is the next top-level key.
+        if line.strip() and not line.startswith((" ", "#")):
+            break
+        m = re.match(r"^  ([A-Za-z_]+):", line)
+        if m:
+            events.append(m.group(1))
+    assert events, f"`on:` in {WORKFLOW} declares no event"
+    return events
+
+
 def _job_block(job: str = GUARD_JOB, text: str | None = None) -> str:
     """One job's YAML as text, sliced to the next top-level key at its indent."""
     text = WORKFLOW.read_text() if text is None else text
@@ -353,11 +376,24 @@ def _provenance_keys() -> tuple[str, ...]:
 
 
 # --------------------------------------------------------------------------
-# LEG 1 — THE TRIGGER. A pytorch.txt-only PR must fire the workflow.
+# LEG 1 — THE TRIGGER. A pytorch.txt-only change must fire the workflow on the
+# develop push, and no pull request may.
 # --------------------------------------------------------------------------
+def test_THE_WORKFLOW_RUNS_ON_NO_PULL_REQUEST():
+    """It reads state outside this repository and posts no required check, so
+    it is off the pull-request path: the develop push and the weekday schedule
+    run it. A pull_request trigger coming back puts it on every PR again."""
+    events = _on_events()
+    assert not [e for e in events if e.startswith("pull_request")], (
+        f"{WORKFLOW.name} runs on pull requests again: {events}"
+    )
+    for kept in ("push", "schedule"):
+        assert kept in events, f"{WORKFLOW.name} lost its `{kept}` trigger: {events}"
+
+
 def test_the_paths_extractor_reads_the_real_filters():
     """The extractor itself, because both trigger tests trust its boundaries."""
-    for event in ("pull_request", "push"):
+    for event in PATH_EVENTS:
         entries = _event_paths(event)
         assert "model_zoo/**" in entries, f"on.{event}.paths looks mis-sliced: {entries}"
         assert TOOLS_MIRROR in entries, f"on.{event}.paths lost the tools/ mirror"
@@ -368,9 +404,9 @@ def test_the_paths_extractor_reads_the_real_filters():
 
 def test_A_PYTORCH_TXT_ONLY_CHANGE_TRIGGERS_THE_WORKFLOW():
     """(internal ref) leg 1. Without this the guard cannot fail because it never runs."""
-    for event in ("pull_request", "push"):
+    for event in PATH_EVENTS:
         assert _triggers(CI_MIRROR, event), (
-            f"on.{event}.paths does not match {CI_MIRROR}: a PR touching only "
+            f"on.{event}.paths does not match {CI_MIRROR}: a change touching only "
             f"the CI pytorch mirror fires no job at all (internal ref). Filters: "
             f"{_event_paths(event)}"
         )
@@ -378,15 +414,15 @@ def test_A_PYTORCH_TXT_ONLY_CHANGE_TRIGGERS_THE_WORKFLOW():
 
 def test_the_tools_mirror_still_triggers_the_workflow():
     """Adding the second mirror must not cost the first one its trigger."""
-    for event in ("pull_request", "push"):
+    for event in PATH_EVENTS:
         assert _triggers(TOOLS_MIRROR, event)
 
 
 def test_the_filter_is_not_a_CATCH_ALL():
     """The control. If everything matched, the test above would be vacuous —
-    and the workflow would run its 60-minute sweep on every PR ((internal ref)'s
-    acceptance: a PR touching neither mirror still skips)."""
-    for event in ("pull_request", "push"):
+    and the workflow would run its 60-minute sweep on every develop push
+    ((internal ref)'s acceptance: a change touching neither mirror still skips)."""
+    for event in PATH_EVENTS:
         for untouched in ("README.md", "LICENSE", "CLAUDE.md", "Makefile"):
             assert not _triggers(untouched, event), (
                 f"on.{event}.paths matches {untouched}: the filter has become a "
