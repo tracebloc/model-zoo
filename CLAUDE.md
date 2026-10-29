@@ -4,6 +4,12 @@ Repo-specific guidance for Claude Code sessions goes here, above the
 managed org block: build/test commands, architecture notes, gotchas,
 and this repo's default reviewer. Rollout: (internal ref).
 
+## Before you push
+
+`make check` runs the checks CI runs, and the pre-push hook runs it before every push.
+`make setup` installs the hook in this clone, which covers every worktree of it, and
+`make hooks-status` says whether the installed hook is current.
+
 <!-- org-standards:begin -->
 ## tracebloc engineering standards (org-wide)
 

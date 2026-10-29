@@ -97,21 +97,8 @@ setup:
 	@echo "==> setup: lint + $(FRAMEWORK) requirements installed; run 'make check'"
 	@$(MAKE) --no-print-directory install-hooks
 
-# install-hooks: put a pre-push hook in place that runs `make check`, so the
-# canon's "run the tests before you push" is carried by the tooling rather than
-# by memory. Factored out of `setup` so it is independently runnable and
-# testable, and so a contributor who only wants the hook need not rerun the
-# full `make setup`.
-#
-# Honest by design: the hook catches FORGETTING, not defiance — `git push
-# --no-verify` skips it and always will. And it refuses to clobber a pre-push
-# hook that is already there and not ours (e.g. one the pre-commit framework
-# manages), rather than silently stomping a contributor's setup.
-#
-# `git rev-parse --git-path hooks` (not a hard-coded `.git/hooks`) so it lands
-# in the right place inside a linked worktree or a submodule, where the git dir
-# is not `.git`.
-# test-hooks: run the install-hooks / pre-push-hook behaviour suite on demand.
+# test-hooks: run the Makefile's own behaviour tests (guard-toolchain) on demand;
+# the installer and its hook are the generated snippet's, tested where it lives.
 # Not a `check` dependency: it runs real `make` in throwaway repos, so an
 # environment quirk (old git, noexec /tmp) could block a local push on something
 # CI never sees. Run it directly with `make test-hooks`.
@@ -119,89 +106,10 @@ setup:
 test-hooks:
 	@sh scripts/tests/test-pre-push-hook.sh
 
-.PHONY: install-hooks
-install-hooks:
-	@if ! git rev-parse --git-dir >/dev/null 2>&1; then \
-	  echo "note: not a git checkout — skipping pre-push hook install"; \
-	elif hp="$$(git config --get core.hooksPath 2>/dev/null || true)"; [ -n "$$hp" ] && { \
-	       hd="$$(git rev-parse --git-path hooks)"; \
-	       case "$$hd" in /*) hdd="$$hd";; *) hdd="$$PWD/$$hd";; esac; \
-	       hdx="$$hdd"; sfx=''; \
-	       while [ ! -d "$$hdx" ] && [ "$$hdx" != "$$(dirname "$$hdx")" ]; do \
-	         sfx="$$(basename "$$hdx")/$$sfx"; hdx="$$(dirname "$$hdx")"; \
-	       done; \
-	       chd="$$(cd "$$hdx" 2>/dev/null && pwd -P || true)"; \
-	       ctop="$$(cd "$$(git rev-parse --show-toplevel)" && pwd -P)"; \
-	       cgd="$$(cd "$$(git rev-parse --git-common-dir)" 2>/dev/null && pwd -P || true)"; \
-	       inr=0; \
-	       case "$$chd/" in "$$ctop/"*) inr=1;; esac; \
-	       if [ -n "$$cgd" ]; then case "$$chd/" in "$$cgd/"*) inr=1;; esac; fi; \
-	       case "/$$sfx" in */../*) inr=0;; esac; \
-	       [ -z "$$chd" ] || [ "$$inr" = 0 ]; \
-	     }; then \
-	  echo "note: core.hooksPath is set to '$$hp', outside this repo — skipping."; \
-	  echo "      That is a shared hooks dir; installing here would run 'make check' from every repo you push."; \
-	  echo "      Add 'make check' to that hook by hand if you want it everywhere."; \
-	else \
-	  hook="$$(git rev-parse --git-path hooks)/pre-push"; \
-	  if [ -e "$$hook" ] && ! grep -q 'tracebloc pre-push hook' "$$hook" 2>/dev/null; then \
-	    echo "note: $$hook already exists and is not ours — leaving it untouched."; \
-	    echo "      add 'make check' to it, or remove it and re-run 'make install-hooks'."; \
-	  else \
-	    mkdir -p "$$(dirname "$$hook")" && \
-	    printf '%s\n' \
-	      '#!/bin/sh' \
-	      '# tracebloc pre-push hook installed by make setup.' \
-	      '# Runs make check so a push that would be red in CI is caught locally first.' \
-	      '# It catches forgetting, not defiance: git push --no-verify skips it.' \
-	      '#' \
-	      '# Nothing to check on a delete/no-op push: a branch delete streams a' \
-	      '# local sha of all-zeros on stdin (no new commits). Skip so a red tree' \
-	      '# cannot block "git push --delete", and cleanup pushes stay free.' \
-	      'z=0000000000000000000000000000000000000000' \
-	      'had_update=0' \
-	      'while read -r _ local_sha _ _; do' \
-	      '  [ "$$local_sha" != "$$z" ] && had_update=1' \
-	      'done' \
-	      '[ "$$had_update" = 0 ] && exit 0' \
-	      '#' \
-	      '# Degrade gracefully when the toolchain is absent: GUI/IDE git clients' \
-	      '# (Tower, GitKraken, VS Code) launch hooks with a minimal PATH, so make' \
-	      '# may be missing — and several do not expose --no-verify. Skipping beats' \
-	      '# hard-blocking every push with "make: command not found".' \
-	      'command -v make >/dev/null 2>&1 || exit 0' \
-	      '#' \
-	      '# Git exports GIT_DIR/GIT_WORK_TREE/etc into hook processes; a nested git' \
-	      '# invocation (from a test, tool, or setuptools-scm) then fails in a linked' \
-	      '# worktree with exit status 128. Clear them so the make runs below behave' \
-	      '# as they do from an ordinary shell.' \
-	      'unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_PREFIX GIT_COMMON_DIR GIT_OBJECT_DIRECTORY' \
-	      '#' \
-	      '# Guarding on make alone was not enough: a GUI/IDE client' \
-	      '# commonly has system make on a thin PATH but not the virtualenv these' \
-	      '# checks run in, so the skip above passed and the push then hard-failed on' \
-	      '# "No module named ruff" — the exact outcome the skip exists to prevent,' \
-	      '# with no --no-verify to escape. The hook delegates to guard-toolchain,' \
-	      '# the single place the tool list lives, rather than restating it here — so' \
-	      '# the hook cannot drift from it. guard-toolchain probes the TOOLS check' \
-	      '# runs, not installed packages (a broken venv still fails make check in a shell).' \
-	      '#' \
-	      '# This hook lives in .git/hooks and runs against whatever Makefile the' \
-	      '# pushed branch has, so it can OUTLIVE any target it names — an older' \
-	      '# branch, staging before the train lands, or no Makefile at all. make' \
-	      '# exits 2 for a MISSING TARGET exactly as for a failed recipe, so probe' \
-	      '# every target with -n: an absent check (or Makefile) soft-passes rather' \
-	      '# than hard-blocking a push that has no --no-verify, and an absent' \
-	      '# guard-toolchain falls through to make check instead of skipping it' \
-	      '# silently.' \
-	      'make -n check >/dev/null 2>&1 || exit 0' \
-	      'if make -n guard-toolchain >/dev/null 2>&1; then make guard-toolchain >/dev/null 2>&1 || exit 0; fi' \
-	      'exec make check' > "$$hook" && \
-	    chmod +x "$$hook" && \
-	    echo "==> pre-push hook installed at $$hook" && \
-	    echo "    'make check' now runs before each push (skip once with: git push --no-verify)"; \
-	  fi; \
-	fi
+# The one pre-push installer, generated: `make install-hooks` writes the hook that runs
+# `make check`, `make hooks-status` says whether it is current. Never edit
+# .github/install-hooks.mk here; it is rendered from the org's canonical copy.
+include .github/install-hooks.mk
 
 # ---- individual targets ------------------------------------------
 
