@@ -31,7 +31,7 @@ jobs:
       # contributor's pre-push hook is the wrong way round.
       #
       # The pin is already single-source and stays that way: lint.txt declares
-      # ruff==0.15.20, this step installs it, and `make setup` installs the same
+      # ruff==0.16.0, this step installs it, and `make setup` installs the same
       # file.
       - run: make lint
 
