@@ -1,0 +1,4 @@
+# The test runner, pinned so a new pytest release cannot change a run without a pull
+# request. It is not one of the engine's pins, so it lives here, apart from the
+# framework files that mirror them; ci.yml and `make setup` install it beside them.
+pytest==9.2.0

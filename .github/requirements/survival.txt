@@ -13,9 +13,6 @@
 # entire point -- and it is a comment, not a check, until (internal ref) lands
 # the scheduled drift detection.
 #
-# pytest is deliberately NOT pinned: it does not appear in the engine's
-# requirements, so there is nothing to sync it to, and inventing a pin would
-# assert an agreement that does not exist. Same call as the pytorch env.
-pytest
+# pytest is not one of the engine's pins, so it is pinned in test.txt instead.
 lifelines==0.30.3
 scikit-survival==0.27.0

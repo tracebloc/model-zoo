@@ -93,7 +93,7 @@ check-all: lint
 setup:
 	$(PYTHON) -m pip install --upgrade pip
 	$(PYTHON) -m pip install -r .github/requirements/lint.txt
-	$(PYTHON) -m pip install -r .github/requirements/$(FRAMEWORK).txt
+	$(PYTHON) -m pip install -r .github/requirements/test.txt -r .github/requirements/$(FRAMEWORK).txt
 	@echo "==> setup: lint + $(FRAMEWORK) requirements installed; run 'make check'"
 	@$(MAKE) --no-print-directory install-hooks
 
