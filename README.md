@@ -67,3 +67,5 @@ If you're uploading **your own** model and want to bundle pretrained weights wit
 Apache 2.0 — see [LICENSE](LICENSE).
 
 **Questions?** [support@tracebloc.io](mailto:support@tracebloc.io) or [open an issue](https://github.com/tracebloc/model-zoo/issues).
+
+**Found a security vulnerability?** Report it privately: see [SECURITY.md](SECURITY.md).
