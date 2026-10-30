@@ -1,9 +1,9 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/naming-guard.yml`
-# (blob a37fa5fff01f0ca7b5fd58e373866b5b0abdba86) folded with the private source repo's own caller of it,
+# (blob 85792df759dbfde87de811b0b3170ac430635503) folded with the private source repo's own caller of it,
 # job `naming` of `.github/workflows/ci.yml` with that file's `on:` and
-# `permissions:` (blob b3ce07c2477acde3c2c8366688d97cfecd35b033 of those lines; its
+# `permissions:` (blob 916e70428b7ecbaf72722e1d914397f1832885a1 of those lines; its
 # `concurrency:` is one group for every job it runs, so it is not
 # carried), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
@@ -94,11 +94,12 @@ name: Naming guard
 # WHAT A CALLER MUST TRIGGER ON, and the caller job's id:
 #   pull_request: [opened, synchronize, reopened, ready_for_review] -- a new head needs a run
 #                 of its own, or the context is missing on it once required;
-#   merge_group:  -- FROM DAY ONE, on every repo (it never fires where no merge queue runs):
-#                 a required context must report on the queue's commit or the queue removes
-#                 the PR with `checks_timed_out` ((internal ref)). The queue commit is
-#                 judged like a PR head, against `merge_group.base_sha`, so it re-runs the
-#                 same verdict on what the queue is about to merge;
+#   merge_group:  -- ONLY on a repo whose protected branch merges through a merge queue:
+#                 there a required context must report on the queue's commit or the queue
+#                 removes the PR with `checks_timed_out` ((internal ref)); anywhere
+#                 else it never fires, so it is not declared ((internal ref)). The
+#                 queue commit is judged like a PR head, against `merge_group.base_sha`, so it
+#                 re-runs the same verdict on what the queue is about to merge;
 #   jobs: naming: uses: this file -- `naming` plus this job's `check` is the context name,
 #   `naming / check`, that branch protection keys on at step 4.
 # NO `paths:` OR `branches:` FILTER in a caller: a filtered required check never reports on
@@ -114,7 +115,6 @@ name: Naming guard
 on:
   pull_request:
     types: [opened, reopened, synchronize]
-  merge_group:
 
 permissions:
   contents: read
