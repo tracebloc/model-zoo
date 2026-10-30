@@ -42,7 +42,7 @@ user = User()  # log in with your tracebloc email + password
 user.uploadModel("model-zoo/model_zoo/image_classification/pytorch/resnet_18.py")
 ```
 
-Full walkthrough → [Open the training notebook in Colab](https://colab.research.google.com/drive/1N00idtpoaq1lk9OJE6g4bMqd8o-Qex2C?usp=sharing)
+Full walkthrough → [run the training notebook in your own Jupyter](https://github.com/tracebloc/quickstart/blob/main/notebooks/traceblocTrainingGuide.ipynb)
 
 ## Index
 
@@ -60,7 +60,7 @@ If you're uploading **your own** model and want to bundle pretrained weights wit
 
 ## Links
 
-[Platform](https://ai.tracebloc.io/) · [Docs](https://docs.tracebloc.io/) · [Training notebook](https://colab.research.google.com/drive/1N00idtpoaq1lk9OJE6g4bMqd8o-Qex2C?usp=sharing) · [PyPI package](https://pypi.org/project/tracebloc-package/) · [Discord](https://discord.gg/tracebloc)
+[Platform](https://ai.tracebloc.io/) · [Docs](https://docs.tracebloc.io/) · [Training notebook](https://github.com/tracebloc/quickstart/blob/main/notebooks/traceblocTrainingGuide.ipynb) · [PyPI package](https://pypi.org/project/tracebloc-package/) · [Discord](https://discord.gg/tracebloc)
 
 ## License
 
