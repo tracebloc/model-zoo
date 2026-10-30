@@ -3,7 +3,7 @@
 # Self-contained copy of the reusable workflow `.github/workflows/code-quality.yml`
 # (blob ae62cd4340c27e0c42b0dafe6e59f9bcb1aa738e) folded with the private source repo's own caller of it,
 # job `quality` of `.github/workflows/ci.yml` with that file's `on:` and
-# `permissions:` (blob 5f52e88f6154b7d545ea46c9aa129d3ea597f715 of those lines; its
+# `permissions:` (blob ffc33eb4910df7737d1155a0e0700a85212009f0 of those lines; its
 # `concurrency:` is one group for every job it runs, so it is not
 # carried), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
@@ -123,7 +123,6 @@ name: Code quality
 on:
   pull_request:
     types: [opened, reopened, synchronize]
-  merge_group:
 
 # THE DIFF BASE, DECLARED ONCE ((internal ref)). Five jobs scan "the files this
 # change touches"; each used to carry its own `BASE_SHA`, and on a MERGE_GROUP

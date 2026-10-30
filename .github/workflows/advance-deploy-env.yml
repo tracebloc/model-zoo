@@ -1,7 +1,7 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/advance-deploy-env.yml`
-# (blob 0ebde3008740f7d0de046a946fae55cd76a4d985) folded with the private source repo's own caller of it,
+# (blob 9887ff6eb4bbe80a0fbd4af3e9f917d09ac1af8b) folded with the private source repo's own caller of it,
 # `.github/workflows/advance-deploy-env-caller.yml` (blob 5de24d409e5bbf2bccbb720912cd551cbe33b040), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
@@ -410,9 +410,9 @@ jobs:
             else
               err="$body"
             fi
-            # ARCHIVED BETWEEN THE LOOKUP AND THIS WRITE ((internal ref)): the
-            # router archives a promotion PR's card when it closes, concurrently
-            # with this push's run, so the `isArchived` skip below can read a live
+            # ARCHIVED BETWEEN THE LOOKUP AND THIS WRITE ((internal ref)): a card can
+            # be archived concurrently with this push's run (the daily kanban-archive,
+            # or a person), so the `isArchived` skip below can read a live
             # card that GitHub then refuses to update. That refusal is the
             # pre-check's own answer, arrived late -- out of the deploy flow, a
             # clean skip -- and the card's remaining writes are skipped with it.

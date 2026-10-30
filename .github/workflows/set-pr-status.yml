@@ -1,7 +1,7 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/set-pr-status.yml`
-# (blob fbf4fd4c82dde082ecf2765cc353176323d11902) folded with the private source repo's own caller of it,
+# (blob 44b48e639177aee1dbb0cc13aa83994e349c201b) folded with the private source repo's own caller of it,
 # `.github/workflows/set-pr-status-caller.yml` (blob cc75117351e328f2bf64c58d7c9a2ef9b13e33e4), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
@@ -67,6 +67,14 @@ name: Set PR card Status on project
 # the SAME event that puts a card in `Code review`, and (3) needs no new
 # `repo-inventory.yml` row (the inventory tracks callers, one row per reusable).
 # It is a required status check nowhere, and advisory by default ((internal ref)).
+#
+# NEITHER JOB RUNS ON A TRAIN PROMOTION ((internal ref)): a promotion PR is the
+# train's plumbing, not a work item, so it gets no Status and no closing-ref run. Each
+# job's `if:` carries the guard: `is_promo(head, base)` in scripts/desk-dispatch.py, plus
+# one clause, the base is not the repo's default branch, so a PR into a main-only repo's
+# `main` from a train-named branch is never taken for one. scripts/tests/callershape.py
+# `board_guard_findings` evaluates the guard against the real `is_promo`, and against
+# every branch whose protection requires the job's context, where it must never skip.
 
 on:
   pull_request:
@@ -126,7 +134,12 @@ jobs:
   # over anything at or beyond the first post-merge column.
   set-status:
     name: set-status / set-status
-    if: ${{ github.event.pull_request.state == 'open' }}
+    if: >-
+      github.event.pull_request.state == 'open'
+      && !((startsWith(github.event.pull_request.head.ref, 'release-train/')
+      || startsWith(github.event.pull_request.head.ref, 'hotfix-backmerge/'))
+      && contains(fromJSON('["staging", "main", "master"]'), github.event.pull_request.base.ref)
+      && github.event.pull_request.base.ref != github.event.repository.default_branch)
     runs-on: ubuntu-slim  # runner: hosted (ubuntu-slim)
     # Declared because `ubuntu-slim` kills at its 15-minute cap with no timeout
     # report ((internal ref) item 2; scripts/runner-tier.py asserts it for every
@@ -516,7 +529,12 @@ jobs:
     # Open PRs only: on a merged PR this would be advice about a merge that
     # already happened, and a late red X on a shipped PR teaches people to ignore
     # the check (rule 4). A retitle happens while the PR is open, when this runs.
-    if: ${{ true && github.event.pull_request.state == 'open' }}
+    if: >-
+      true && github.event.pull_request.state == 'open'
+      && !((startsWith(github.event.pull_request.head.ref, 'release-train/')
+      || startsWith(github.event.pull_request.head.ref, 'hotfix-backmerge/'))
+      && contains(fromJSON('["staging", "main", "master"]'), github.event.pull_request.base.ref)
+      && github.event.pull_request.base.ref != github.event.repository.default_branch)
     runs-on: ubuntu-slim  # runner: hosted (ubuntu-slim)
     timeout-minutes: 5
     steps:
