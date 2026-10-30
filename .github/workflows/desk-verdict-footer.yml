@@ -1,7 +1,7 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/desk-verdict-footer.yml`
-# (blob 9b790f8e5a6fb1752fe92289a7d730c45b19fece) folded with the private source repo's own caller of it,
+# (blob a0f0c03978b15196b421834a11f6b3b96cb289a3) folded with the private source repo's own caller of it,
 # `.github/workflows/desk-verdict-footer-caller.yml` (blob bcee1883d619384ab1440cca73b88bbf012e425f), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
@@ -98,9 +98,12 @@ name: Desk verdict footer
 # suite created after an APPROVE reads a list that holds it (the script re-reads until it
 # holds the review that started the run: EVENT_REVIEW_ID).
 #
-# NO JOB-LEVEL `if:`, and none may be added: a job skipped by a condition reports SUCCESS,
-# so a skip on any event would read as a pass over an earlier red. Every event judges the
-# whole PR. NO `paths:` OR `branches:` FILTER in a caller either: a filtered required check
+# ONE JOB-LEVEL `if:`, THE PROMOTION GUARD, AND NO OTHER: a job skipped by a condition
+# reports SUCCESS, so a skip on any other event would read as a pass over an earlier red.
+# Every event judges the whole PR. A train promotion skips ((internal ref)):
+# the desk never reviews one, so there is no APPROVE to judge, and the guard never skips
+# where protection requires this context -- set-pr-status.yml's header says how that holds.
+# NO `paths:` OR `branches:` FILTER in a caller either: a filtered required check
 # never reports on the PR it skips (a base retargeted to `develop` included).
 #
 # WHAT A CALLER MUST TRIGGER ON, and the caller job's id:
@@ -152,6 +155,11 @@ permissions:
 jobs:
   verdict-footer:
     name: desk / verdict-footer
+    if: >-
+      !((startsWith(github.event.pull_request.head.ref, 'release-train/')
+      || startsWith(github.event.pull_request.head.ref, 'hotfix-backmerge/'))
+      && contains(fromJSON('["staging", "main", "master"]'), github.event.pull_request.base.ref)
+      && github.event.pull_request.base.ref != github.event.repository.default_branch)
     # `ubuntu-slim` ((internal ref)): one mint, two shallow checkouts, one or two
     # paged `gh api` reads -- a one-minute job.
     runs-on: ubuntu-slim  # runner: hosted (ubuntu-slim)
