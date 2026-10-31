@@ -32,6 +32,10 @@ PYTEST ?= $(PYTHON) -m pytest
 # .github/requirements/<name>.txt `make setup` installs.
 FRAMEWORK ?= pytorch
 
+# The venv `mutation-nightly` runs in. Its own, because the weekly runner's
+# python3 is externally managed (PEP 668); point it at an existing one to reuse it.
+MUTATION_VENV ?= .venv-mutation
+
 .PHONY: help
 help:
 	@echo "tracebloc/model-zoo — make targets"
@@ -42,6 +46,9 @@ help:
 	@echo "  install-hooks  (re)install the git pre-push hook that runs 'make check'"
 	@echo
 	@echo "  individual: lint test index"
+	@echo
+	@echo "  mutation-nightly  every mutation row, in its own venv (MUTATION_VENV);"
+	@echo "                    the weekly run. pytest tests/ and check deselect them."
 	@echo
 	@echo "  CI runs 'pytest tests/' three times, once per framework env:"
 	@echo "  pytorch, sklearn, survival. Locally you have one."
@@ -120,10 +127,22 @@ include .github/install-hooks.mk
 lint:
 	$(PYTHON) -m ruff check --select=F401,F821,E9 model_zoo/
 
-# test: ci.yml's `pytest tests/` (one framework env at a time locally).
+# test: ci.yml's `pytest tests/` (one framework env at a time locally). Like
+# ci.yml, it deselects the mutation rows: `mutation-nightly` runs them.
 .PHONY: test
 test:
 	$(PYTEST) tests/ -q
+
+# mutation-nightly: every mutation row and nothing else, and non-zero on any
+# failure: the entry .github/workflows/mutation-nightly.yml runs weekly. The rows
+# files come from .github/mutation-coverage.yml through tests/mutation_selection.py,
+# which also picks the rows inside them; they import only the stdlib and pytest.
+.PHONY: mutation-nightly
+mutation-nightly:
+	[ -x "$(MUTATION_VENV)/bin/python" ] || $(PYTHON) -m venv "$(MUTATION_VENV)"
+	"$(MUTATION_VENV)/bin/python" -m pip install --quiet --disable-pip-version-check -r .github/requirements/test.txt
+	files="$$($(PYTHON) tests/mutation_selection.py)" && \
+	  "$(MUTATION_VENV)/bin/python" -m pytest --mutation-rows -v $$files
 
 # index: rebuild model_zoo/index.v1.json after changing a template's
 # batch_size, architecture or estimator. tests/test_zoo_index.py fails until the

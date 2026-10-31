@@ -51,7 +51,18 @@ _PREP = _prep_offline_weights()
 # The `ingest_producer` marker: deselected unless `-m` names it. The hooks live in
 # their own file so the category-gate tests can drive the SAME hooks in a throwaway
 # session; see tests/ingest_producer_marker.py for why deselected, not skipped.
-from ingest_producer_marker import pytest_collection_modifyitems, pytest_configure  # noqa: E402,F401
+import ingest_producer_marker  # noqa: E402
+from ingest_producer_marker import pytest_configure  # noqa: E402,F401
+
+# The mutation rows: deselected unless --mutation-rows, which deselects everything
+# else (the weekly run). The rule and its refusals: tests/mutation_selection.py.
+import mutation_selection  # noqa: E402
+from mutation_selection import pytest_addoption, pytest_report_collectionfinish  # noqa: E402,F401
+
+
+def pytest_collection_modifyitems(config, items):
+    mutation_selection.select(config, items)
+    ingest_producer_marker.pytest_collection_modifyitems(config, items)
 
 # Force the closed door for the whole test session (not setdefault — the point
 # is that the suite proves templates build with the hub shut, regardless of the
