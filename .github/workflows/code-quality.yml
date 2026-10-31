@@ -1,7 +1,7 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/code-quality.yml`
-# (blob ae62cd4340c27e0c42b0dafe6e59f9bcb1aa738e) folded with the private source repo's own caller of it,
+# (blob 818ddb0e7207f11ec6728be5d7066175318ab69b) folded with the private source repo's own caller of it,
 # job `quality` of `.github/workflows/ci.yml` with that file's `on:` and
 # `permissions:` (blob ffc33eb4910df7737d1155a0e0700a85212009f0 of those lines; its
 # `concurrency:` is one group for every job it runs, so it is not
@@ -403,7 +403,7 @@ jobs:
       - name: Install black
         if: ${{ !cancelled() && steps.gates.outputs.format == 'true' && (steps.files.outputs.mode == 'all' || steps.files.outputs.count != '0') }}
         env:
-          BLACK_VERSION: ${{ '26.3.1' }}
+          BLACK_VERSION: ${{ '26.10.1' }}
         run: |
           set -euo pipefail
           # `black-version` still decides the style, so the runner move changes
@@ -443,7 +443,7 @@ jobs:
           ERRS=$(grep -cE '^error:|would fail to reformat' /tmp/black.out || true)
 
           {
-            echo "### format (black ${{ '26.3.1' }})"
+            echo "### format (black ${{ '26.10.1' }})"
             echo ""
             if [ "${ERRS:-0}" -gt 0 ]; then
               echo "black could not process ${ERRS} file(s) -- this is an error, not a formatting verdict."
