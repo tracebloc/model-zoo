@@ -35,6 +35,9 @@ rows:
   - tests/test_ingest_category_contract_rows.py
   - tests/test_folder_template_zips.py
   - tests/test_mutation_selection_rows.py
+  - tests/test_dump_fetch_guard.py
+  - tests/test_dump_manifest_guard.py
+  - tests/test_ingest_schema_guard.py
 exempt:
   - path: tools/build_index.py
     ticket: tracebloc/model-zoo#84
