@@ -35,6 +35,9 @@ jobs:
       # file.
       - run: make lint
 
+  # `pytest tests/` deselects the mutation rows (tests/mutation_selection.py), so
+  # these three jobs run each guard's behaviour tests and not its rows. The rows
+  # run weekly, through `make mutation-nightly` in mutation-nightly.yml.
   test-pytorch:
     timeout-minutes: 30
     runs-on: ubuntu-latest
