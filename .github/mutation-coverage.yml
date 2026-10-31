@@ -10,6 +10,13 @@
 # change applied, and asserts the exact finding the tool reports. A row file
 # names each tool it covers by its repo-relative path, literally.
 #
+# THE ROWS RUN WEEKLY, NEVER ON A PULL REQUEST. `make mutation-nightly`, which
+# .github/workflows/mutation-nightly.yml runs on a schedule, runs every row;
+# `pytest tests/`, `make check` and CI's test jobs deselect them. Which tests in
+# a listed file are rows is decided by tests/mutation_selection.py, which reads
+# this list: every test of a `*_rows.py` file, else the `test_row_*` and
+# `test_MUTATION_*` tests. Each listed file must give the weekly run a test.
+#
 # THE GATE COUNTS A NAME, NOT A ROW. tests/test_engine_pin_drift_guard.py holds
 # the rows for tools/check_engine_pin_drift.py. It also names
 # tools/verify_dumps_against_engine_pin.py, only to read `_PROVENANCE_KEYS`
@@ -27,6 +34,7 @@ rows:
   - tests/test_engine_pin_drift_guard.py
   - tests/test_ingest_category_contract_rows.py
   - tests/test_folder_template_zips.py
+  - tests/test_mutation_selection_rows.py
 exempt:
   - path: tools/build_index.py
     ticket: tracebloc/model-zoo#84
