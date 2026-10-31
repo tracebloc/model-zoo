@@ -213,6 +213,7 @@ on:
       - Code quality
       - Commit hygiene
       - Mutation coverage
+      - Naming guard
     types: [completed]
   # `check_suite: completed` IS subscribed, for Cursor Bugbot: it finishes after the
   # required checks on about half of all pushes, so its own suite completing is then
