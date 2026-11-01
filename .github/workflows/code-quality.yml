@@ -1,7 +1,7 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/code-quality.yml`
-# (blob 818ddb0e7207f11ec6728be5d7066175318ab69b) folded with the private source repo's own caller of it,
+# (blob 3e7f09ad52cedb22fbebc7af46f8208602791b11) folded with the private source repo's own caller of it,
 # job `quality` of `.github/workflows/ci.yml` with that file's `on:` and
 # `permissions:` (blob ffc33eb4910df7737d1155a0e0700a85212009f0 of those lines; its
 # `concurrency:` is one group for every job it runs, so it is not
@@ -790,6 +790,22 @@ jobs:
             set -- "$@" --exclude "$EXCLUDE"
           fi
           set -- "$@" --exclude '.org-config-tools/*'
+          if [ "$SOFT_FAIL" = "true" ]; then
+            set -- "$@" --soft-fail
+          fi
+
+          python3 "$CHECKER" "$@"
+
+      # Bugbot leaves a `linguist-generated` file out of its review and its size count, so an
+      # unmarked lockfile or render can push a promotion past its limit ((internal ref)).
+      # WHOLE-TREE, git's own attribute answer; stdlib only.
+      - name: Run the linguist-generated checker
+        env:
+          SOFT_FAIL: ${{ true }}
+        run: |
+          set -uo pipefail
+          CHECKER=".org-config-tools/scripts/linguist-generated.py"
+          set -- --root . --github --summary "$GITHUB_STEP_SUMMARY"
           if [ "$SOFT_FAIL" = "true" ]; then
             set -- "$@" --soft-fail
           fi
