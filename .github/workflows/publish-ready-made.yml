@@ -1,0 +1,68 @@
+name: Publish ready-made models
+
+# Every template in model_zoo/index.v1.json becomes, or stays, a tracebloc
+# ready-made model: tools/publish_ready_made.py sends each one to the backend,
+# which runs the checks a user upload passes. Unchanged files run no checks, so
+# a push that changes one template costs one check.
+#
+# Each branch publishes to the environment it deploys to: develop to dev,
+# staging to stg, main to prod. The GitHub environment of that name holds the
+# backend's URL and the publisher account's token, so its protection rules
+# decide which branch may publish there. A manual run publishes one environment,
+# optionally one template.
+#
+# NOT ON PULL REQUESTS. Publishing writes what every user runs, and a pull
+# request's code never sees these secrets; tests/test_publish_ready_made.py runs
+# in ci.yml's tests.
+on:
+  push:
+    branches: [develop, staging, main]
+    # The templates alone: a change to this workflow or its script publishes
+    # nothing until a manual run.
+    paths:
+      - "model_zoo/**"
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Where to publish"
+        type: choice
+        options: [dev, stg, prod]
+        required: true
+      template:
+        description: "One template id (empty: every template)"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  # One publish per environment at a time; a newer push waits rather than
+  # cancelling one halfway through the list.
+  group: publish-ready-made-${{ inputs.environment || (github.ref_name == 'main' && 'prod') || (github.ref_name == 'staging' && 'stg') || 'dev' }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Publish to ${{ inputs.environment || (github.ref_name == 'main' && 'prod') || (github.ref_name == 'staging' && 'stg') || 'dev' }}
+    # A push publishes only once the repository variable PUBLISH_READY_MADE is
+    # "true", set when every environment holds its secrets; a manual run always.
+    if: github.event_name == 'workflow_dispatch' || vars.PUBLISH_READY_MADE == 'true'
+    runs-on: ubuntu-latest  # runner: hosted (a first publish outlasts ubuntu-slim's 15-minute cap)
+    environment: ${{ inputs.environment || (github.ref_name == 'main' && 'prod') || (github.ref_name == 'staging' && 'stg') || 'dev' }}
+    # A first publish runs the checks on every template, one request each.
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Stdlib only, so nothing to install. A template the checks refuse fails
+      # the run after the rest are sent; an unreadable index or a missing secret
+      # fails it before anything is sent.
+      - name: Publish the templates
+        env:
+          TRACEBLOC_PUBLISH_URL: ${{ secrets.TRACEBLOC_PUBLISH_URL }}
+          TRACEBLOC_PUBLISH_TOKEN: ${{ secrets.TRACEBLOC_PUBLISH_TOKEN }}
+          TEMPLATE: ${{ inputs.template }}
+        run: python3 tools/publish_ready_made.py ${TEMPLATE:+--template "$TEMPLATE"}
