@@ -25,7 +25,7 @@ main_class = "MyModel"
 category = "causal_language_modeling"
 model_type = ""
 tokenizer_file = "distilgpt2_tokenizer.json"
-batch_size = 8
+batch_size = 4
 # distilgpt2 supports up to 1024 positions; the causal-LM uploader caps
 # sequence_length at max_position_embeddings=512.
 sequence_length = 128
