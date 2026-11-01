@@ -13,10 +13,7 @@
 # the entire point -- and it is a comment, not a check, until (internal ref)
 # lands the scheduled drift detection.
 #
-# pytest is deliberately NOT pinned: it does not appear in the engine's
-# requirements, so there is nothing to sync it to, and inventing a pin would
-# assert an agreement that does not exist. Same call as the pytorch env.
-pytest
+# pytest is not one of the engine's pins, so it is pinned in test.txt instead.
 scikit-learn==1.8.0
 xgboost==3.2.0
 lightgbm==4.6.0

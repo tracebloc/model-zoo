@@ -1,0 +1,320 @@
+# GENERATED FILE -- DO NOT EDIT BY HAND.
+#
+# Self-contained copy of the reusable workflow `.github/workflows/mutation-nightly.yml`
+# (blob 8d2e3e720223df2a7fa2e56bb40a836ec39f1dc1) folded with the private source repo's caller TEMPLATE for it,
+# `.github/caller-templates/mutation-nightly-caller.yml` (blob 801e23606e2fd6431f0d178fd6553debd13267f1), the file every
+# repo's caller is rendered from, for a PUBLIC repo: GitHub lets a
+# public repo `uses:` a reusable workflow only from a public repo, and the
+# reusables live in the private source repo. So this file carries the
+# reusable's jobs inline -- the triggers are the caller's; every `inputs.*` is
+# resolved to a literal (repo-inventory.yml's `caller_inputs` floor, else the
+# template's own value, which every caller passes, else the reusable's default); the
+# App-token secrets are named directly; a job whose condition resolves to a
+# constant false is omitted; and each job's display name keeps the
+# `mutation / ` prefix so the check contexts branch protection requires do
+# not change. Scripts are still fetched from the private source repo at run time with a
+# read-only App installation token; on a fork PR that token cannot be minted
+# (no secrets), so the checkout fails closed rather than running untrusted input.
+# Where the copy checks the private source repo out, its `tools-ref` is the literal `main` --
+# the ref every caller of the reusable pins -- because a public copy has no
+# reusable to take the commit from (the private original defaults to its own).
+#
+# THE CRON LINE MARKED `stagger:` IS SET PER REPO. Its value here is the template's
+# placeholder; delivery writes the repo's own minute on it (`nightly_cron(<repo>)` in
+# the private source repo's scripts/onboard_repo.py), so each repo's copy differs from this file
+# on that one line, and is held to it everywhere else.
+#
+# PUBLIC SURFACE. This file is delivered to a public repo. Exactly what was
+# scrubbed, and what was not:
+#
+#   * COMMENT TEXT -- a whole-line YAML `#` comment, a `#`-first line of a `run:`
+#     script that is not inside a heredoc, and this header -- was scrubbed: every
+#     private-repo issue reference, private repo name (org-qualified OR bare),
+#     RFC id and tenant name became `(internal ref)`, and the private repo this
+#     file was generated from became `the private source repo`.
+#     A bare name is left alone where the next character is `/` or `#`: that is a
+#     path or branch prefix, or the issue form, which is matched on its own.
+#     A name that is also an ordinary English word, declared as such on the
+#     inventory row, is left alone in prose as well: it is scrubbed only inside a
+#     code span, as `<org>/<repo>` (URL or not), or as `<repo>#N`.
+#   * CODE -- everything else: commands, heredoc bodies, strings a workflow posts,
+#     `repository:` values, URLs, step names -- was NOT edited. An internal
+#     reference there refuses the render (it is a defect in the source). A BARE
+#     private repo name is never judged in code at all: several are also public
+#     product identifiers -- an image a public chart installs, a package name, a
+#     branch prefix -- so only the org-qualified spelling refuses there, with one
+#     exception: the name of the private repo this file was generated from, which
+#     the code states verbatim because the workflow checks that repo out and
+#     fetches its scripts from it at run time.
+#
+# Regenerate:  python3 scripts/render-self-contained.py          (in the private source repo)
+# Verify:      python3 scripts/render-self-contained.py --check  (make selftest-self-contained)
+#
+# The comments below are the reusable's own and describe the reusable; where
+# they mention `inputs.*` or callers, read them as history.
+#
+# LEFT OUT: step `actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97` of job `run`, whose condition resolves to a
+# constant false here, so it could never run.
+
+name: Mutation nightly
+
+# Reusable workflow (the private source repo, part D of (internal ref)). The
+# weekly mutation run, on Tuesday night, for every repo WITHOUT a mutation tier of its own
+# (D11 of the (internal ref) plan, (internal ref)). Four repos run
+# their rows on a schedule from their own workflows ((internal ref), the private source repo,
+# (internal ref), (internal ref)); everywhere else a row ran inside a PR suite, by hand, or
+# never (the per-repo table is (internal ref)). This is the one runner those
+# repos call, and `scripts/nightly-red-issue.py judge` is the one red-night filer it
+# reports through. This file is the wiring; the script carries the verdict.
+#
+# THE CONTRACT IS ONE ENTRY POINT. A caller passes `entry`: ONE command, run from its own
+# checkout, that runs every mutation row the repo has no other runner for and exits
+# NON-ZERO on SURVIVED, STALE, BROKEN or a baseline that is not green -- e.g. a `make
+# mutation-nightly` target wrapping (internal ref)'s `mutation-check.ps1` and its
+# `*-mutations.sh` harnesses. The exit code is the whole interface: nothing here parses
+# the harness's output, so a harness that prints SURVIVED and exits 0 is a green night.
+# Assert that in the repo's own selftest, not here.
+#
+# A REPO MAY MOVE PR-TIER ROWS INTO ITS NIGHTLY ENTRY. Decision a (2026-09-27) left the
+# rows that already ran on every PR in their PR suites -- (internal ref)'s `drift-checks`,
+# `helm-unit` and `installer-tests`, (internal ref)'s `installer`, (internal ref)'s
+# `test (3.11)` -- and had the entry point add only the rows that ran nowhere. That is
+# where a repo starts, not a rule this file holds it to: a repo may move PR-tier rows
+# into the command it passes as `entry` ((internal ref) moves (internal ref)'s
+# drift-checks and Pester mutation rows into `make mutation-nightly`).
+#
+# RED AND GREEN. `judge` needs `run` and runs `always()` on the caller's schedule or
+# dispatch, reading `toJSON(needs)`: any result but `success` -- `failure`, `cancelled`
+# (which is what a timeout reads as) or `skipped` -- is a red night, and opens or updates
+# ONE unassigned `work-type:bug`, labelled `nightly-red`, in the kanban's Ready column,
+# for the bug-fix routine to pick up. A green night on the repo's default branch closes
+# it and cites the run URL; a green dispatch on another branch leaves it open. A `judge`
+# job that cannot tell (no `needs`, a job with no result) refuses, and the run is red.
+#
+# WHAT A CALLER MUST TRIGGER ON: a staggered `schedule:` AND `workflow_dispatch`. The
+# dispatch is load-bearing: it is how (internal ref)'s cron-watchdog re-runs a
+# night that got no result. `scripts/onboard_repo.py` generates the caller from
+# `.github/caller-templates/mutation-nightly-caller.yml` and sets each repo's cron on
+# Tuesday night: the slot NIGHTLY_SLOTS lists for it, else a minute derived from its name.
+# A `push` or `pull_request` caller would run the rows and file nothing: `judge` is skipped off the
+# schedule, because a PR's red is its own check's to report.
+#
+# ARMING IS TWO STEPS, IN THIS ORDER: (1) this file reaches `main` -- every caller pins
+# `@main`, so a caller merged first dies with `startup_failure`; (2) a repo's caller and
+# its entry point land in ONE PR there, then its inventory cell flips from `exempt` to
+# `required` in the private source repo. The nightly is never a required status check: it reports by
+# filing a bug, not by a context a PR waits on.
+#
+# ADOPTION, BY SHAPE (`profile:` in repo-inventory.yml decides which):
+#   * `@main` callers (the train and private-single-branch profiles -- which include
+#     (internal ref) and (internal ref), both train callers today): onboarding generates the caller,
+#     the repo adds its entry point, the inventory cell flips. Nothing is copied.
+#   * self-contained copies (the `content` profile: the public model-zoo and quickstart,
+#     which cannot call a private reusable): scripts/render-self-contained.py folds this
+#     file with the caller template into `.github/self-contained/mutation-nightly.yml`,
+#     `run` and `judge` inline, the filer checked out from `main` at run time as every
+#     public copy's scripts are. Onboarding delivers it with the repo's own cron on the
+#     `stagger:` line; caller-drift holds the rest of the file to the render, and the
+#     pipeline family's check 4a holds the cron ((internal ref)). The repo adds
+#     its `make mutation-nightly` entry in the PR that adds the copy.
+#
+# LEGS AND THE CAP. A caller may split its rows over `legs` jobs; each runs the entry with
+# MUTATION_LEG (1..legs) and MUTATION_LEGS set, and the entry runs only its own share. At
+# most `max-parallel` legs of ONE run hold a runner at once (on `run` below), so a caller
+# cannot take a larger share of the fleet by asking for more legs: the rest wait inside
+# the run. The callers share the same cap: their Tuesday slots, in scripts/onboard_repo.py
+# NIGHTLY_SLOTS, are held by onboard-repo-selftest so that all their runs together, each at
+# its measured length, never hold more than it at once.
+#
+# NO `paths:` FILTER: a run takes every row whatever changed that week, which is the
+# point of a scheduled tier. NO `concurrency:` group either: two scheduled runs cannot
+# overlap under a weekly cron and a 120-minute default timeout, and a dispatch beside a
+# scheduled run is deduped by the filer (one open issue per label, and a warning if it ever
+# finds two).
+
+on:
+  schedule:
+    - cron: '10 1 * * 2'  # stagger: derived per repo by scripts/onboard_repo.py nightly_cron()
+  workflow_dispatch: {}
+
+# Read-only: every write goes through the App token minted in `judge`. `contents: read` here;
+# `run` alone adds `packages: read` (below), which every generated caller grants.
+permissions:
+  contents: read
+
+jobs:
+  run:
+    # `run (N)`: the headroom report reads each leg by this name, and the cron-watchdog finds
+    # the tier by the caller's job name (`mutation / run (N)`), which this keeps.
+    name: mutation / run (${{ matrix.leg }})
+    # The full tier, held in scripts/runner-tier.py's FULL_TIER_STAYS with its reason: a
+    # mutation night runs for hours, past ubuntu-slim's 15-minute platform cap.
+    runs-on: ubuntu-latest  # runner: hosted (OQ7 unverified)
+    # `packages: read`: the entry point installs the org's private GitHub Packages with this
+    # job's token ((internal ref)'s `.npmrc`; (internal ref)). A called workflow never holds more
+    # than its caller grants and GitHub refuses the run at startup when it asks for more, so
+    # the caller template grants it first, and onboard-repo-selftest holds this block to that
+    # grant (onboard_repo.py caller_grant_problems).
+    permissions:
+      contents: read
+      packages: read
+    timeout-minutes: ${{ 120 }}
+    strategy:
+      # One red leg does not cancel the others: the night reports every row it reached.
+      fail-fast: false
+      # THE CAP: one run never holds more runners than this at once, whatever `legs` says.
+      # Sized in scripts/onboard_repo.py NIGHTLY_LEG_CAP's comment; that constant is this
+      # number's only other reader, and onboard-repo-selftest holds the two equal.
+      max-parallel: 4
+      matrix:
+        # 1..legs. Expressions have no range, so index N of this list is [1..N]; a count
+        # outside 1..8 reads [] or null, the job cannot start, and `judge` files the red.
+        leg: ${{ fromJSON('[[],[1],[1,2],[1,2,3],[1,2,3,4],[1,2,3,4,5],[1,2,3,4,5,6],[1,2,3,4,5,6,7],[1,2,3,4,5,6,7,8]]')[1] }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Run this leg's mutation rows
+        env:
+          ENTRY: ${{ 'make mutation-nightly' }}
+          # The job's token, under a name of its own: most repos' code reads GITHUB_TOKEN,
+          # and handing it that name would change what their rows do.
+          GITHUB_PACKAGES_TOKEN: ${{ github.token }}
+          MUTATION_LEG: ${{ matrix.leg }}
+          MUTATION_LEGS: ${{ 1 }}
+        # Through the environment, never interpolated into the script: the entry is the
+        # caller's text, and `${{ }}` in a `run:` block is spliced in before bash parses it.
+        run: bash -euo pipefail -c "$ENTRY"
+
+  judge:
+    name: mutation / judge
+    needs: [run]
+    # `always()`: a cancelled or skipped `run` is a red night, and without it this job
+    # would be skipped exactly when there is a red to file.
+    if: ${{ always() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') }}
+    runs-on: ubuntu-slim  # runner: hosted (ubuntu-slim)
+    timeout-minutes: 5
+    steps:
+      - name: Mint a read-only token for org-config (private; the caller's own token cannot read it)
+        id: org-config-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.RELEASE_TRAIN_APP_ID }}
+          private-key: ${{ secrets.RELEASE_TRAIN_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: org-config
+          permission-contents: read
+
+      # THE TOOLS REF ((internal ref) D4, (internal ref)): `job.workflow_sha` is the commit of
+      # THIS reusable file, so the filer below is the one it was reviewed with;
+      # `tools-ref` overrides it for a test. An EMPTY ref would check out the tools repo's
+      # DEFAULT branch fleet-wide, so it is refused. `toJSON(job)` because actionlint's
+      # `job` schema (1.7.12) does not know `workflow_sha`.
+      - name: Resolve the tools ref, refusing an empty one
+        id: tools-ref
+        env:
+          TOOLS_REF: ${{ 'main' }}
+          JOB_CONTEXT: ${{ toJSON(job) }}
+        run: |
+          if [ -z "$TOOLS_REF" ]; then
+            case "$JOB_CONTEXT" in
+              *'"workflow_sha"'*) TOOLS_REF="${JOB_CONTEXT#*\"workflow_sha\": \"}"; TOOLS_REF="${TOOLS_REF%%\"*}" ;;
+            esac
+          fi
+          if ! [[ "$TOOLS_REF" =~ ^[0-9a-f]{40}$ || ( -n "$TOOLS_REF" && "$TOOLS_REF" != *[![:alnum:]._/-]* ) ]]; then
+            echo "::error::the tools ref is empty or not a ref (${TOOLS_REF:-<empty>}); an empty ref would check out the tools repo's default branch instead of the commit this workflow was pinned at. Refusing."
+            exit 1
+          fi
+          echo "ref=$TOOLS_REF" >> "$GITHUB_OUTPUT"
+          echo "tools ref: $TOOLS_REF"
+      - name: Check out the red-night filer
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: tracebloc/org-config
+          token: ${{ steps.org-config-token.outputs.token }}
+          ref: ${{ 'main' }}
+          path: .org-config-tools
+          persist-credentials: false
+
+      # No PyYAML: the filer reads no inventory, only the issues API and the board.
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+
+      # LEAST PRIVILEGE, DERIVED FROM THE FILER'S CALLS. `repositories:` narrows the issue
+      # writes to the caller's repo; org projects are unaffected by repo scoping
+      # (measured under (internal ref), stale-backlog.yml).
+      - name: Mint the filer's token (the caller's issues, the org's board)
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.RELEASE_TRAIN_APP_ID }}
+          private-key: ${{ secrets.RELEASE_TRAIN_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-issues: write # the label, the issue, its comments and the close
+          permission-organization-projects: write # the bug's card: project read, add, Status write
+
+      - name: A red night files one bug in Ready; a green one closes it
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          # The board placement (nightly-red-issue.py's KANBAN_TOKEN_ENV): the same App token,
+          # whose `organization-projects: write` above is what the placement needs -- no PAT.
+          KANBAN_TOKEN: ${{ steps.app-token.outputs.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          NEEDS: ${{ toJSON(needs) }}
+        run: >-
+          python3 .org-config-tools/scripts/nightly-red-issue.py judge --nightly mutation
+          --repo "$GITHUB_REPOSITORY" --run-url "$RUN_URL" --ref "$GITHUB_REF_NAME"
+          --needs-json "$NEEDS"
+
+      # THE NIGHT'S HEADROOM ((internal ref)). The only signal that a tier had
+      # outgrown its time used to be a red night. Every night now prints the `run` job's
+      # wall time against its own cap -- `inputs.timeout-minutes`, the same input the job
+      # above is held to, never a second copy -- and a GREEN scheduled night above 80% of
+      # it opens (or comments on) one standing `work-type:tech-debt` issue in the caller,
+      # so the tier is split or made cheaper before a night goes red on time alone. A red
+      # night files nothing here: the step above already filed it. A dispatch prints the
+      # reading and files nothing, since it may be a branch being proved.
+      #
+      # ITS OWN READ TOKEN: listing this run's jobs needs `actions: read`, which the
+      # filer's token does not carry and should not. The issue write reuses that token's
+      # `issues: write`.
+      #
+      # ADVISORY, NEVER THE NIGHT'S VERDICT: both steps are `continue-on-error`. A
+      # headroom read that cannot run -- an installation without `actions: read`, a job
+      # name the pattern does not match -- prints its `::error::` and leaves the night
+      # as the red-night filer above judged it, rather than turning every caller red at
+      # once (the desk on (internal ref)).
+      - name: Mint the headroom reader's token (the caller's run, read-only)
+        id: headroom-token
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.RELEASE_TRAIN_APP_ID }}
+          private-key: ${{ secrets.RELEASE_TRAIN_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-actions: read
+
+      - name: Report the run job's headroom against its cap
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        env:
+          ACTIONS_TOKEN: ${{ steps.headroom-token.outputs.token }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          CAP_MINUTES: ${{ 120 }}
+          LEGS: ${{ 1 }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          jobs="$RUNNER_TEMP/mutation-jobs.json"
+          GH_TOKEN="$ACTIONS_TOKEN" gh api --paginate \
+            "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/jobs?filter=latest&per_page=100" \
+            --jq '.jobs[]' > "$jobs"
+          file=()
+          [ "$GITHUB_EVENT_NAME" != schedule ] || file=(--file)
+          python3 .org-config-tools/scripts/mutation-headroom.py report --jobs "$jobs" \
+            --leg-pattern '(?:^| / )run \((\d+)\)$' --expected-legs "$LEGS" --cap-minutes "$CAP_MINUTES" \
+            --run-url "$RUN_URL" --repo "$GITHUB_REPOSITORY" "${file[@]}"

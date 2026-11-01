@@ -4,6 +4,25 @@ Repo-specific guidance for Claude Code sessions goes here, above the
 managed org block: build/test commands, architecture notes, gotchas,
 and this repo's default reviewer. Rollout: (internal ref).
 
+## Before you push
+
+`make check` runs the checks CI runs, and the pre-push hook runs it before every push.
+`make setup` installs the hook in this clone, which covers every worktree of it, and
+`make hooks-status` says whether the installed hook is current.
+
+## Mutation rows run weekly, not on pull requests
+
+The files listed under `rows:` in `.github/mutation-coverage.yml` hold the mutation rows
+for the guards in `tools/`. `pytest tests/`, `make check` and CI's test jobs deselect the
+rows; `make mutation-nightly` runs them and nothing else, and
+`.github/workflows/mutation-nightly.yml` runs that target weekly and files an issue when
+it fails. A pull request still runs each guard's behaviour tests, and
+`mutation-coverage / check` still requires every guard to have a row, so a guard a pull
+request breaks is caught by the next weekly run. `tests/mutation_selection.py` decides
+which tests are rows: every test of a `*_rows.py` file, else the `test_row_*` and
+`test_MUTATION_*` tests. Name a new row that way: a row named otherwise runs on every pull
+request instead, and the weekly run refuses a rows file in which no test is a row.
+
 <!-- org-standards:begin -->
 ## tracebloc engineering standards (org-wide)
 
@@ -88,7 +107,7 @@ and this repo's default reviewer. Rollout: (internal ref).
 - **The one card that stays off: an issue labelled `off-board`.** It marks a standing ledger or a bot's record, never a work item. The weekly `kanban-reconcile` sweep never adds or restores its card and archives a live one, so labelling an existing issue takes it off within a week. Use it only for such records. It is for issues only: a PR carrying it stays on the board, because `fr-gate` fails closed on a PR missing from it. The name is declared once, in `scripts/lib/off-board.json`: a reader reads it from there, and a copy anywhere else is held to it by a check.
 - Picking up work: the team coordinates. `Ready` is the refined queue — bugs excepted, per the line above — and the first choice when it's stocked; pulling from `Backlog` is normal when refinement hasn't caught up — say what you're taking.
 - Merging to `develop` moves the card to `On dev` automatically; there is no dev-side review.
-- Functional review happens once, on staging: when it passes, comment `/fr-pass` on the PR or drag the card to `Ready for prod`. Self-signoff is allowed. A repo whose `repo-inventory.yml` row declares `staging_surface: none` puts nothing on staging to review, so the staging push moves its cards straight to `Ready for prod`; absence of the cell keeps the review. A (internal ref) promotion PR is the train's plumbing, not a work item: its card is archived when it closes, never routed to a column.
+- Functional review happens once, on staging: when it passes, comment `/fr-pass` on the PR or drag the card to `Ready for prod`. Self-signoff is allowed. A repo whose `repo-inventory.yml` row declares `staging_surface: none` puts nothing on staging to review, so the staging push moves its cards straight to `Ready for prod`; absence of the cell keeps the review. A (internal ref) promotion PR is the train's plumbing, not a work item: when it merges, its card goes to `Done`, never to a deploy column.
 - `fr-gate` is a required check on promotions. If it blocks, the board or the work isn't ready — fix that. If it fails with the annotation `FR gate could not verify` (exit 3), it judged nothing: GitHub did not answer a read it needed (a rate limit, an unanswered API call, an unreadable board, a range whose changed files it could not count), and it has already walked once more where the wait fitted the job, so re-run the check once GitHub answers; nothing on the board needs fixing. `skip-fr-gate` is audited, for emergencies only.
 
 ### Releases & publishing

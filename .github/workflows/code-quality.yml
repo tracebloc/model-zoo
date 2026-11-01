@@ -1,9 +1,9 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/code-quality.yml`
-# (blob ae62cd4340c27e0c42b0dafe6e59f9bcb1aa738e) folded with the private source repo's own caller of it,
+# (blob 3e7f09ad52cedb22fbebc7af46f8208602791b11) folded with the private source repo's own caller of it,
 # job `quality` of `.github/workflows/ci.yml` with that file's `on:` and
-# `permissions:` (blob 5f52e88f6154b7d545ea46c9aa129d3ea597f715 of those lines; its
+# `permissions:` (blob ffc33eb4910df7737d1155a0e0700a85212009f0 of those lines; its
 # `concurrency:` is one group for every job it runs, so it is not
 # carried), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
@@ -123,7 +123,6 @@ name: Code quality
 on:
   pull_request:
     types: [opened, reopened, synchronize]
-  merge_group:
 
 # THE DIFF BASE, DECLARED ONCE ((internal ref)). Five jobs scan "the files this
 # change touches"; each used to carry its own `BASE_SHA`, and on a MERGE_GROUP
@@ -404,7 +403,7 @@ jobs:
       - name: Install black
         if: ${{ !cancelled() && steps.gates.outputs.format == 'true' && (steps.files.outputs.mode == 'all' || steps.files.outputs.count != '0') }}
         env:
-          BLACK_VERSION: ${{ '26.3.1' }}
+          BLACK_VERSION: ${{ '26.10.1' }}
         run: |
           set -euo pipefail
           # `black-version` still decides the style, so the runner move changes
@@ -444,7 +443,7 @@ jobs:
           ERRS=$(grep -cE '^error:|would fail to reformat' /tmp/black.out || true)
 
           {
-            echo "### format (black ${{ '26.3.1' }})"
+            echo "### format (black ${{ '26.10.1' }})"
             echo ""
             if [ "${ERRS:-0}" -gt 0 ]; then
               echo "black could not process ${ERRS} file(s) -- this is an error, not a formatting verdict."
@@ -791,6 +790,22 @@ jobs:
             set -- "$@" --exclude "$EXCLUDE"
           fi
           set -- "$@" --exclude '.org-config-tools/*'
+          if [ "$SOFT_FAIL" = "true" ]; then
+            set -- "$@" --soft-fail
+          fi
+
+          python3 "$CHECKER" "$@"
+
+      # Bugbot leaves a `linguist-generated` file out of its review and its size count, so an
+      # unmarked lockfile or render can push a promotion past its limit ((internal ref)).
+      # WHOLE-TREE, git's own attribute answer; stdlib only.
+      - name: Run the linguist-generated checker
+        env:
+          SOFT_FAIL: ${{ true }}
+        run: |
+          set -uo pipefail
+          CHECKER=".org-config-tools/scripts/linguist-generated.py"
+          set -- --root . --github --summary "$GITHUB_STEP_SUMMARY"
           if [ "$SOFT_FAIL" = "true" ]; then
             set -- "$@" --soft-fail
           fi

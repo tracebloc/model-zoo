@@ -1,0 +1,23 @@
+# Generated and recorded files are `linguist-generated`: Bugbot leaves them out of its
+# review and of its size count, so they cannot push a promotion past Bugbot's limit. The
+# house-rules job's linguist-generated check names a stamped file or a lockfile left out.
+# Rendered byte for byte from the shared hook template; the pipeline audit compares it.
+.github/install-hooks.mk linguist-generated=true
+# Rendered workflows, each stamped GENERATED FILE and held byte-equal to its render.
+.github/workflows/add-to-kanban.yml linguist-generated=true
+.github/workflows/advance-deploy-env.yml linguist-generated=true
+.github/workflows/code-quality.yml linguist-generated=true
+.github/workflows/commit-hygiene.yml linguist-generated=true
+.github/workflows/customer-priority-bump.yml linguist-generated=true
+.github/workflows/desk-dispatch.yml linguist-generated=true
+.github/workflows/desk-verdict-footer.yml linguist-generated=true
+.github/workflows/fr-gate.yml linguist-generated=true
+.github/workflows/fr-pass-comment.yml linguist-generated=true
+.github/workflows/kanban-closure-router.yml linguist-generated=true
+.github/workflows/mutation-coverage.yml linguist-generated=true
+.github/workflows/naming-guard.yml linguist-generated=true
+.github/workflows/set-pr-status.yml linguist-generated=true
+.github/workflows/stale-backlog.yml linguist-generated=true
+# tools/build_index.py writes the index; the tokenizers are recorded from their models.
+model_zoo/index.v1.json linguist-generated=true
+model_zoo/**/*tokenizer.json linguist-generated=true

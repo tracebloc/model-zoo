@@ -32,6 +32,12 @@ Each row::
     label        derived from the template's name (``label_for``): the stem, or
                  for a packaged template (``<name>/model.py``) its directory.
     batch        the module-level ``batch_size`` literal, read by AST.
+    forecast_window
+                 time_series_forecasting only: ``{"sequence_length": N,
+                 "forecast_horizon": M}``, the template's look-back and horizon
+                 literals, read by AST. A series fits the model only when both
+                 its training and its validation slice hold N + M steps. Null
+                 for every other task.
     params       PyTorch only: total ``numel`` over ``parameters()``, counted on
                  the ``meta`` device so nothing is allocated (the multi-billion
                  parameter templates would not fit a CI runner otherwise). Null
@@ -356,6 +362,25 @@ def upload_path(rel: pathlib.PurePosixPath) -> str:
     return str(rel)
 
 
+#: The task whose rows carry ``forecast_window``.
+FORECASTING = "time_series_forecasting"
+
+
+def forecast_window(rel: pathlib.PurePosixPath, consts: dict) -> dict | None:
+    """A forecaster's look-back and horizon; None for every other task."""
+    if consts.get("category") != FORECASTING:
+        return None
+    window = {}
+    for field in ("sequence_length", "forecast_horizon"):
+        value = consts.get(field)
+        if type(value) is not int or value < 1:
+            raise ValueError(
+                f"{rel}: `{field}` must be a positive int literal, got {value!r}"
+            )
+        window[field] = value
+    return window
+
+
 def static_row(path: pathlib.Path, consts: dict) -> dict:
     """Everything the AST can say. Raises ValueError on a template the index
     cannot describe, naming the file and the field."""
@@ -384,6 +409,7 @@ def static_row(path: pathlib.Path, consts: dict) -> dict:
         "model_type": model_type,
         "label": label_for(template_name(rel)),
         "batch": batch,
+        "forecast_window": forecast_window(rel, consts),
     }
 
 
