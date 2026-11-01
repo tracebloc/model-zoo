@@ -8,7 +8,7 @@
       "framework": "pytorch",
       "model_type": "",
       "label": "DistilGPT2",
-      "batch": 8,
+      "batch": 4,
       "forecast_window": null,
       "params": 81912576,
       "averageable": true
