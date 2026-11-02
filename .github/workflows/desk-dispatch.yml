@@ -1,8 +1,8 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/desk-dispatch.yml`
-# (blob 8da4f3dc23ca81c9c62f22cfe62e6237611e073b) folded with the private source repo's own caller of it,
-# `.github/workflows/desk-dispatch-caller.yml` (blob 77b14d378bffb399601380c6803dc325641fb0ea), for a PUBLIC repo: GitHub lets a
+# (blob c0a00151d628575606ecfe84597f2c2b3baac717) folded with the private source repo's own caller of it,
+# `.github/workflows/desk-dispatch-caller.yml` (blob fb5d1be26b2a4f3216d7d8a3ecd04fe5cd5dbe2e), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
 # reusable's jobs inline -- the triggers are the caller's; every `inputs.*` is
@@ -164,11 +164,11 @@
 # ((internal ref)); a caller calls `@main`, so any edit here a caller depends on
 # must be promoted before a caller relies on it ((internal ref)). The caller passes
 # `with.fire-url: ${{ vars.DESK_ROUTINE_FIRE_URL }}`, `with.fire-url-failover:
-# ${{ vars.DESK_ROUTINE_FIRE_URL_2 }}` and the four named secrets below, and nothing
-# else: `reviewer` is derived from the default, never restated. `desk-routines` and the
-# `desk-routine-tokens` secret are passed only by a caller whose `@main` declares them,
-# for the reason above; under an org roster, a caller passing neither refuses its fires
-# rather than firing `reviewer`'s routines across owners (`desk_roster`).
+# ${{ vars.DESK_ROUTINE_FIRE_URL_2 }}`, `with.desk-routines: ${{ vars.DESK_ROUTINES }}`
+# and every secret below by name, and nothing else: `reviewer` is derived from the
+# default, never restated. Under an org roster, a caller older than the roster, passing
+# neither `desk-routines` nor `desk-routine-tokens`, refuses its fires rather than firing
+# `reviewer`'s routines across owners (`desk_roster`).
 #
 # THE INVENTORY ROWS for this file flip from `exempt` to `required` on the
 # condition `repo-inventory.yml`'s `desk_dispatch_rollout_pending` anchor states
@@ -453,7 +453,7 @@ jobs:
           # the roster the caller passes and its tokens. Empty is the desk without owners. The
           # org's own variable rides beside it, read here, so a caller that predates the roster
           # refuses under one instead of firing `reviewer`'s routines across owners.
-          DESK_ROUTINES: ${{ '' }}
-          DESK_ROUTINE_TOKENS: ${{ '' }}
+          DESK_ROUTINES: ${{ (vars.DESK_ROUTINES) }}
+          DESK_ROUTINE_TOKENS: ${{ secrets.DESK_ROUTINE_TOKENS }}
           DESK_ROUTINES_ORG: ${{ vars.DESK_ROUTINES }}
         run: python3 .org-config-tools/scripts/desk-dispatch.py
