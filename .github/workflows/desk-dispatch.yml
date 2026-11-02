@@ -1,8 +1,8 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/desk-dispatch.yml`
-# (blob 5efa1996d7116683415c585876fe5642f89d9cc1) folded with the private source repo's own caller of it,
-# `.github/workflows/desk-dispatch-caller.yml` (blob 30167e0434ebe6a16abed1d8c0e08eeabac4ca5f), for a PUBLIC repo: GitHub lets a
+# (blob 8da4f3dc23ca81c9c62f22cfe62e6237611e073b) folded with the private source repo's own caller of it,
+# `.github/workflows/desk-dispatch-caller.yml` (blob 77b14d378bffb399601380c6803dc325641fb0ea), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
 # reusable's jobs inline -- the triggers are the caller's; every `inputs.*` is
@@ -64,6 +64,10 @@
 # repo's CODEOWNERS requests it on every PR it may review and the review lands as
 # that account. A person's login here would make their name stand in for a bot
 # on every approval, and could never cover their own PRs.
+#   WITH THE DESK OWNERS ((internal ref); `desk-routines`): each PR has ONE
+# owner, a claude.ai account with its own routine or routines, and that owner is the
+# reviewer whose routines fire; `reviewer` stays the account CODEOWNERS requests, whose
+# standing request a rotation owner answers (`desk_owner` in scripts/desk-dispatch.py).
 #
 # WHAT IT FIRES ON (the decision lives in scripts/desk-dispatch.py, tested offline).
 # The one event is a FINISHED COMMIT; what has no commit event (a conflict after the
@@ -161,7 +165,10 @@
 # must be promoted before a caller relies on it ((internal ref)). The caller passes
 # `with.fire-url: ${{ vars.DESK_ROUTINE_FIRE_URL }}`, `with.fire-url-failover:
 # ${{ vars.DESK_ROUTINE_FIRE_URL_2 }}` and the four named secrets below, and nothing
-# else: `reviewer` is derived from the default, never restated.
+# else: `reviewer` is derived from the default, never restated. `desk-routines` and the
+# `desk-routine-tokens` secret are passed only by a caller whose `@main` declares them,
+# for the reason above; under an org roster, a caller passing neither refuses its fires
+# rather than firing `reviewer`'s routines across owners (`desk_roster`).
 #
 # THE INVENTORY ROWS for this file flip from `exempt` to `required` on the
 # condition `repo-inventory.yml`'s `desk_dispatch_rollout_pending` anchor states
@@ -442,4 +449,11 @@ jobs:
           # fires one routine, as before. desk-dispatch-selftest holds the shape.
           DESK_FIRE_URL_FAILOVER: ${{ ((vars.DESK_ROUTINE_FIRE_URL_2) != '' && secrets.DESK_ROUTINE_TOKEN_2 != '') && (vars.DESK_ROUTINE_FIRE_URL_2) || '' }}
           DESK_ROUTINE_TOKEN_FAILOVER: ${{ ((vars.DESK_ROUTINE_FIRE_URL_2) != '' && secrets.DESK_ROUTINE_TOKEN_2 != '') && secrets.DESK_ROUTINE_TOKEN_2 || '' }}
+          # THE DESK OWNERS ((internal ref); `desk_roster` in scripts/desk-dispatch.py):
+          # the roster the caller passes and its tokens. Empty is the desk without owners. The
+          # org's own variable rides beside it, read here, so a caller that predates the roster
+          # refuses under one instead of firing `reviewer`'s routines across owners.
+          DESK_ROUTINES: ${{ '' }}
+          DESK_ROUTINE_TOKENS: ${{ '' }}
+          DESK_ROUTINES_ORG: ${{ vars.DESK_ROUTINES }}
         run: python3 .org-config-tools/scripts/desk-dispatch.py
