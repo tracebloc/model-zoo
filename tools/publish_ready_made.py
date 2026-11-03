@@ -10,7 +10,8 @@ checks a user upload passes; the same files again run none.
         python3 tools/publish_ready_made.py [--template ID ...] [--dry-run]
 
 One line per template. Exits 1 when any template was not published, after
-trying the rest, and 2 when the index or the environment cannot be read. The
+trying the rest, and 2 when the index or the environment cannot be read, or
+the index lists a template under ``archive/``, before anything is sent. The
 token is never printed. Standard library only.
 """
 
@@ -34,6 +35,8 @@ from urllib.parse import urlsplit
 
 ROOT = Path(__file__).resolve().parents[1]
 INDEX = "model_zoo/index.v1.json"
+#: Templates kept out of the zoo, at the path they had under ``model_zoo/``.
+ARCHIVE = "archive"
 INDEX_VERSION = 1
 ENDPOINT = "ready-made-models/publish/"
 #: A busy check answers 503; it is asked again at most this many times.
@@ -110,6 +113,19 @@ def index_rows(root: Path) -> list:
     if not all(isinstance(row, dict) and "id" in row for row in rows):
         raise Unreadable(f"{INDEX} has a template row without an id")
     return rows
+
+
+def archived(root: Path) -> set:
+    """The ids of the templates under ``archive/``, as the index would spell them."""
+    archive = root / ARCHIVE
+    return {p.relative_to(archive).with_suffix("").as_posix() for p in archive.rglob("*.py")}
+
+
+def refuse_archived(root: Path, rows: list) -> None:
+    """Raises :class:`Unreadable` when the index lists an archived template."""
+    listed = sorted({str(row["id"]) for row in rows} & archived(root))
+    if listed:
+        raise Unreadable(f"{INDEX} lists archived templates: {', '.join(listed)}")
 
 
 def form(item: Template) -> tuple[bytes, str]:
@@ -210,6 +226,7 @@ def main(
     args = parser.parse_args(argv)
     try:
         rows = index_rows(root)
+        refuse_archived(root, rows)
         wanted = set(args.template)
         unknown = wanted - {row["id"] for row in rows}
         if unknown:
