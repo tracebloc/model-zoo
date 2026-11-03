@@ -1,7 +1,7 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/fr-pass-comment.yml`
-# (blob 6116f94471cec70f67550904b6dc3243f7be1e0c) folded with the private source repo's own caller of it,
+# (blob 0b0a0d7cf848bcee555103fcdd6aef43f8228a33) folded with the private source repo's own caller of it,
 # `.github/workflows/fr-pass-comment-caller.yml` (blob c362337773bea41e5bc51afa86354efb42be49f5), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
@@ -117,7 +117,7 @@ jobs:
       # fallback to a PAT (it would let a broken App path look like a working migration).
       - name: Mint an installation token
         id: app-token
-        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
         with:
           app-id: ${{ secrets.RELEASE_TRAIN_APP_ID }}
           private-key: ${{ secrets.RELEASE_TRAIN_APP_PRIVATE_KEY }}
@@ -153,7 +153,7 @@ jobs:
       # ((internal ref) D4; (internal ref), (internal ref)).
       - name: Mint a read-only token for org-config (private; the caller's own token cannot read it)
         id: org-config-token
-        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
         with:
           app-id: ${{ secrets.RELEASE_TRAIN_APP_ID }}
           private-key: ${{ secrets.RELEASE_TRAIN_APP_PRIVATE_KEY }}

@@ -1,7 +1,7 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/mutation-nightly.yml`
-# (blob 8d2e3e720223df2a7fa2e56bb40a836ec39f1dc1) folded with the private source repo's caller TEMPLATE for it,
+# (blob eb907957e9a7b84dbb9819c5daea0e92b157cec7) folded with the private source repo's caller TEMPLATE for it,
 # `.github/caller-templates/mutation-nightly-caller.yml` (blob 801e23606e2fd6431f0d178fd6553debd13267f1), the file every
 # repo's caller is rendered from, for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
@@ -197,7 +197,7 @@ jobs:
     steps:
       - name: Mint a read-only token for org-config (private; the caller's own token cannot read it)
         id: org-config-token
-        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
         with:
           app-id: ${{ secrets.RELEASE_TRAIN_APP_ID }}
           private-key: ${{ secrets.RELEASE_TRAIN_APP_PRIVATE_KEY }}
@@ -246,7 +246,7 @@ jobs:
       # (measured under (internal ref), stale-backlog.yml).
       - name: Mint the filer's token (the caller's issues, the org's board)
         id: app-token
-        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
         with:
           app-id: ${{ secrets.RELEASE_TRAIN_APP_ID }}
           private-key: ${{ secrets.RELEASE_TRAIN_APP_PRIVATE_KEY }}
@@ -290,7 +290,7 @@ jobs:
         id: headroom-token
         if: ${{ !cancelled() }}
         continue-on-error: true
-        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
         with:
           app-id: ${{ secrets.RELEASE_TRAIN_APP_ID }}
           private-key: ${{ secrets.RELEASE_TRAIN_APP_PRIVATE_KEY }}

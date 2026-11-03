@@ -1,7 +1,7 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/mutation-coverage.yml`
-# (blob 84273bc4e4568bf1cb8e721e00d7d0bf5d5df041) folded with the private source repo's own caller of it,
+# (blob 55490177efa768c3732d2b01ff08511f905a419d) folded with the private source repo's own caller of it,
 # job `mutation-coverage` of `.github/workflows/ci.yml` with that file's `on:` and
 # `permissions:` (blob e0bb2c04363d1c511fe5d9eb01b175e57a83ffca of those lines; its
 # `concurrency:` is one group for every job it runs, so it is not
@@ -149,7 +149,7 @@ jobs:
       # passes by name (Q5).
       - name: Mint a read-only token for org-config (private; the caller's own token cannot read it)
         id: org-config-token
-        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
         with:
           app-id: ${{ secrets.RELEASE_TRAIN_APP_ID }}
           private-key: ${{ secrets.RELEASE_TRAIN_APP_PRIVATE_KEY }}
