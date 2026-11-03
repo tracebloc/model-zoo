@@ -1,6 +1,6 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
-# Public-safe copy of `.github/workflows/add-to-kanban.yml` (blob 1f79cd2b26be82dd5515cca6bd19a6ece0b017eb) for a PUBLIC repo:
+# Public-safe copy of `.github/workflows/add-to-kanban.yml` (blob 7fe783fa3f9511cfc394945a5a8abfb0bcf19b0d) for a PUBLIC repo:
 # the same workflow, byte for byte, except that its comments are scrubbed as
 # described below. Private repos carry the original; the conformance audit
 # compares a public repo's copy against THIS file and a private repo's
@@ -50,6 +50,9 @@ jobs:
     # only version of that claim a reader can check. Free, and it means the least-
     # privilege story covers both credentials in the job rather than just the loud one.
     permissions: {}
+    # The board the add writes to and the re-read after it checks: one value, so the two agree.
+    env:
+      PROJECT_URL: https://github.com/orgs/tracebloc/projects/2
     steps:
       # Board writes authenticate as the tracebloc-release-train App ((internal ref)),
       # not a human's PAT. `owner:` yields an ORG-scoped installation token; a
@@ -121,7 +124,38 @@ jobs:
           permission-pull-requests: read
           permission-organization-projects: write
 
-      - uses: actions/add-to-project@5afcf98fcd03f1c2f92c3c83f58ae24323cc57fd # v2.0.0
+      # Two adds of one item race when a filer or session puts its own ticket on the
+      # board, and GitHub refuses the loser with "Content already exists in this
+      # project" although the card is there. So a failed add is judged by the next step.
+      - name: Add the issue or pull request to the board
+        id: add
+        uses: actions/add-to-project@5afcf98fcd03f1c2f92c3c83f58ae24323cc57fd # v2.0.0
+        continue-on-error: true
         with:
-          project-url: https://github.com/orgs/tracebloc/projects/2
+          project-url: ${{ env.PROJECT_URL }}
           github-token: ${{ steps.app-token.outputs.token }}
+
+      # A failed add passes only if a re-read on the same App token finds this issue or PR
+      # in a card on the board added in the last 15 minutes: the race's winner. Every read is
+      # retried, failed ones too; an errors body, a dead node or an older card ends red.
+      - name: Pass a failed add only if the card is on the board
+        if: steps.add.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          NODE_ID: ${{ github.event.issue.node_id || github.event.pull_request.node_id }}
+        run: |
+          set -euo pipefail
+          # shellcheck disable=SC2016  # the $names are GraphQL variables, not shell - keep literal
+          query='query($id: ID!) { node(id: $id) {
+            ... on Issue { projectItems(first: 100, includeArchived: false) { nodes { createdAt project { url } } } }
+            ... on PullRequest { projectItems(first: 100, includeArchived: false) { nodes { createdAt project { url } } } } } }'
+          fresh='[.data.node.projectItems.nodes[] | select(.project.url == env.PROJECT_URL and (.createdAt | fromdateiso8601) > now - 900)] | length'
+          for attempt in 1 2 3; do
+            if cards=$(gh api graphql -f query="$query" -f id="$NODE_ID" --jq "$fresh") && [ "$cards" -gt 0 ]; then
+              echo "The add failed, but $NODE_ID is on $PROJECT_URL in a card added moments ago: another add won the race."
+              exit 0
+            fi
+            if [ "$attempt" -lt 3 ]; then sleep 5; fi
+          done
+          echo "::error::The add to $PROJECT_URL failed (its error is in the step above), and $NODE_ID has no card there added in the last 15 minutes."
+          exit 1
