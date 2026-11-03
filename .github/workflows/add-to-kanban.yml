@@ -1,6 +1,6 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
-# Public-safe copy of `.github/workflows/add-to-kanban.yml` (blob 7fe783fa3f9511cfc394945a5a8abfb0bcf19b0d) for a PUBLIC repo:
+# Public-safe copy of `.github/workflows/add-to-kanban.yml` (blob d3672b876f23f88387b01f3ca0b144a12518dc55) for a PUBLIC repo:
 # the same workflow, byte for byte, except that its comments are scrubbed as
 # described below. Private repos carry the original; the conformance audit
 # compares a public repo's copy against THIS file and a private repo's
@@ -64,7 +64,7 @@ jobs:
       # stop reaching the board with `Input required and not supplied`.
       - name: Mint an installation token
         id: app-token
-        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
         with:
           app-id: ${{ secrets.RELEASE_TRAIN_APP_ID }}
           private-key: ${{ secrets.RELEASE_TRAIN_APP_PRIVATE_KEY }}

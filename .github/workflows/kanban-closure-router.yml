@@ -1,7 +1,7 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/kanban-closure-router.yml`
-# (blob bb78f2d1a7e1951219857636c3e8f6ced5ef587e) folded with the private source repo's own caller of it,
+# (blob 047441d23241bba1d5b595c0bf91cf43635e70dd) folded with the private source repo's own caller of it,
 # `.github/workflows/kanban-closure-caller.yml` (blob b38b7c1e8514240939dd944ad2e3e6add7fcfd57), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
@@ -86,7 +86,7 @@ jobs:
       # this file: one definition of branch -> Status ((internal ref)).
       - name: Mint a read-only token for org-config (private; the caller's own token cannot read it)
         id: org-config-token
-        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
         with:
           app-id: ${{ secrets.RELEASE_TRAIN_APP_ID }}
           private-key: ${{ secrets.RELEASE_TRAIN_APP_PRIVATE_KEY }}
@@ -130,7 +130,7 @@ jobs:
       # PAT -- it would let a broken App path look like a working migration.
       - name: Mint an installation token
         id: app-token
-        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
         with:
           app-id: ${{ secrets.RELEASE_TRAIN_APP_ID }}
           private-key: ${{ secrets.RELEASE_TRAIN_APP_PRIVATE_KEY }}
