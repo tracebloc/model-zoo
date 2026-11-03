@@ -173,6 +173,26 @@ def test_no_https_target_and_token_is_an_error_before_anything_is_sent(zoo, monk
     assert backend.requests == []
 
 
+def test_an_index_listing_an_archived_template_sends_nothing(zoo, monkeypatch, capsys):
+    monkeypatch.setenv("TRACEBLOC_PUBLISH_URL", URL)
+    monkeypatch.setenv("TRACEBLOC_PUBLISH_TOKEN", "t")
+    archived = zoo / tool.ARCHIVE / "text_classification/pytorch/net.py"
+    archived.parent.mkdir(parents=True)
+    archived.write_text("x = 1\n")
+    backend = Backend()
+    assert tool.main([], root=zoo, transport=backend) == 2
+    assert backend.requests == []
+    assert "lists archived templates: text_classification/pytorch/net" in capsys.readouterr().err
+
+
+def test_an_archived_template_absent_from_the_index_is_no_concern(zoo):
+    archived = zoo / tool.ARCHIVE / "tabular_regression/sklearn/knn.py"
+    archived.parent.mkdir(parents=True)
+    archived.write_text("x = 1\n")
+    assert tool.archived(zoo) == {"tabular_regression/sklearn/knn"}
+    tool.refuse_archived(zoo, tool.index_rows(zoo))
+
+
 def test_a_dry_run_sends_nothing_and_needs_no_target(zoo, monkeypatch, capsys):
     monkeypatch.delenv("TRACEBLOC_PUBLISH_URL", raising=False)
     assert tool.main(["--dry-run"], root=zoo, transport=Backend()) == 0
