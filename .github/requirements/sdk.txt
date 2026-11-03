@@ -8,4 +8,4 @@
 # validates on the minor the training images run), so this resolves against
 # pytorch.txt without overriding it.
 -r pytorch.txt
-tracebloc[pytorch]==1.2.79
+tracebloc[pytorch]==1.2.80
