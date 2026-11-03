@@ -2,7 +2,7 @@
 """Mutation rows for ``tools/publish_ready_made.py``.
 
 Each row starts from a copy of the REAL ``model_zoo/`` (its index and every
-file the index names), asserts the tool reads it in full, makes one change,
+file the index names) and ``archive/``, asserts the tool reads it in full, makes one change,
 asserts the change applied, and asserts the exact finding the tool reports.
 """
 
@@ -35,9 +35,10 @@ tool = _load()
 
 @pytest.fixture
 def zoo(tmp_path):
-    """A copy of the real ``model_zoo/``: the index and the files it names."""
+    """A copy of the real ``model_zoo/`` and ``archive/``."""
     copy = tmp_path / "zoo"
     shutil.copytree(ROOT / "model_zoo", copy / "model_zoo")
+    shutil.copytree(ROOT / tool.ARCHIVE, copy / tool.ARCHIVE)
     return copy
 
 
@@ -58,6 +59,8 @@ def test_the_real_zoo_reads_in_full(zoo):
     items = read_all(zoo)
     assert len(items) == len(index(zoo)["templates"]) > 0
     assert any(i.tokenizer is not None for i in items)
+    assert tool.archived(zoo)
+    tool.refuse_archived(zoo, tool.index_rows(zoo))
 
 
 def test_row_an_index_of_another_version_is_unreadable(zoo):
@@ -100,3 +103,13 @@ def test_row_a_row_missing_a_fact_is_named(zoo):
     assert "batch" not in row
     with pytest.raises(tool.Unreadable, match=r"missing batch"):
         tool.template(zoo, row)
+
+
+def test_row_an_archived_template_back_in_the_index_is_refused(zoo):
+    victim = sorted(tool.archived(zoo))[0]
+    document = index(zoo)
+    document["templates"].append(dict(document["templates"][0], id=victim))
+    write(zoo, document)
+    assert victim in {row["id"] for row in index(zoo)["templates"]}
+    with pytest.raises(tool.Unreadable, match=rf"lists archived templates: {victim}$"):
+        tool.refuse_archived(zoo, tool.index_rows(zoo))

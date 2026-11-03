@@ -19,9 +19,7 @@ For a fast, zero-tuning baseline, use [`sklearn/random_forest.py`](sklearn/rando
 | [`random_forest.py`](sklearn/random_forest.py) | Robust out-of-the-box baseline |
 | [`gradient_boosting.py`](sklearn/gradient_boosting.py) | Classical sklearn boosting |
 | [`decision_tree.py`](sklearn/decision_tree.py) | Interpretable single tree; high variance |
-| [`knn.py`](sklearn/knn.py) | Small datasets with meaningful distance |
 | [`mlp.py`](sklearn/mlp.py) | Small feed-forward net inside sklearn |
-| [`svm.py`](sklearn/svm.py) | Moderate data with kernel methods |
 | [`linear_regression.py`](sklearn/linear_regression.py) | Always run this first as a floor |
 | [`ridge.py`](sklearn/ridge.py) | L2 regularization; correlated features |
 | [`lasso.py`](sklearn/lasso.py) | L1 regularization; feature selection |
