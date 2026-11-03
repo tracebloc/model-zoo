@@ -1382,18 +1382,6 @@
       "averageable": false
     },
     {
-      "id": "tabular_classification/sklearn/ensemble",
-      "upload": "tabular_classification/sklearn/ensemble.py",
-      "category": "tabular_classification",
-      "framework": "sklearn",
-      "model_type": "ensemble",
-      "label": "Ensemble",
-      "batch": 4,
-      "forecast_window": null,
-      "params": null,
-      "averageable": false
-    },
-    {
       "id": "tabular_classification/sklearn/gbm",
       "upload": "tabular_classification/sklearn/gbm.py",
       "category": "tabular_classification",
@@ -1413,18 +1401,6 @@
       "model_type": "tree",
       "label": "Hist Gradient Boosting Classifier",
       "batch": 4096,
-      "forecast_window": null,
-      "params": null,
-      "averageable": false
-    },
-    {
-      "id": "tabular_classification/sklearn/knn",
-      "upload": "tabular_classification/sklearn/knn.py",
-      "category": "tabular_classification",
-      "framework": "sklearn",
-      "model_type": "clustering",
-      "label": "KNN",
-      "batch": 4,
       "forecast_window": null,
       "params": null,
       "averageable": false
@@ -1512,18 +1488,6 @@
       "forecast_window": null,
       "params": null,
       "averageable": true
-    },
-    {
-      "id": "tabular_classification/sklearn/svm",
-      "upload": "tabular_classification/sklearn/svm.py",
-      "category": "tabular_classification",
-      "framework": "sklearn",
-      "model_type": "svm",
-      "label": "SVM",
-      "batch": 4,
-      "forecast_window": null,
-      "params": null,
-      "averageable": false
     },
     {
       "id": "tabular_classification/sklearn/xgboost_classifier",
@@ -1670,18 +1634,6 @@
       "averageable": false
     },
     {
-      "id": "tabular_regression/sklearn/knn",
-      "upload": "tabular_regression/sklearn/knn.py",
-      "category": "tabular_regression",
-      "framework": "sklearn",
-      "model_type": "ensemble",
-      "label": "KNN",
-      "batch": 512,
-      "forecast_window": null,
-      "params": null,
-      "averageable": false
-    },
-    {
       "id": "tabular_regression/sklearn/lasso",
       "upload": "tabular_regression/sklearn/lasso.py",
       "category": "tabular_regression",
@@ -1752,18 +1704,6 @@
       "forecast_window": null,
       "params": null,
       "averageable": true
-    },
-    {
-      "id": "tabular_regression/sklearn/svm",
-      "upload": "tabular_regression/sklearn/svm.py",
-      "category": "tabular_regression",
-      "framework": "sklearn",
-      "model_type": "svm",
-      "label": "SVM",
-      "batch": 128,
-      "forecast_window": null,
-      "params": null,
-      "averageable": false
     },
     {
       "id": "tabular_regression/sklearn/tweedie_regressor",
