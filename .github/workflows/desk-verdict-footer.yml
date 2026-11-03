@@ -1,7 +1,7 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/desk-verdict-footer.yml`
-# (blob a0f0c03978b15196b421834a11f6b3b96cb289a3) folded with the private source repo's own caller of it,
+# (blob 2be07aee3e9a38458f010fc5e08f04ab900423bc) folded with the private source repo's own caller of it,
 # `.github/workflows/desk-verdict-footer-caller.yml` (blob bcee1883d619384ab1440cca73b88bbf012e425f), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
@@ -58,7 +58,8 @@ name: Desk verdict footer
 
 # Reusable workflow (the private source repo, epic (internal ref)). The review
 # account's APPROVE must carry `desk.py`'s footer line, `model: <id> · skill: <tree>`, or
-# this check is red: an approval filed around `desk.py` (over the MCP review tool, which
+# this check is red, and so must a desk owner's APPROVE that carries the desk's verdict
+# marker ((internal ref)): an approval filed around `desk.py` (over the MCP review tool, which
 # every desk session holds) skips the model gate, the green gate and the head check, and
 # auto-merge lands it -- (internal ref) merged 12 s after one, (internal ref) 56 s
 # after. `scripts/desk-verdict-footer.py` carries the decision and its reasoning; this file
@@ -267,6 +268,11 @@ jobs:
           # The review that started this run, empty on a `pull_request` event: the read
           # must hold it, or the run is CANNOT TELL (a lagging read is not a verdict).
           EVENT_REVIEW_ID: ${{ github.event.review.id }}
+          # THE DESK OWNERS ((internal ref)): the org's roster, read here and not passed
+          # by the caller, because an input the `@main` callee does not declare is a
+          # `startup_failure` for every caller ((internal ref)). Only its logins are used
+          # (`read_owners`). Unset, the review account alone is judged, as before owners.
+          DESK_ROUTINES: ${{ vars.DESK_ROUTINES }}
         # No interpolation of any PR-controlled string into this shell: the script
         # reads the reviews from the API itself.
         run: python3 .org-config-tools/scripts/desk-verdict-footer.py
