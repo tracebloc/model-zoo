@@ -10,6 +10,16 @@
 #
 #   make install-hooks   write the pre-push hook into this clone's hooks directory
 #   make hooks-status    exit 0 only when the installed hook is this file's hook
+#   make check-stamped   run `make check`, and stamp the tree it passed on, so the push of
+#                        that tree skips the hook's run (call it instead of a bare make check)
+#
+# THE STAMP. A pass of `make check` is recorded as HEAD's tree hash, an empty file in
+# `git rev-parse --git-path tracebloc-check-stamps` (this checkout's git directory, never
+# the work tree), and only when make check exited 0 and `git status` showed nothing
+# tracked or untracked (not ignored) differing from HEAD, before and after the run, on
+# the same HEAD tree. The newest 20 stamps are kept. The hook skips `make check` only
+# when the tree of every commit it is pushing has a stamp; a tree it cannot read runs it.
+# The hook's own passing run stamps too, so a retried push is free.
 #
 # The hook runs `make check` and nothing else. It catches forgetting, not defiance:
 # `git push --no-verify` skips it. It is written into this clone's own hooks directory,
@@ -36,11 +46,11 @@ define _tb_prepush_hook
 
 # A delete or no-op push carries no new commits (local sha all zeros): nothing to check.
 z=0000000000000000000000000000000000000000
-had_update=0
+pushed=
 while read -r _ local_sha _ _; do
-  [ "$$local_sha" != "$$z" ] && had_update=1
+  [ "$$local_sha" != "$$z" ] && pushed="$$pushed $$local_sha"
 done
-[ "$$had_update" = 0 ] && exit 0
+[ -z "$$pushed" ] && exit 0
 
 # A GUI client may start hooks with a PATH that has no make, and may offer no --no-verify.
 if ! command -v make >/dev/null 2>&1; then
@@ -73,10 +83,55 @@ if make -n guard-toolchain >/dev/null 2>&1; then
   fi
 fi
 
-exec make check
+# Every pushed commit's tree already passed make check here (THE STAMP in the snippet).
+$(_tb_check_stamps)
+trees=
+for sha in $$pushed; do
+  tree="$$(git rev-parse --verify -q "$$sha^{tree}")"
+  if [ ! -f "$$stamps/$$tree" ]; then
+    trees=
+    break
+  fi
+  trees="$$trees $$tree"
+done
+if [ -n "$$trees" ]; then
+  echo "pre-push: make check already passed here on tree$$trees, so it did not run again."
+  exit 0
+fi
+
+$(_tb_check_stamped)
 endef
 
-.PHONY: install-hooks hooks-status
+# Where the stamps live; the hook reads them and `check-stamped` writes them.
+define _tb_check_stamps
+stamps="$$(git rev-parse --git-path tracebloc-check-stamps 2>/dev/null)"
+endef
+
+# `make check`, then the stamp of the tree it passed on (THE STAMP above). The hook ends
+# with this and `check-stamped` runs it, so both write the same stamp.
+define _tb_check_stamped
+$(_tb_check_stamps)
+clean_tree() {
+  st="$$(git status --porcelain --untracked-files=all --ignore-submodules=none 2>/dev/null)" || return 1
+  [ -z "$$st" ] && git rev-parse --verify -q 'HEAD^{tree}'
+}
+before="$$(clean_tree)"
+make check || exit $$?
+after="$$(clean_tree)"
+if [ -z "$$before" ]; then
+  echo "make check passed on a work tree that differs from HEAD, so no stamp was written."
+elif [ "$$before" != "$$after" ]; then
+  echo "make check passed, but the work tree changed while it ran, so no stamp was written."
+elif mkdir -p "$$stamps" && : > "$$stamps/$$before"; then
+  ls -t "$$stamps" | sed 1,20d | while read -r old; do rm -f "$$stamps/$$old"; done
+  echo "make check passed on tree $$before; a push of it skips the pre-push run."
+else
+  echo "make check passed, but its stamp could not be written in '$$stamps'."
+fi
+exit 0
+endef
+
+.PHONY: install-hooks hooks-status check-stamped
 
 install-hooks: export TRACEBLOC_PREPUSH_HOOK = $(_tb_prepush_hook)
 install-hooks:
@@ -116,5 +171,9 @@ hooks-status:
 	  echo "hooks-status: missing or stale: $$hook$${hp:+ (core.hooksPath is set to $$hp)}; run make install-hooks" >&2; \
 	  exit 1; \
 	fi
+
+check-stamped: export _TB_CHECK_STAMPED = $(_tb_check_stamped)
+check-stamped:
+	@sh -c "$$_TB_CHECK_STAMPED" check-stamped
 
 .DEFAULT_GOAL := $(_tb_install_hooks_goal)
