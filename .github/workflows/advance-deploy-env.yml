@@ -1,7 +1,7 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/advance-deploy-env.yml`
-# (blob 96dd83eb8f536d153241cc664a940c727d9cbb07) folded with the private source repo's own caller of it,
+# (blob 93d6f4ea09712722fb6ada5b5467e0fba08fc2ae) folded with the private source repo's own caller of it,
 # `.github/workflows/advance-deploy-env-caller.yml` (blob 5de24d409e5bbf2bccbb720912cd551cbe33b040), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
@@ -236,6 +236,9 @@ jobs:
           # needs `pull-requests: read` + `contents: read`, and the restricted
           # workflow token lacks the former on a private repo ((internal ref)).
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          # A staging push also re-walks main..staging, so a card a cancelled or
+          # short-attributed earlier run left behind is advanced (monotonic, capped).
+          WALK_BASE_REF: ${{ github.ref_name == 'staging' && 'origin/main' || '' }}
         # DERIVE each commit's PR from GitHub, not from its subject text
         # ((internal ref): the `(#N)` slot carries a ticket as often as a PR). The
         # script falls back to the subject only when the API is empty, with a

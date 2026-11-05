@@ -1,8 +1,8 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/desk-dispatch.yml`
-# (blob c65d8928087b2b4ac2167a3d38e670201eb3027d) folded with the private source repo's own caller of it,
-# `.github/workflows/desk-dispatch-caller.yml` (blob fb5d1be26b2a4f3216d7d8a3ecd04fe5cd5dbe2e), for a PUBLIC repo: GitHub lets a
+# (blob 1d0df99b40834b61ccb9e3a957025b84c16e45dc) folded with the private source repo's own caller of it,
+# `.github/workflows/desk-dispatch-caller.yml` (blob 9d6268ae17a077955be11e87fcc01d7ab34bf6ac), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
 # reusable's jobs inline -- the triggers are the caller's; every `inputs.*` is
@@ -70,8 +70,9 @@
 # standing request a rotation owner answers (`desk_owner` in scripts/desk-dispatch.py).
 #
 # WHAT IT FIRES ON (the decision lives in scripts/desk-dispatch.py, tested offline).
-# The one event is a FINISHED COMMIT; what has no commit event (a conflict after the
-# base moves, a person's answer, a lifted park, a stuck check, a merge) is the sweep's.
+# A review's event is a FINISHED COMMIT, and a requeue's is a PR leaving the merge path
+# (below); what has neither (a conflict after the base moves, a person's answer, a lifted
+# park, a stuck check, a merge) is the sweep's.
 #   workflow_run completed (a CI workflow), or check_suite completed (Cursor
 #     Bugbot's own suite): every CI run and commit status on the
 #     head terminal and green, `reviewer` requested or already on the PR, head
@@ -80,8 +81,13 @@
 #                                                       -> skip (the last one to
 #                                                          finish fires; red waits
 #                                                          for the author's fix)
-#   any other event: a PR event, a comment, a PR-     -> the job is skipped by its
-#     metadata check finishing, another app's suite,     `if:` and starts no runner
+#   pull_request dequeued, ready_for_review or        -> a REQUEUE session for the desk
+#     auto_merge_disabled: a desk APPROVE stands on       owner whose APPROVE stands, once
+#     the head, no auto-merge, not in the merge queue,    per drop (`decide_requeue`;
+#     no session or hold label, the base tip not red      (internal ref))
+#     on a required context
+#   any other event: another PR event, a comment, a   -> the job is skipped by its
+#     PR-metadata check finishing, another app's suite,  `if:` and starts no runner
 #     a run that concluded `skipped`
 #   a held red that is only CANCELLED or FAILED runs  -> re-run each in place, as
 #     on the live head                                    the App, once per run; no
@@ -228,6 +234,10 @@ on:
   # only. It cannot loop: GitHub starts no workflow for a suite GitHub Actions created.
   check_suite:
     types: [completed]
+  # An approved PR leaving the merge path: the requeue (`REQUEUE_EVENTS` in
+  # scripts/desk-dispatch.py, which desk-dispatch-selftest holds this list to).
+  pull_request:
+    types: [dequeued, ready_for_review, auto_merge_disabled]
 
 permissions:
   contents: read
@@ -249,7 +259,7 @@ permissions:
 # the PR such an event would replace that PR's pending run. The condition is the
 # job's `if:` clause for clause; desk-dispatch-selftest evaluates both on every event.
 concurrency:
-  group: desk-dispatch-${{ github.workflow }}-${{ (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion != 'skipped' && !contains(fromJSON('["Desk verdict footer", "FR gate", "Release note check", "Set PR Status", "Version bump gate"]'), github.event.workflow_run.name) || github.event_name == 'check_suite' && github.event.check_suite.app.slug == 'cursor') && (github.event.workflow_run.pull_requests[0].number || github.event.check_suite.pull_requests[0].number || github.event.workflow_run.head_sha || github.event.check_suite.head_sha) || format('noop-{0}', github.run_id) }}
+  group: desk-dispatch-${{ github.workflow }}-${{ (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion != 'skipped' && !contains(fromJSON('["Desk verdict footer", "FR gate", "Release note check", "Set PR Status", "Version bump gate"]'), github.event.workflow_run.name) || github.event_name == 'check_suite' && github.event.check_suite.app.slug == 'cursor' || github.event_name == 'pull_request' && contains(fromJSON('["dequeued", "ready_for_review", "auto_merge_disabled"]'), github.event.action) && github.event.pull_request.head.repo.full_name == github.repository) && (github.event.workflow_run.pull_requests[0].number || github.event.check_suite.pull_requests[0].number || github.event.pull_request.number || github.event.workflow_run.head_sha || github.event.check_suite.head_sha) || format('noop-{0}', github.run_id) }}
   cancel-in-progress: false
 
 # NO `permissions:` BLOCK IN THIS REUSABLE, DELIBERATELY -- see the header. (A
@@ -275,31 +285,35 @@ jobs:
     # a promotion branch; `release-train/` rather than `release-train/to-` because
     # the train owns that namespace. BOTH HALVES SPELL `is_promo` EXACTLY --
     # `(release-train/* OR hotfix-backmerge/*) AND base in (staging, main, master)`
-    # in scripts/desk-dispatch.py -- and scripts/tests/callershape.py
-    # `assert_promotion_guard` evaluates THIS expression over every (head, base)
+    # in scripts/desk-dispatch.py -- and the selftests' `assert_promotion_guard`
+    # (callershape) evaluates THIS expression over every (head, base)
     # of its matrix against the real `is_promo`. An event shape carrying neither
     # ref yields nulls and the job RUNS: a wasted minute beats an unreviewed PR.
     #
-    # THE SECOND CLAUSE: THE JOB RUNS ON A FINISHED COMMIT AND NOTHING ELSE -- a
-    # workflow run that did not conclude `skipped` and is not a PR-metadata check
-    # (caller-drift's METADATA_WORKFLOWS: they re-run on edits, labels and reviews,
-    # and the head the desk reads carries their verdict anyway), or Cursor Bugbot's
-    # suite (app slug `cursor`). A PR event or a comment from a caller not yet
-    # re-delivered is skipped here and starts no runner. The concurrency key above
-    # repeats this clause, and desk-dispatch-selftest evaluates both on every event.
+    # THE SECOND CLAUSE: THE JOB RUNS ON A FINISHED COMMIT, OR ON A PR LEAVING THE MERGE
+    # PATH, AND NOTHING ELSE -- a workflow run that did not conclude `skipped` and is not
+    # a PR-metadata check (caller-drift's METADATA_WORKFLOWS: they re-run on edits, labels
+    # and reviews, and the head the desk reads carries their verdict anyway), Cursor
+    # Bugbot's suite (app slug `cursor`), or a `pull_request` action in `REQUEUE_EVENTS`
+    # (scripts/desk-dispatch.py) on a head in this repo, since a fork's run gets no
+    # secrets. Every other PR event and every comment starts no runner. The concurrency
+    # key above repeats this clause, and desk-dispatch-selftest evaluates both on every event.
     if: >-
       !((startsWith(github.event.workflow_run.head_branch
-      || github.event.check_suite.head_branch, 'release-train/')
+      || github.event.check_suite.head_branch || github.event.pull_request.head.ref, 'release-train/')
       || startsWith(github.event.workflow_run.head_branch
-      || github.event.check_suite.head_branch, 'hotfix-backmerge/'))
+      || github.event.check_suite.head_branch || github.event.pull_request.head.ref, 'hotfix-backmerge/'))
       && contains(fromJSON('["staging", "main", "master"]'),
       github.event.workflow_run.pull_requests[0].base.ref
-      || github.event.check_suite.pull_requests[0].base.ref))
+      || github.event.check_suite.pull_requests[0].base.ref || github.event.pull_request.base.ref))
       && (github.event_name == 'workflow_run'
       && github.event.workflow_run.conclusion != 'skipped'
       && !contains(fromJSON('["Desk verdict footer", "FR gate", "Release note check", "Set PR Status", "Version bump gate"]'), github.event.workflow_run.name)
       || github.event_name == 'check_suite'
-      && github.event.check_suite.app.slug == 'cursor')
+      && github.event.check_suite.app.slug == 'cursor'
+      || github.event_name == 'pull_request'
+      && contains(fromJSON('["dequeued", "ready_for_review", "auto_merge_disabled"]'), github.event.action)
+      && github.event.pull_request.head.repo.full_name == github.repository)
     steps:
       # WHEN THIS JOB STARTED, for the hold the dispatcher takes on a no-op
       # ((internal ref) D6 lever 1): a job bills a rounded-up minute, and a "still in
