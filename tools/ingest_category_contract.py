@@ -23,23 +23,30 @@ THREE LAYERS, each a separate assertion so a failure names which one broke:
 2. every model module's declared ``category = "..."`` equals the directory it
    sits in -- asserted INTO the directory set, read from the AST so a module
    that cannot be imported in this job is still checked.
-3. vendored enum == the producer's enum on its ``develop`` (ci.yml's
-   ``ingest-schema-guard`` job, which runs this module's helpers as they stand
-   at the merge base). A check that compares the tree against a stale vendored
-   file agrees with itself; this layer is what stops the drift from moving one
-   level up.
+3. vendored enum == the producer's enum at the RELEASE the vendored copy pins
+   (``generated_from.ref_tag``; ci.yml's ``ingest-schema-guard`` job, which
+   runs this module's helpers as they stand at the merge base). A check that
+   compares the tree against a stale vendored file agrees with itself; this
+   layer is what stops the drift from moving one level up. A tag, never a
+   branch, so a producer push cannot change a pull request's verdict:
+   ``.github/workflows/category-drift.yml`` holds the copy to the producer's
+   ``develop`` once a day and files one issue when they disagree.
 
 This module is the shared logic for all three plus the refresh that writes the
 vendored file. ``tools/`` is not a package; tests load it by path, as they do
 ``prep_offline_weights.py``. Stdlib only.
 
-THE COST, stated rather than discovered: adding a category becomes a change in
-more than one repo that fails loudly until every repo agrees.
+THE COST, stated rather than discovered: adding a category is a change in more
+than one repo. The required check reads the pinned release, so unrelated pull
+requests stay green; the daily drift run is what goes red until every repo agrees.
 
-Refresh the vendored copy (needs ``gh`` logged in with read access to the
+Compare the vendored copy with the release it pins, or with ``develop``, and
+refresh it from a newer release (needs ``gh`` logged in with read access to the
 producer)::
 
-    python3 tools/ingest_category_contract.py --write
+    python3 tools/ingest_category_contract.py
+    python3 tools/ingest_category_contract.py --ref develop
+    python3 tools/ingest_category_contract.py --write --ref vX.Y.Z
 """
 
 from __future__ import annotations
@@ -48,6 +55,7 @@ import argparse
 import ast
 import json
 import os
+import re
 import subprocess
 import sys
 import urllib.error
@@ -63,8 +71,12 @@ VENDORED = ROOT / "tests" / "contracts" / "tracebloc_ingestor" / "ingest_categor
 #: The producer's repository, owner-qualified at run time. Named once.
 PRODUCER_REPO = "data-ingestors"
 
-#: The branch the vendored copy is held to.
+#: The branch the daily drift run holds the vendored copy to.
 PRODUCER_REF = "develop"
+
+#: The only ref the vendored copy may pin: a producer release tag. ci.yml's pin
+#: step is held to it by tests/test_ingest_schema_guard.py.
+RELEASE_TAG = re.compile(r"v[0-9]+\.[0-9]+\.[0-9]+")
 
 #: Where the ingest schema is published in the producer, NEWEST FIRST. The
 #: producer moved its schema directory into a ``contracts/`` package; ``develop``
@@ -251,6 +263,21 @@ def load_vendored(path: Path = VENDORED) -> tuple[str, ...]:
     return categories_from(wrapped, str(path))
 
 
+def pinned_tag(path: Path = VENDORED) -> str:
+    """The producer release the vendored copy pins, or a REFUSAL.
+
+    A missing field, a branch or a bare commit is not a pin: a branch moves under
+    the copy, and a commit says nothing about whether the producer released it.
+    """
+    try:
+        tag = json.loads(path.read_text(encoding="utf-8"))["generated_from"]["ref_tag"]
+    except (OSError, ValueError, KeyError, TypeError) as e:
+        raise Refusal(f"refused: {path} pins no producer release (generated_from.ref_tag): {e!r}")
+    if not isinstance(tag, str) or not RELEASE_TAG.fullmatch(tag):
+        raise Refusal(f"refused: {path} pins {tag!r}, which is not a producer release tag (vX.Y.Z)")
+    return tag
+
+
 def compare(published, ours, published_name: str, ours_name: str) -> list[str]:
     """Findings, one line per direction, each named. Empty means agreement."""
     findings = []
@@ -291,20 +318,21 @@ def _resolve_sha(owner: str, ref: str, token: str | None, opener=urllib.request.
         raise Refusal(f"refused: could not resolve {ref} to a commit: {e}")
 
 
-def render_vendored(categories, path: str, sha: str, date: str) -> str:
+def render_vendored(categories, path: str, sha: str, tag: str, date: str) -> str:
     doc = {
         "description": (
             "The category enum of the ingestor's published ingest schema, the list an ingest "
             "is validated against. DERIVED by tools/ingest_category_contract.py --write, never "
             "hand-edited. The zoo's category directories are asserted equal to it, and it is "
-            "asserted equal to the producer's develop in CI, so a stale copy cannot pass."
+            "asserted equal to the producer release it pins (ref_tag) in CI and to the "
+            "producer's develop daily, so a stale copy cannot pass."
         ),
         "version": 1,
         "generated_from": {
             "path": path,
             "pointer": "/" + "/".join(ENUM_POINTER),
             "ref": sha,
-            "ref_branch": PRODUCER_REF,
+            "ref_tag": tag,
             "ref_date": date,
         },
         "categories": list(categories),
@@ -315,20 +343,25 @@ def render_vendored(categories, path: str, sha: str, date: str) -> str:
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--owner", default="tracebloc")
-    ap.add_argument("--ref", default=PRODUCER_REF)
+    ap.add_argument("--ref", help="the producer ref to read (default: the release the vendored copy pins); "
+                                  "--write takes a release tag only")
     ap.add_argument("--write", action="store_true", help="rewrite the vendored file from the producer")
     args = ap.parse_args(argv)
 
+    ref = args.ref or pinned_tag()
+    if args.write and not RELEASE_TAG.fullmatch(ref):
+        raise Refusal(f"refused: --write pins a producer release tag (vX.Y.Z), not {ref!r}")
+
     token = _gh_token()
-    sha = _resolve_sha(args.owner, args.ref, token)
+    sha = _resolve_sha(args.owner, ref, token)
     path, body = fetch_http(args.owner, sha, token)
     categories = categories_from(body, f"{path}@{sha[:12]}")
     if duplicates(categories):
         raise Refusal(f"refused: the producer lists {duplicates(categories)} more than once")
     if path != CANDIDATE_PATHS[0]:
-        print(f"note: the producer still serves the OLD path {path} at {args.ref}", file=sys.stderr)
+        print(f"note: the producer still serves the OLD path {path} at {ref}", file=sys.stderr)
 
-    findings = compare(categories, load_vendored(), f"the producer ({args.ref})", "the vendored copy")
+    findings = compare(categories, load_vendored(), f"the producer ({ref})", "the vendored copy")
     if not args.write:
         for f in findings:
             print(f"DRIFT: {f}", file=sys.stderr)
@@ -336,7 +369,7 @@ def main(argv=None) -> int:
         return 1 if findings else 0
 
     date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    VENDORED.write_text(render_vendored(categories, path, sha, date), encoding="utf-8")
+    VENDORED.write_text(render_vendored(categories, path, sha, ref, date), encoding="utf-8")
     print(f"wrote {VENDORED.relative_to(ROOT)} from {path}@{sha[:12]}")
     ours = zoo_directories()
     tree = compare(categories, ours, "the producer", "model_zoo/")

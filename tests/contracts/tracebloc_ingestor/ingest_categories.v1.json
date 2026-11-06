@@ -1,11 +1,11 @@
 {
-  "description": "The category enum of the ingestor's published ingest schema, the list an ingest is validated against. DERIVED by tools/ingest_category_contract.py --write, never hand-edited. The zoo's category directories are asserted equal to it, and it is asserted equal to the producer's develop in CI, so a stale copy cannot pass.",
+  "description": "The category enum of the ingestor's published ingest schema, the list an ingest is validated against. DERIVED by tools/ingest_category_contract.py --write, never hand-edited. The zoo's category directories are asserted equal to it, and it is asserted equal to the producer release it pins (ref_tag) in CI and to the producer's develop daily, so a stale copy cannot pass.",
   "version": 1,
   "generated_from": {
     "path": "tracebloc_ingestor/contracts/schema/ingest.v1.json",
     "pointer": "/properties/category/enum",
-    "ref": "55d7ea1f2d1303dc6a4fed48c246f2972018c5b1",
-    "ref_branch": "develop",
+    "ref": "b01a249a89710fa8f62ccf40d599de3a33e3647d",
+    "ref_tag": "v0.12.3",
     "ref_date": "2026-11-06"
   },
   "categories": [

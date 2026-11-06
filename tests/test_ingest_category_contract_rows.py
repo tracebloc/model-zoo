@@ -117,3 +117,19 @@ def test_a_module_declaring_another_directorys_category_is_named(zoo):
     path.write_text(source.replace(anchor, 'category = "not_this_directory"'), encoding="utf-8")
 
     assert mismatches(zoo) == {rel: (directory, "not_this_directory")}
+
+
+def test_the_real_copy_pins_a_release(vendored):
+    """The known-good pin the row below starts from."""
+    assert gate.RELEASE_TAG.fullmatch(gate.pinned_tag(vendored))
+
+
+def test_a_copy_pinned_to_a_branch_is_refused(vendored):
+    doc = json.loads(vendored.read_text(encoding="utf-8"))
+    doc["generated_from"]["ref_tag"] = gate.PRODUCER_REF
+    vendored.write_text(json.dumps(doc), encoding="utf-8")
+    assert json.loads(vendored.read_text(encoding="utf-8"))["generated_from"]["ref_tag"] == gate.PRODUCER_REF
+
+    with pytest.raises(gate.Refusal) as exc:
+        gate.pinned_tag(vendored)
+    assert str(exc.value).endswith(f"pins {gate.PRODUCER_REF!r}, which is not a producer release tag (vX.Y.Z)")
