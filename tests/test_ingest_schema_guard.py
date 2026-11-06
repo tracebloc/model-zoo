@@ -283,6 +283,20 @@ def _drift_findings(text: str) -> list[str]:
     return findings
 
 
+def test_a_green_scheduled_run_closes_the_drift_issue():
+    """Without it a stale open issue dedupes the next real drift away."""
+    job = wf.job_block(_drift_text(), "settle")
+    assert "success() && github.event_name == 'schedule'" in job
+    assert "gh issue close" in job
+
+
+def test_MUTATION_a_settle_job_that_never_closes_is_caught():
+    text = _drift_text()
+    mutant = wf.mutate(text, "gh issue close", "echo close")
+    assert "gh issue close" in wf.job_block(text, "settle")
+    assert "gh issue close" not in wf.job_block(mutant, "settle")
+
+
 def test_THE_DRIFT_RUN_IS_THE_GUARDS_COMPARISON_AGAINST_DEVELOP_AND_KEEPS_NOTHING():
     """Byte-equal to the guard's step, so every verdict and leak test above
     covers it; scheduled, so no pull request's code runs beside its token."""

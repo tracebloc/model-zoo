@@ -136,3 +136,26 @@ jobs:
           gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" \
             --body-file "$body_file" --label "work-type:bug" \
             || gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --body-file "$body_file"
+
+  # A green scheduled run closes the open drift issue, so a later drift files a
+  # fresh one instead of being dropped as a duplicate of a stale one.
+  settle:
+    needs: drift
+    if: ${{ success() && github.event_name == 'schedule' }}
+    timeout-minutes: 5
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - name: Close the drift issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          title="Category drift: the vendored category enum disagrees with the producer's develop"
+          for number in $(gh issue list --repo "$GITHUB_REPOSITORY" \
+            --search "is:open \"$title\" in:title" --json number --jq '.[].number'); do
+            gh issue close "$number" --repo "$GITHUB_REPOSITORY" --reason completed \
+              --comment "The daily category drift run is green again: $RUN_URL"
+          done
