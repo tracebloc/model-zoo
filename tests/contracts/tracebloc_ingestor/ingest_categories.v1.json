@@ -4,9 +4,9 @@
   "generated_from": {
     "path": "tracebloc_ingestor/contracts/schema/ingest.v1.json",
     "pointer": "/properties/category/enum",
-    "ref": "0065146058bef12b0a621b1fc5e732a2a5ac7255",
+    "ref": "55d7ea1f2d1303dc6a4fed48c246f2972018c5b1",
     "ref_branch": "develop",
-    "ref_date": "2026-11-05"
+    "ref_date": "2026-11-06"
   },
   "categories": [
     "image_classification",
@@ -15,6 +15,7 @@
     "semantic_segmentation",
     "text_classification",
     "multi_label_text_classification",
+    "text_regression",
     "token_classification",
     "sentence_pair_classification",
     "tabular_classification",
