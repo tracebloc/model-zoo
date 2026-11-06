@@ -32,7 +32,8 @@ A checkpoint that publishes no `tokenizer.json` gets one generated from its own
 vocabulary by the tracebloc SDK's converter (`tracebloc.convert.tokenizers`), which
 checks that the generated file gives the original tokenizer's ids:
 `multi_label_text_classification/pytorch/esm2_35m_tokenizer.json` is ESM-2's
-`vocab.txt` matched one residue per token, as `EsmTokenizer` does.
+`vocab.txt` matched one residue per token, as `EsmTokenizer` does, and
+`text_regression/pytorch/esm2_35m_tokenizer.json` is the same file.
 
 ## The shared bert-vocab files are verified copies, not generated files
 
