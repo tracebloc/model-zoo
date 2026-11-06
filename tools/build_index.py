@@ -202,6 +202,7 @@ LABEL_WORDS = {
     "ebm": "EBM",
     "efficientdet": "EfficientDet",
     "electra": "ELECTRA",
+    "esm2": "ESM-2",
     "eva": "EVA",
     "fastvit": "FastViT",
     "fcn": "FCN",
