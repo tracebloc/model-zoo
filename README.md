@@ -13,6 +13,7 @@ Every model in this repo is compatible with tracebloc's secure training environm
 | Image classification | PyTorch | `model_zoo/image_classification/pytorch/` | Categorize images into labels |
 | Object detection | PyTorch | `model_zoo/object_detection/pytorch/` | Locate and classify objects in images |
 | Text classification | PyTorch | `model_zoo/text_classification/pytorch/` | Classify documents, reviews, tickets |
+| Text regression | PyTorch | `model_zoo/text_regression/pytorch/` | Predict a number from a text or sequence: protein stability, binding affinity, a review's score |
 | Token classification | PyTorch | `model_zoo/token_classification/pytorch/` | Tag tokens: NER, POS, slot filling |
 | Causal language modeling | PyTorch | `model_zoo/causal_language_modeling/pytorch/` | Pretrain/fine-tune a decoder-only LM (next-token) |
 | Masked language modeling | PyTorch | `model_zoo/masked_language_modeling/pytorch/` | Pretrain/domain-adapt an encoder LM (fill-in-the-blank) |
