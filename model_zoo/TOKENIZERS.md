@@ -28,6 +28,12 @@ table, and no tokenizer file in the directory is left unnamed.
 | **the model's own tokenizer** | `<model>_tokenizer.json` beside an offline-migrated pretrained template (`bert_base_uncased_tokenizer.json`, `distilbert_tokenizer.json`, `qwen2_5_0_5b_tokenizer.json`, `t5_small_tokenizer.json`, …) | the architecture was pretrained with this exact vocabulary; the file is the published tokenizer of that checkpoint, with padding baked in |
 | **the shared bert-vocab tokenizer** | `simple_*_tokenizer.json`, `masked_language_modeling/pytorch/tokenizer.json`, `embeddings_tokenizer.json`, `bert_vocab_tokenizer.json`, `seq2seq_tokenizer.json` | from-scratch templates that size their embedding table at `vocab_size = 30522` and need any consistent WordPiece vocabulary of that width |
 
+A checkpoint that publishes no `tokenizer.json` gets one generated from its own
+vocabulary by the tracebloc SDK's converter (`tracebloc.convert.tokenizers`), which
+checks that the generated file gives the original tokenizer's ids:
+`multi_label_text_classification/pytorch/esm2_35m_tokenizer.json` is ESM-2's
+`vocab.txt` matched one residue per token, as `EsmTokenizer` does.
+
 ## The shared bert-vocab files are verified copies, not generated files
 
 They are the standard `bert-base-uncased` WordPiece tokenizer — the same 30522-entry
