@@ -182,6 +182,18 @@
       "averageable": true
     },
     {
+      "id": "image_classification/pytorch/multichannel_cnn",
+      "upload": "image_classification/pytorch/multichannel_cnn.py",
+      "category": "image_classification",
+      "framework": "pytorch",
+      "model_type": null,
+      "label": "Multichannel CNN",
+      "batch": 16,
+      "forecast_window": null,
+      "params": 24082,
+      "averageable": true
+    },
+    {
       "id": "image_classification/pytorch/resnet_18",
       "upload": "image_classification/pytorch/resnet_18.py",
       "category": "image_classification",
@@ -695,6 +707,18 @@
       "batch": 32,
       "forecast_window": null,
       "params": 28795194,
+      "averageable": true
+    },
+    {
+      "id": "multi_label_text_classification/pytorch/esm2_35m",
+      "upload": "multi_label_text_classification/pytorch/esm2_35m.py",
+      "category": "multi_label_text_classification",
+      "framework": "pytorch",
+      "model_type": "",
+      "label": "ESM-2 35M",
+      "batch": 8,
+      "forecast_window": null,
+      "params": 33505211,
       "averageable": true
     },
     {

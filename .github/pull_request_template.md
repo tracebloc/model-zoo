@@ -25,10 +25,11 @@ Surface:
 <!-- For UI changes. Remove if N/A. -->
 
 ## Deployment notes
-<!-- Env vars, migrations, rollout order, feature flags. Remove if N/A. -->
+<!-- Env vars, migrations, feature flags. Remove if N/A. -->
 
 ## Checklist
 - [ ] Tests added / updated and passing locally
 - [ ] Docs updated if behavior or config changed
 - [ ] No secrets / credentials in the diff
 - [ ] For security-sensitive paths: appropriate reviewer requested
+- [ ] Can this ship alone? It ships to Prod in any order with every other PR: additive (expand, then contract) or dark behind a flag that is off by default. If not, split the change: each part that can ships alone, and a part that needs another PR stays a draft until that PR is in Prod. Unticked is a draft or a two-sided break. A `Merge after:` line may order merges into `develop`, never wait on another PR's release.
