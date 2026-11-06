@@ -36,8 +36,9 @@ This module is the shared logic for all three plus the refresh that writes the
 vendored file. ``tools/`` is not a package; tests load it by path, as they do
 ``prep_offline_weights.py``. Stdlib only.
 
-THE COST, stated rather than discovered: adding a category becomes a change in
-more than one repo that fails loudly until every repo agrees.
+THE COST, stated rather than discovered: adding a category is a change in more
+than one repo. The required check reads the pinned release, so unrelated pull
+requests stay green; the daily drift run is what goes red until every repo agrees.
 
 Compare the vendored copy with the release it pins, or with ``develop``, and
 refresh it from a newer release (needs ``gh`` logged in with read access to the
