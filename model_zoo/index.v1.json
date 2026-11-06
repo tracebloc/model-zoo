@@ -710,6 +710,18 @@
       "averageable": true
     },
     {
+      "id": "multi_label_text_classification/pytorch/esm2_35m",
+      "upload": "multi_label_text_classification/pytorch/esm2_35m.py",
+      "category": "multi_label_text_classification",
+      "framework": "pytorch",
+      "model_type": "",
+      "label": "ESM-2 35M",
+      "batch": 8,
+      "forecast_window": null,
+      "params": 33505211,
+      "averageable": true
+    },
+    {
       "id": "object_detection/pytorch/atss_resnet",
       "upload": "object_detection/pytorch/atss_resnet.py",
       "category": "object_detection",
