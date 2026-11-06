@@ -109,8 +109,10 @@ jobs:
   # platform's list is the `category` enum of the ingestor's published ingest
   # schema. tests/test_zoo_category_contract.py holds the tree to a VENDORED copy
   # of that enum in every test job above; these two jobs hold the vendored copy to
-  # the producer's develop, because a check against a stale vendored file agrees
-  # with itself.
+  # the producer RELEASE it pins (`generated_from.ref_tag`), because a check
+  # against a stale vendored file agrees with itself. A tag, never a branch, so a
+  # producer push cannot redden a pull request that changed nothing here;
+  # category-drift.yml holds the copy to the producer's develop once a day.
   #
   # 1) The vendored enum must EQUAL the producer's, checked in the one job that
   #    can read the private producer. Two rules, both pinned by
@@ -137,6 +139,25 @@ jobs:
           # trusted comparison is extracted from.
           fetch-depth: 0
           persist-credentials: false
+      # THE PIN IS DATA: one field of the PR's vendored blob, read by jq rather
+      # than by any code the PR controls, and refused unless it is a release tag
+      # (RELEASE_TAG in tools/ingest_category_contract.py, held equal by
+      # tests/test_ingest_schema_guard.py). jq prints it JSON-encoded and ASCII,
+      # so a newline or a non-ASCII digit stays escaped and cannot match.
+      - name: Read the producer release the vendored copy pins
+        id: pin
+        run: |
+          set -euo pipefail
+          vendored=tests/contracts/tracebloc_ingestor/ingest_categories.v1.json
+          release='^"v[0-9]+\.[0-9]+\.[0-9]+"$'
+          raw="$(git cat-file blob "HEAD:$vendored" | jq -ac '.generated_from.ref_tag' 2>/dev/null)" || raw=""
+          if ! [[ $raw =~ $release ]]; then
+            echo "::error file=$vendored::INGEST CATEGORY CHECK FAILED — $vendored pins no producer release (generated_from.ref_tag)"
+            exit 1
+          fi
+          tag="${raw//\"/}"
+          echo "producer release: $tag"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
       - name: Mint an ingestor-read token
         id: ingestor-token
         uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
@@ -150,7 +171,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ${{ github.repository_owner }}/data-ingestors
-          ref: develop
+          ref: refs/tags/${{ steps.pin.outputs.tag }}
           token: ${{ steps.ingestor-token.outputs.token }}
           path: _producer
           persist-credentials: false
@@ -248,13 +269,13 @@ jobs:
       - name: model_zoo/ agrees with the vendored category enum
         run: pytest tests/test_zoo_category_contract.py -v
       # Runs even when the step above is red, so one run reports both layers.
-      - name: The vendored category enum agrees with the producer's develop
+      - name: The vendored category enum agrees with the producer release it pins
         if: ${{ !cancelled() }}
         env:
           GUARD_RESULT: ${{ needs.ingest-schema-guard.result }}
         run: |
           if [ "$GUARD_RESULT" != "success" ]; then
-            echo "::error::ingest-schema-guard did not prove the vendored category enum equal to the producer's develop (result: ${GUARD_RESULT:-none}); its log gives the verdict."
+            echo "::error::ingest-schema-guard did not prove the vendored category enum equal to the producer release it pins (result: ${GUARD_RESULT:-none}); its log gives the verdict."
             exit 1
           fi
-          echo "ingest-schema-guard: the vendored category enum equals the producer's develop"
+          echo "ingest-schema-guard: the vendored category enum equals the producer release it pins"

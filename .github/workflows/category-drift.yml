@@ -1,0 +1,161 @@
+name: Category drift (daily)
+
+# The category gate's moving half. ci.yml's required `category-contract` holds the
+# vendored category enum to the producer RELEASE it pins, so a producer push cannot
+# redden a pull request here. This run holds it to the producer's develop once a
+# day and files one issue when they disagree: the cue to re-vendor from a newer
+# release (tests/contracts/tracebloc_ingestor/README.md). It is required nowhere.
+#
+# The comparison step is ci.yml's guard step byte for byte, so the boundary
+# tests/test_ingest_schema_guard.py pins there holds here too: the comparison is
+# `tools/` at the commit this runs, and the log carries one verdict and nothing
+# from the producer. Schedule and dispatch only, never a pull request.
+
+on:
+  schedule:
+    # Daily 05:23 UTC, off the on-the-hour spike.
+    - cron: '23 5 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  drift:
+    timeout-minutes: 10
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Mint an ingestor-read token
+        id: ingestor-token
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          app-id: ${{ secrets.RELEASE_TRAIN_APP_ID }}
+          private-key: ${{ secrets.RELEASE_TRAIN_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: data-ingestors
+          permission-contents: read
+      - name: Check out the producer's ingest schema
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.repository_owner }}/data-ingestors
+          ref: develop
+          token: ${{ steps.ingestor-token.outputs.token }}
+          path: _producer
+          persist-credentials: false
+          # Every candidate path, newest first, as in ci.yml's guard job.
+          sparse-checkout: |
+            /tracebloc_ingestor/contracts/schema/ingest.v1.json
+            /tracebloc_ingestor/schema/ingest.v1.json
+          sparse-checkout-cone-mode: false
+      - name: Assert the vendored category enum matches the producer's
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          set -euo pipefail
+          vendored=tests/contracts/tracebloc_ingestor/ingest_categories.v1.json
+          if [ -n "${BASE_REF:-}" ]; then
+            trusted_rev="$(git merge-base "origin/$BASE_REF" HEAD)"
+          else
+            trusted_rev="$(git rev-parse HEAD)"
+          fi
+          work="$(mktemp -d "${RUNNER_TEMP:-/tmp}/ingest-schema.XXXXXX")"
+          trusted="$work/checker"
+          report="$work/report.log"
+          mkdir -p "$trusted"
+          git archive "$trusted_rev" tools | tar -x -C "$trusted"
+          # The blob, never the working-tree path, which could be a symlink.
+          git cat-file blob "HEAD:$vendored" > "$work/vendored.json"
+          echo "category comparison: tools/ at $trusted_rev"
+          status=0
+          python3 -I - "$trusted/tools" _producer "$work/vendored.json" \
+            > "$report" 2>&1 <<'PY' || status=$?
+          import sys
+          from pathlib import Path
+
+          tools, producer, vendored = sys.argv[1:4]
+          sys.path.insert(0, tools)
+          import ingest_category_contract as gate
+
+          try:
+              rel, body = gate.select_from_tree(Path(producer))
+              published = gate.categories_from(body, rel)
+              ours = gate.load_vendored(Path(vendored))
+          except gate.Refusal as refusal:
+              print(refusal, file=sys.stderr)
+              sys.exit(2)
+          findings = gate.compare(published, ours, "the producer", "the vendored copy")
+          for finding in findings:
+              print(f"DRIFT: {finding}", file=sys.stderr)
+          sys.exit(1 if findings else 0)
+          PY
+          if [ "$status" -eq 0 ]; then
+            echo "ingest schema OK: $vendored matches the producer's category enum"
+            exit 0
+          elif [ "$status" -eq 1 ] && ! grep -q '^Traceback ' "$report"; then
+            echo "::error file=$vendored::INGEST CATEGORY DRIFT — $vendored disagrees with the producer's category enum"
+          else
+            echo "::error file=$vendored::INGEST CATEGORY CHECK FAILED — no verdict for $vendored (exit $status)"
+          fi
+          echo "The report names the producer's categories, so it is not printed here."
+          echo "To read it, run tools/ingest_category_contract.py with read access to the producer."
+          exit 1
+
+  # One issue, only on a scheduled red, and only one open at a time. Its text is
+  # fixed: it names no category, because the producer's develop is not public.
+  triage:
+    needs: drift
+    if: ${{ failure() && github.event_name == 'schedule' }}
+    timeout-minutes: 5
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - name: Open one drift issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          title="Category drift: the vendored category enum disagrees with the producer's develop"
+          # --search overrides --state, so the open filter lives in the query.
+          open_count="$(gh issue list --repo "$GITHUB_REPOSITORY" \
+            --search "is:open \"$title\" in:title" --json number --jq 'length')"
+          if [ "$open_count" -ne 0 ]; then
+            echo "An open drift issue already exists; not filing a duplicate."
+            exit 0
+          fi
+          body_file="$(mktemp)"
+          {
+            echo "The daily category drift run failed: $RUN_URL"
+            echo ""
+            echo "If its comparison step failed, tests/contracts/tracebloc_ingestor/ingest_categories.v1.json disagrees with the producer's develop. Once the producer releases the change, run \`python3 tools/ingest_category_contract.py --write --ref <release tag>\`, reconcile \`model_zoo/\`, and commit both in one pull request. If an earlier step failed (the token, a checkout), the run could not look: fix that and re-run it."
+          } > "$body_file"
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" \
+            --body-file "$body_file" --label "work-type:bug" \
+            || gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --body-file "$body_file"
+
+  # A green scheduled run closes the open drift issue, so a later drift files a
+  # fresh one instead of being dropped as a duplicate of a stale one.
+  settle:
+    needs: drift
+    if: ${{ success() && github.event_name == 'schedule' }}
+    timeout-minutes: 5
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - name: Close the drift issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          title="Category drift: the vendored category enum disagrees with the producer's develop"
+          for number in $(gh issue list --repo "$GITHUB_REPOSITORY" \
+            --search "is:open \"$title\" in:title" --json number --jq '.[].number'); do
+            gh issue close "$number" --repo "$GITHUB_REPOSITORY" --reason completed \
+              --comment "The daily category drift run is green again: $RUN_URL"
+          done

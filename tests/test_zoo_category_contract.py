@@ -341,6 +341,52 @@ def test_the_producer_test_is_deselected_unless_selected(tmp_path):
     assert rc == 0 and "1 passed" in summary, summary
 
 
+# ── the pin: the release the vendored copy was derived from ────────────────
+
+
+def _copy_pinning(tmp_path, **generated_from):
+    doc = json.loads(gate.VENDORED.read_text(encoding="utf-8"))
+    doc["generated_from"].update(generated_from)
+    path = tmp_path / "pinned.json"
+    path.write_text(json.dumps(doc), encoding="utf-8")
+    return path
+
+
+@pytest.mark.parametrize(
+    "tag", ["develop", "main", "", "0.12.2", "v0.12", "v0.12.2-rc1", "v0.12.2\n", "a7c214ce" * 5, None, 12]
+)
+def test_a_copy_that_pins_no_release_is_a_refusal(tmp_path, tag):
+    """A branch moves under the copy, and a commit says nothing about whether
+    the producer released it."""
+    with pytest.raises(gate.Refusal, match="not a producer release tag"):
+        gate.pinned_tag(_copy_pinning(tmp_path, ref_tag=tag))
+
+
+def test_a_copy_with_no_pin_is_a_refusal(tmp_path):
+    path = _copy_pinning(tmp_path)
+    doc = json.loads(path.read_text(encoding="utf-8"))
+    del doc["generated_from"]["ref_tag"]
+    path.write_text(json.dumps(doc), encoding="utf-8")
+    with pytest.raises(gate.Refusal, match="pins no producer release"):
+        gate.pinned_tag(path)
+
+
+def test_write_refuses_a_branch_before_it_reads_anything(monkeypatch):
+    def no_read(*args, **kwargs):
+        raise AssertionError("the refusal must come before any read")
+
+    monkeypatch.setattr(gate, "_gh_token", no_read)
+    monkeypatch.setattr(gate, "_resolve_sha", no_read)
+    with pytest.raises(gate.Refusal, match="--write pins a producer release tag"):
+        gate.main(["--write", "--ref", gate.PRODUCER_REF])
+
+
+def test_a_rendered_copy_pins_the_release_it_was_written_from(tmp_path):
+    path = tmp_path / "rendered.json"
+    path.write_text(gate.render_vendored(["a"], gate.CANDIDATE_PATHS[0], "0" * 40, "v1.2.3", "2026-01-01"))
+    assert gate.pinned_tag(path) == "v1.2.3"
+
+
 # ── control ────────────────────────────────────────────────────────────────
 
 
