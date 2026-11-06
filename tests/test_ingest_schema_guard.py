@@ -1,5 +1,7 @@
 """ci.yml's ``ingest-schema-guard``: the vendored category enum held to the
-producer's ``develop`` without running the PR's code or publishing the producer.
+producer release it pins without running the PR's code or publishing the
+producer; and ``category-drift.yml``, which holds it to the producer's
+``develop`` once a day with the guard's own comparison step.
 
 This repo is public, and so are its run logs and artifacts; the producer is
 not. The guard job holds the producer token and the producer's schema, so:
@@ -9,7 +11,9 @@ not. The guard job holds the producer token and the producer's schema, so:
 * nothing leaves the job but its log, and the log carries one verdict: no
   artifact, no cache, no output, no report;
 * ``category-contract``, the check branch protection requires, runs the PR's
-  tree tests with no token and is red unless the guard succeeded.
+  tree tests with no token and is red unless the guard succeeded;
+* the producer ref the guard reads is a release tag taken from the vendored
+  blob as data, so a producer push cannot change a pull request's verdict.
 
 Each property is RUN against a synthetic producer, and each has a mutation row
 at the bottom that breaks it and sees it caught.
@@ -28,12 +32,15 @@ import workflow_text as wf
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 WORKFLOW = REPO_ROOT / ".github" / "workflows" / "ci.yml"
+DRIFT_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "category-drift.yml"
 TOOL_REL = "tools/ingest_category_contract.py"
 VENDORED_REL = "tests/contracts/tracebloc_ingestor/ingest_categories.v1.json"
 GUARD_JOB = "ingest-schema-guard"
 GUARD_STEP = "Assert the vendored category enum matches the producer's"
+PIN_STEP = "Read the producer release the vendored copy pins"
 GATE_JOB = "category-contract"
-GATE_STEP = "The vendored category enum agrees with the producer's develop"
+GATE_STEP = "The vendored category enum agrees with the producer release it pins"
+DRIFT_JOB = "drift"
 
 
 def _tool():
@@ -62,17 +69,25 @@ def _checkouts(job_text: str) -> list[str]:
     return [s for s in wf.steps(job_text) if "actions/checkout@" in s]
 
 
-def _producer_dir() -> str:
-    """Where the guard job checks the producer out, read from the YAML."""
-    producer = [s for s in _checkouts(_guard()) if "token:" in s]
-    assert len(producer) == 1, f"expected ONE producer checkout in {GUARD_JOB}: {producer}"
-    m = re.search(r"^\s*path:\s*(\S+)\s*$", producer[0], re.MULTILINE)
-    assert m, f"the producer checkout declares no path:\n{producer[0]}"
+def _producer_checkout(job_text: str) -> str:
+    producer = [s for s in _checkouts(job_text) if "token:" in s]
+    assert len(producer) == 1, f"expected ONE producer checkout: {producer}"
+    return producer[0]
+
+
+def _with_value(step: str, key: str) -> str:
+    m = re.search(rf"^\s*{key}:\s*(\S.*?)\s*$", step, re.MULTILINE)
+    assert m, f"the step declares no {key}:\n{step}"
     return m.group(1)
 
 
-def _sparse_paths() -> list[str]:
-    producer = [s for s in _checkouts(_guard()) if "token:" in s][0]
+def _producer_dir() -> str:
+    """Where the guard job checks the producer out, read from the YAML."""
+    return _with_value(_producer_checkout(_guard()), "path")
+
+
+def _sparse_paths(job_text: str | None = None) -> list[str]:
+    producer = _producer_checkout(_guard() if job_text is None else job_text)
     lines = producer.splitlines()
     at = next(i for i, ln in enumerate(lines) if ln.strip() == "sparse-checkout: |")
     out = []
@@ -132,6 +147,160 @@ def test_the_required_check_is_green_only_on_a_guard_success(tmp_path):
     """A skipped or cancelled guard compared nothing, and a check that read it
     as anything but red would pass a fork PR that could not look."""
     assert _gate_findings(tmp_path, _gate_shell()) == []
+
+
+# --------------------------------------------------------------------------
+# THE PIN: a producer release tag, read from the vendored blob as data
+# --------------------------------------------------------------------------
+def _pin_shell() -> str:
+    return wf.step_shell(_guard(), PIN_STEP)
+
+
+def _pin_step_id() -> str:
+    step = [s for s in wf.steps(_guard()) if s.startswith(f"name: {PIN_STEP}\n")]
+    assert len(step) == 1, f"expected ONE step named {PIN_STEP!r}"
+    return _with_value(step[0], "id")
+
+
+#: Pins written down apart from either matcher: releases, near-misses, branches,
+#: a commit, and what a shell read could flatten (a trailing newline, a second
+#: line, padding, a non-ASCII digit). ``None`` is a missing field.
+_PINS = (
+    "v0.12.2", "v10.0.0", "v0.0.0",
+    "0.12.2", "v0.12", "v0.12.2-rc1", "v0.12.2.1", "V0.12.2", "va.b.c",
+    "develop", "main", "refs/tags/v0.12.2", "a7c214ce6952664889c765ee6d60003da753f684",
+    "", " v0.12.2", "v0.12.2 ", "v0.12.2\n", "v0.12.2\nv0.12.3", "v０.12.2",
+    None, 12,
+)
+
+
+def _pin_findings(tmp_path: Path, shell: str) -> list[str]:
+    """Pins the step and the tool's ``pinned_tag`` decide differently."""
+    root = _stage_repo(tmp_path)
+    findings = []
+    for i, pin in enumerate(_PINS):
+        doc = json.loads((REPO_ROOT / VENDORED_REL).read_text())
+        if pin is None:
+            del doc["generated_from"]["ref_tag"]
+        else:
+            doc["generated_from"]["ref_tag"] = pin
+        text = json.dumps(doc, indent=2) + "\n"
+        if (root / VENDORED_REL).read_text() != text:
+            wf.commit_pr_change(root, VENDORED_REL, text)
+        written = tmp_path / f"vendored-{i}.json"
+        written.write_text(text)
+        try:
+            tool = gate.pinned_tag(written)
+        except gate.Refusal:
+            tool = None
+        out = tmp_path / f"output-{i}"
+        out.write_text("")
+        proc = wf.run_step(root, shell, {"GITHUB_OUTPUT": str(out)})
+        step = None
+        if proc.returncode == 0:
+            m = re.fullmatch(r"tag=(.*)\n", out.read_text())
+            step = m.group(1) if m else f"unparsed output {out.read_text()!r}"
+        if step != tool:
+            findings.append(f"{pin!r}: the step pins {step!r}, the tool {tool!r}")
+    return findings
+
+
+def test_the_pin_step_and_the_tool_accept_exactly_the_same_release_tags(tmp_path):
+    """The step's pattern and ``RELEASE_TAG`` are two statements of one rule,
+    run over one domain. Both an accepted and a refused pin are in it."""
+    tags = [p for p in _PINS if isinstance(p, str)]
+    assert any(gate.RELEASE_TAG.fullmatch(p) for p in tags)
+    assert not all(gate.RELEASE_TAG.fullmatch(p) for p in tags)
+    assert _pin_findings(tmp_path, _pin_shell()) == []
+
+
+def test_a_vendored_blob_that_is_not_json_pins_nothing(tmp_path):
+    root = _stage_repo(tmp_path)
+    wf.commit_pr_change(root, VENDORED_REL, "not json\n")
+    out = tmp_path / "output"
+    out.write_text("")
+    proc = wf.run_step(root, _pin_shell(), {"GITHUB_OUTPUT": str(out)})
+    assert proc.returncode != 0 and out.read_text() == ""
+    assert "pins no producer release" in _public(proc)
+
+
+def _guard_ref_findings(job_text: str) -> list[str]:
+    ref = _with_value(_producer_checkout(job_text), "ref")
+    want = f"refs/tags/${{{{ steps.{_pin_step_id()}.outputs.tag }}}}"
+    return [] if ref == want else [f"the guard reads the producer at {ref!r}, not the pinned tag"]
+
+
+def test_the_guard_reads_the_producer_at_the_pinned_tag():
+    """A branch here is what let a producer push redden every pull request."""
+    assert _guard_ref_findings(_guard()) == []
+
+
+def test_the_committed_copy_pins_a_release():
+    assert gate.RELEASE_TAG.fullmatch(gate.pinned_tag(REPO_ROOT / VENDORED_REL))
+
+
+# --------------------------------------------------------------------------
+# THE DRIFT RUN: the guard's own comparison, against the producer's develop
+# --------------------------------------------------------------------------
+def _drift_text() -> str:
+    return DRIFT_WORKFLOW.read_text()
+
+
+def _triggers(text: str) -> list[str]:
+    lines = text.splitlines()
+    assert "on:" in lines, "no top-level `on:` key"
+    keys = []
+    for line in lines[lines.index("on:") + 1 :]:
+        if line and not line.startswith(" "):
+            break
+        m = re.match(r"^  ([A-Za-z_]+):", line)
+        if m:
+            keys.append(m.group(1))
+    assert keys, "no triggers parsed"
+    return keys
+
+
+def _drift_findings(text: str) -> list[str]:
+    findings = []
+    if sorted(_triggers(text)) != ["schedule", "workflow_dispatch"]:
+        findings.append(f"the drift run triggers on {_triggers(text)}, not on a schedule and dispatch alone")
+    job = wf.job_block(text, DRIFT_JOB)
+    if wf.step_shell(job, GUARD_STEP) != _guard_shell():
+        findings.append("the drift run's comparison is not the guard's step")
+    producer = _producer_checkout(job)
+    if _with_value(producer, "ref") != gate.PRODUCER_REF:
+        findings.append(f"the drift run reads the producer at {_with_value(producer, 'ref')!r}")
+    if _with_value(producer, "path") != _producer_dir():
+        findings.append("the drift run checks the producer out where the comparison does not read")
+    if _sparse_paths(job) != ["/" + p for p in gate.CANDIDATE_PATHS]:
+        findings.append("the drift run does not check out every candidate path in order")
+    if _token_jobs(text) != [DRIFT_JOB]:
+        findings.append(f"the producer token is in {_token_jobs(text)}, not in {DRIFT_JOB} alone")
+    findings += [f"the drift job publishes through {p}" for p in wf.publishers(job)]
+    findings += [f"the drift job runs untrusted code: {r}" for r in wf.untrusted_runs(job)]
+    if any("persist-credentials: false" not in s for s in _checkouts(job)):
+        findings.append("a drift checkout keeps a credential")
+    return findings
+
+
+def test_a_green_scheduled_run_closes_the_drift_issue():
+    """Without it a stale open issue dedupes the next real drift away."""
+    job = wf.job_block(_drift_text(), "settle")
+    assert "success() && github.event_name == 'schedule'" in job
+    assert "gh issue close" in job
+
+
+def test_MUTATION_a_settle_job_that_never_closes_is_caught():
+    text = _drift_text()
+    mutant = wf.mutate(text, "gh issue close", "echo close")
+    assert "gh issue close" in wf.job_block(text, "settle")
+    assert "gh issue close" not in wf.job_block(mutant, "settle")
+
+
+def test_THE_DRIFT_RUN_IS_THE_GUARDS_COMPARISON_AGAINST_DEVELOP_AND_KEEPS_NOTHING():
+    """Byte-equal to the guard's step, so every verdict and leak test above
+    covers it; scheduled, so no pull request's code runs beside its token."""
+    assert _drift_findings(_drift_text()) == []
 
 
 # --------------------------------------------------------------------------
@@ -411,3 +580,40 @@ def test_MUTATION_a_required_check_that_accepts_a_skipped_guard_is_caught(tmp_pa
     assert _gate_findings(tmp_path, shell) == []
     mutant = wf.mutate(shell, '[ "$GUARD_RESULT" != "success" ]', '[ "$GUARD_RESULT" = "failure" ]')
     assert "skipped" in _gate_findings(tmp_path, mutant)
+
+
+def test_MUTATION_a_pin_step_that_takes_any_ref_is_caught(tmp_path):
+    shell = _pin_shell()
+    assert _pin_findings(tmp_path / "clean", shell) == []
+    mutant = wf.mutate(shell, """release='^"v[0-9]+\\.[0-9]+\\.[0-9]+"$'""", """release='^".+"$'""")
+    assert "'develop': the step pins 'develop', the tool None" in _pin_findings(tmp_path / "mutant", mutant)
+
+
+def test_MUTATION_a_guard_that_reads_a_branch_is_caught():
+    assert _guard_ref_findings(_guard()) == []
+    mutant = wf.mutate(_guard(), "ref: refs/tags/${{ steps.pin.outputs.tag }}", "ref: develop")
+    assert _guard_ref_findings(mutant) == ["the guard reads the producer at 'develop', not the pinned tag"]
+
+
+def test_MUTATION_a_drift_comparison_that_differs_from_the_guard_is_caught():
+    text = _drift_text()
+    assert _drift_findings(text) == []
+    mutant = wf.mutate(text, 'sys.exit(1 if findings else 0)', 'sys.exit(0)')
+    assert _drift_findings(mutant) == ["the drift run's comparison is not the guard's step"]
+
+
+def test_MUTATION_a_drift_run_on_pull_requests_is_caught():
+    text = _drift_text()
+    assert _drift_findings(text) == []
+    mutant = wf.mutate(text, "  workflow_dispatch:\n", "  workflow_dispatch:\n  pull_request:\n")
+    assert _drift_findings(mutant) == [
+        "the drift run triggers on ['schedule', 'workflow_dispatch', 'pull_request'], "
+        "not on a schedule and dispatch alone"
+    ]
+
+
+def test_MUTATION_a_drift_run_that_reads_another_branch_is_caught():
+    text = _drift_text()
+    assert _drift_findings(text) == []
+    mutant = wf.mutate(text, "          ref: develop\n", "          ref: main\n")
+    assert _drift_findings(mutant) == ["the drift run reads the producer at 'main'"]
