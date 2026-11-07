@@ -30,7 +30,8 @@ framework = "pytorch"
 main_class = "MyModel"
 license = "Apache-2.0"
 image_size = 1024
-batch_size = 2
+# Sized to train within the smallest client's memory: see tools/template_memory.py.
+batch_size = 1
 output_classes = 2
 category = "semantic_segmentation"
 

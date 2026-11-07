@@ -6,7 +6,8 @@ framework = "pytorch"
 model_type = "yolo"
 main_class = "MyModel"
 image_size = 448
-batch_size = 64
+# Sized to train within the smallest client's memory: see tools/template_memory.py.
+batch_size = 8
 output_classes = 3
 category = "object_detection"
 

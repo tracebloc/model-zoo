@@ -21,4 +21,4 @@ Pixel-level class labeling. Each output pixel gets a class assignment, so the re
 
 - **Input**: RGB images, `(B, 3, H, W)`.
 - **Labels**: per-pixel class masks, `(B, H, W)` with integer class IDs.
-- **Batch size**: default 8 — segmentation masks are memory-heavy.
+- **Batch size**: each template's own default, sized so a run fits a client with 4 GiB of memory per run (`tools/template_memory.py`); raise it in the training plan on a client with more memory.

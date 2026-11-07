@@ -10,6 +10,7 @@ template's defaults and reporting, on a copy of the real ``model_zoo/``.
 from __future__ import annotations
 
 import importlib.util
+import json
 import pathlib
 import shutil
 import sys
@@ -30,7 +31,7 @@ def _load():
 
 
 tool = _load()
-TEMPLATE = tool.CHECKED[0]
+TEMPLATE = "multi_label_text_classification/pytorch/esm2_35m"
 
 
 def recorded(defaults, path):
@@ -47,6 +48,13 @@ def zoo(tmp_path):
     return tmp_path
 
 
+@pytest.fixture
+def not_fitting():
+    real = tool.NOT_FITTING
+    yield
+    tool.NOT_FITTING = real
+
+
 def _rewrite(zoo, old, new):
     path = zoo / tool.ZOO / f"{TEMPLATE}.py"
     text = path.read_text()
@@ -56,13 +64,13 @@ def _rewrite(zoo, old, new):
 
 
 def test_row_the_real_zoo_fits(zoo):
-    lines, findings = tool.check(zoo, recorded)
-    assert findings == [] and len(lines) == len(tool.CHECKED)
+    lines, findings = tool.check(zoo, recorded, templates=(TEMPLATE,))
+    assert findings == [] and len(lines) == 1
 
 
 def test_row_raised_batch_is_a_finding(zoo):
     _rewrite(zoo, "batch_size = 2\n", "batch_size = 8\n")
-    _, findings = tool.check(zoo, recorded)
+    _, findings = tool.check(zoo, recorded, templates=(TEMPLATE,))
     assert findings == [
         f"{TEMPLATE}: ~3.79 GiB at batch 8, size 512, over the 4 GiB budget "
         "with the SDK's margin; lower its defaults"
@@ -71,7 +79,7 @@ def test_row_raised_batch_is_a_finding(zoo):
 
 def test_row_raised_sequence_length_is_a_finding(zoo):
     _rewrite(zoo, "sequence_length = 512\n", "sequence_length = 1024\n")
-    _, findings = tool.check(zoo, recorded)
+    _, findings = tool.check(zoo, recorded, templates=(TEMPLATE,))
     assert findings == [
         f"{TEMPLATE}: ~3.79 GiB at batch 2, size 1024, over the 4 GiB budget "
         "with the SDK's margin; lower its defaults"
@@ -80,13 +88,13 @@ def test_row_raised_sequence_length_is_a_finding(zoo):
 
 def test_row_unreadable_batch_is_a_finding(zoo):
     _rewrite(zoo, "batch_size = 2\n", "batch_size = int('2')\n")
-    _, findings = tool.check(zoo, recorded)
+    _, findings = tool.check(zoo, recorded, templates=(TEMPLATE,))
     assert findings == [f"{TEMPLATE}: batch_size None is not a positive int"]
 
 
 def test_row_missing_template_is_a_finding(zoo):
     (zoo / tool.ZOO / f"{TEMPLATE}.py").unlink()
-    _, findings = tool.check(zoo, recorded)
+    _, findings = tool.check(zoo, recorded, templates=(TEMPLATE,))
     assert findings == [
         f"{TEMPLATE}: no template at {tool.ZOO}/{TEMPLATE}.py",
     ]
@@ -95,3 +103,22 @@ def test_row_missing_template_is_a_finding(zoo):
 def test_row_nothing_checked_is_a_finding(zoo):
     _, findings = tool.check(zoo, recorded, templates=())
     assert findings == ["no template is checked"]
+
+
+def test_row_checked_lists_every_pytorch_template(zoo):
+    templates, findings = tool.checked(zoo)
+    assert findings == []
+    assert TEMPLATE in templates
+    assert not set(templates) & tool.NOT_FITTING
+    index = json.loads((zoo / tool.INDEX).read_text())["templates"]
+    pytorch = {row["id"] for row in index if row["framework"] == "pytorch"}
+    assert set(templates) == pytorch - tool.NOT_FITTING
+
+
+def test_row_a_stale_not_fitting_entry_is_a_finding(zoo, not_fitting):
+    tool.NOT_FITTING = tool.NOT_FITTING | {"object_detection/pytorch/no_such"}
+    _, findings = tool.checked(zoo)
+    assert findings == [
+        "object_detection/pytorch/no_such: listed in NOT_FITTING but not a "
+        "checked template"
+    ]

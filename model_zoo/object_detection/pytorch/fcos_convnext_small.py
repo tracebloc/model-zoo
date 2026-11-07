@@ -92,10 +92,8 @@ license = "BSD-3-Clause"
 # all declare 800 now, and `KNOWN_MISMATCHES` in
 # tests/test_od_declared_resolution.py is empty with its ratchet at zero.
 image_size = 800
-# Conservative on purpose. OD ships no SDK shape-probe (internal ref), so this value is
-# taken at face value with nothing to correct it, and a ConvNeXt-Small backbone
-# at 800px is the memory driver rather than the anchor-free head.
-batch_size = 2
+# Sized to train within the smallest client's memory: see tools/template_memory.py.
+batch_size = 1
 output_classes = 12
 category = "object_detection"
 

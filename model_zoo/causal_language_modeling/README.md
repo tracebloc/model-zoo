@@ -23,7 +23,7 @@ The first three are plain `nn.Module` decoders (no pretrained weights, no in-fil
 
 - **Input**: `.txt` files — plain text for pretraining, or `prompt\tcompletion` lines for SFT.
 - **Labels**: position-aligned and **unshifted**. The model does **not** shift labels; the training container applies the single next-token shift (logits at position *t* are scored against the token at position *t+1*).
-- **Batch size**: 32 (simple/medium), 16 (nanogpt).
+- **Batch size**: each template's own default, sized so a run fits a client with 4 GiB of memory per run (`tools/template_memory.py`); raise it in the training plan on a client with more memory.
 
 ## Tokenizer
 

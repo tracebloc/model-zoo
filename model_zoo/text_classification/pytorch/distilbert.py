@@ -31,7 +31,8 @@ main_class = "MyModel"
 category = "text_classification"
 model_type = ""
 tokenizer_file = "distilbert_tokenizer.json"
-batch_size = 16
+# Sized to train within the smallest client's memory: see tools/template_memory.py.
+batch_size = 2
 sequence_length = 512
 output_classes = 5
 

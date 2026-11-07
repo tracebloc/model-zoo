@@ -99,10 +99,8 @@ license = "BSD-3-Clause"
 # UPSCALES anything smaller straight back to 800, so 800 is the resolution this
 # model actually runs at.
 image_size = 800
-# The distribution head is 4 * (reg_max + 1) = 68 regression channels against
-# RetinaNet's 4 per anchor, so activations are heavier than atss_resnet's at
-# the same resolution. 4 rather than 8.
-batch_size = 4
+# Sized to train within the smallest client's memory: see tools/template_memory.py.
+batch_size = 2
 output_classes = 12
 category = "object_detection"
 

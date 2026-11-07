@@ -31,7 +31,8 @@ main_class = "MyModel"
 category = "token_classification"
 model_type = ""
 tokenizer_file = "distil_token_tokenizer.json"
-batch_size = 64
+# Sized to train within the smallest client's memory: see tools/template_memory.py.
+batch_size = 16
 sequence_length = 128
 # BIO/IOB2 tag count. Default 9 matches the CoNLL-2003 scheme:
 # O + B/I x {PER, ORG, LOC, MISC}. Set to your dataset's tag count.

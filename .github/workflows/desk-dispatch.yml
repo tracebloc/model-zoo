@@ -1,7 +1,7 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/desk-dispatch.yml`
-# (blob 1d0df99b40834b61ccb9e3a957025b84c16e45dc) folded with the private source repo's own caller of it,
+# (blob ac1d75f551e1936f002a593a4fe1f6572069574d) folded with the private source repo's own caller of it,
 # `.github/workflows/desk-dispatch-caller.yml` (blob da7925b437da4dea17b83f9fff5d9516541a5076), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
@@ -188,7 +188,8 @@
 # every run mints is ONLY to read this private repo's checker (`permission-contents:
 # read` on the private source repo); the two others -- the heal's `actions: write`, the
 # protection read's `administration: read` -- are minted only after the PRE-CHECK
-# says this run can fire ((internal ref), the step below). The routine
+# says this run can fire ((internal ref), the step below), and a board
+# token for a flaky bug's card only when the pre-check counted a heal. The routine
 # token and fire URL come from the caller.
 #
 # NO `paths:` FILTER may ever be added by a caller; NO `cancel-in-progress` here
@@ -367,7 +368,7 @@ jobs:
         with:
           python-version: '3.12'
       # THE PRE-CHECK ((internal ref)): the SAME script, on the job's own
-      # token only, before the two App mints below. It stops the run -- `go=false`,
+      # token only, before the App mints below. It stops the run -- `go=false`,
       # after the same concurrency hold `main` takes -- only on a verdict the
       # protection read cannot change: an event that acts on nothing (not a
       # completion, no open PR, a draft / bot / promotion PR, an older push, an event
@@ -388,6 +389,35 @@ jobs:
           DISPATCH_T0: ${{ steps.started.outputs.at }}
           DESK_REVIEWER: ${{ 'tracebloc-review' }}
         run: python3 .org-config-tools/scripts/desk-dispatch.py --precheck
+      # A FLAKY BUG'S CARD. The pre-check counts a re-run's heal on the job's own token
+      # (`count_heal` in scripts/desk-dispatch.py), and an issue that token opens starts
+      # no workflow, so add-to-kanban never places it. These two steps place it, the way
+      # every filed bug is placed (nightly-red-issue.py `place`): a token from the same
+      # App with `organization-projects: write`, the grant the nightly filers mint for a
+      # bug's card, and `issues: read` so the card can name the caller's issue. Only
+      # when the pre-check named a bug (`FLAKY_OUTPUT`), whatever its verdict.
+      # `continue-on-error`, DELIBERATELY: a card that could not be placed is an error
+      # annotation, never a lost review, and the next heal of the check places it again.
+      - name: Mint a board token for a flaky bug's card (tolerates a refused mint)
+        id: board-token
+        if: steps.precheck.outputs.flaky != ''
+        continue-on-error: true
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          app-id: ${{ secrets.RELEASE_TRAIN_APP_ID }}
+          private-key: ${{ secrets.RELEASE_TRAIN_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-issues: read
+          permission-organization-projects: write
+      - name: Place each flaky bug the heal was counted on in Ready
+        if: steps.precheck.outputs.flaky != ''
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          KANBAN_TOKEN: ${{ steps.board-token.outputs.token }}
+          FLAKY_ISSUES: ${{ steps.precheck.outputs.flaky }}
+        run: python3 .org-config-tools/scripts/nightly-red-issue.py place --repo "$GITHUB_REPOSITORY" --issues "$FLAKY_ISSUES"
       # SCOPED to the caller repo and to actions: write, for exactly one call: an
       # in-place re-run, as the App so the re-run's completion is a `workflow_run` the
       # caller sees, of a run behind a CANCELLED or FAILED required context on the live

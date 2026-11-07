@@ -23,4 +23,4 @@ If you want absolute maximum accuracy and can afford the compute, use [`pytorch/
 
 - **Input**: text strings; tokenization happens inside the training container with the tokenizer each template names in `tokenizer_file` (uploaded with the model — see [`../TOKENIZERS.md`](../TOKENIZERS.md)).
 - **Labels**: integer class indices.
-- **Batch size**: default 512.
+- **Batch size**: each template's own default, sized so a run fits a client with 4 GiB of memory per run (`tools/template_memory.py`); raise it in the training plan on a client with more memory.
