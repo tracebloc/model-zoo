@@ -27,7 +27,8 @@ framework = "pytorch"
 main_method = "MyModel"
 license = "MIT"
 image_size = 512
-batch_size = 4
+# Sized to train within the smallest client's memory: see tools/template_memory.py.
+batch_size = 2
 output_classes = 2
 category = "semantic_segmentation"
 
