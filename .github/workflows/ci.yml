@@ -101,7 +101,7 @@ jobs:
       - name: The pinned SDK's upload checks pass on every template as cloned
         env:
           MODEL_ZOO_SDK_UPLOAD: "1"
-        run: pytest tests/test_sdk_upload_from_clone.py -v
+        run: pytest tests/test_sdk_upload_from_clone.py tests/test_template_memory.py -v
 
   # ── The category gate: model_zoo/ against the ingestor's published enum ──
   #

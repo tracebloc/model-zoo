@@ -39,6 +39,7 @@ rows:
   - tests/test_dump_manifest_guard.py
   - tests/test_ingest_schema_guard.py
   - tests/test_publish_ready_made_rows.py
+  - tests/test_template_memory_rows.py
 exempt:
   - path: tools/build_index.py
     ticket: tracebloc/model-zoo#84
