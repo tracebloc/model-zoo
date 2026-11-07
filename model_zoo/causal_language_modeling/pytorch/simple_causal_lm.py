@@ -7,7 +7,8 @@ main_class = "SimpleCausalLM"
 category = "causal_language_modeling"
 model_type = ""
 tokenizer_file = "bert_vocab_tokenizer.json"
-batch_size = 32
+# Sized to train within the smallest client's memory: see tools/template_memory.py.
+batch_size = 16
 sequence_length = 128
 vocab_size = 30522
 license = "Apache-2.0"

@@ -10,6 +10,7 @@ template's defaults and reporting, on a copy of the real ``model_zoo/``.
 from __future__ import annotations
 
 import importlib.util
+import json
 import pathlib
 import shutil
 import sys
@@ -104,12 +105,14 @@ def test_row_nothing_checked_is_a_finding(zoo):
     assert findings == ["no template is checked"]
 
 
-def test_row_checked_lists_the_categories_templates(zoo):
+def test_row_checked_lists_every_pytorch_template(zoo):
     templates, findings = tool.checked(zoo)
     assert findings == []
     assert TEMPLATE in templates
     assert not set(templates) & tool.NOT_FITTING
-    assert {t.split("/", 1)[0] for t in templates} == tool.CATEGORIES
+    index = json.loads((zoo / tool.INDEX).read_text())["templates"]
+    pytorch = {row["id"] for row in index if row["framework"] == "pytorch"}
+    assert set(templates) == pytorch - tool.NOT_FITTING
 
 
 def test_row_a_stale_not_fitting_entry_is_a_finding(zoo, not_fitting):
