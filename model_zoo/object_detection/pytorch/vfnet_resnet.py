@@ -105,8 +105,8 @@ license = "BSD-3-Clause"
 # UPSCALES anything smaller straight back to 800, so 800 is the resolution this
 # model actually runs at.
 image_size = 800
-# Two deformable convolutions per pyramid level on top of the shared towers.
-batch_size = 4
+# Sized to train within the smallest client's memory: see tools/template_memory.py.
+batch_size = 2
 output_classes = 12
 category = "object_detection"
 

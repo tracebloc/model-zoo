@@ -39,6 +39,7 @@ tool = _load()
 
 
 def test_every_checked_template_fits_at_its_defaults():
+    templates, _ = tool.checked(ROOT)
     lines, findings = tool.check(ROOT, tool.sdk_estimator())
     assert not findings, "\n".join(findings)
-    assert len(lines) == len(tool.CHECKED) > 0
+    assert len(lines) == len(templates) > 0
