@@ -121,10 +121,8 @@ license = "BSD-3-Clause"
 # asserted from here — tests/test_od_declared_resolution.py compares the two
 #
 image_size = 800
-# Three ROI heads over the same pooled features. The backbone pass is shared, so
-# the cost over faster_rcnn_resnet is three 1024-wide MLP heads on 512 sampled
-# proposals per image rather than one — enough to warrant 4 rather than 8.
-batch_size = 4
+# Sized to train within the smallest client's memory: see tools/template_memory.py.
+batch_size = 1
 output_classes = 12
 category = "object_detection"
 

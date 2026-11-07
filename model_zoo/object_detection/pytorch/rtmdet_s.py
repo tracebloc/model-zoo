@@ -174,7 +174,8 @@ license = "Apache-2.0"
 # The resolution the backbone actually sees: the transform below is built with
 # min_size == max_size == this value, so a square input scales by 1.0.
 image_size = 640
-batch_size = 8
+# Sized to train within the smallest client's memory: see tools/template_memory.py.
+batch_size = 4
 output_classes = 12
 category = "object_detection"
 

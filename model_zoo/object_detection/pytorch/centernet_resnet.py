@@ -108,11 +108,8 @@ license = "BSD-3-Clause"
 # The transform below is built with min_size=IMAGE_SIZE, so the declared value
 # IS the resolution this model runs at.
 image_size = 512
-# A stride-4 map at 512px is 128x128 = 16k locations with only three thin heads
-# on top, so this is lighter than the 800px pyramid templates despite the higher
-# resolution. OD ships no SDK shape-probe (internal ref), so the value is taken at face
-# value and chosen conservatively.
-batch_size = 8
+# Sized to train within the smallest client's memory: see tools/template_memory.py.
+batch_size = 4
 output_classes = 12
 category = "object_detection"
 

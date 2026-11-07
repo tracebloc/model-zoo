@@ -87,11 +87,8 @@ license = "BSD-3-Clause"
 # this model actually runs at. (Not overridden here: the whole roster shares
 # the torchvision default, and a per-template override is a silent divergence.)
 image_size = 800
-# Conservative on purpose. OD ships no SDK shape-probe (internal ref), so this value is
-# taken at face value with nothing to correct it, and a ConvNeXt-Small backbone
-# at 800px is the memory driver rather than the detector heads. 2 matches the
-# other 800px two-stage templates in the roster.
-batch_size = 2
+# Sized to train within the smallest client's memory: see tools/template_memory.py.
+batch_size = 1
 output_classes = 12
 category = "object_detection"
 
