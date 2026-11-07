@@ -22,5 +22,5 @@ user.upload_model("model_zoo/text_regression/pytorch/esm2_35m.py",
 - **Input**: texts, or sequences (one protein per sample, residues as letters); tokenization happens inside the training container with the tokenizer the template names in `tokenizer_file` (uploaded with the model — see [`../TOKENIZERS.md`](../TOKENIZERS.md)).
 - **Labels**: one number per text or sequence.
 - **Output**: `(B, 1)`, the predicted number, with no activation in the model; `output_classes` is 1. The platform trains it with `mse` (the default) or `l1`, and reports scores in the target's own units.
-- **Sequence length**: 1024 tokens (`esm2_35m`), ESM-2's pretraining length; longer sequences are cut.
-- **Batch size**: 8 (`esm2_35m`).
+- **Sequence length**: 512 tokens (`esm2_35m`), so it trains within the smallest client's memory; longer sequences are cut. ESM-2 was pretrained on up to 1024; raise the sequence length in the training plan on a client with more memory.
+- **Batch size**: 2 (`esm2_35m`).
