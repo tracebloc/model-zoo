@@ -30,4 +30,17 @@ shows the shape. Presence is asserted by the conformance audit
 6. **Reviewers hold the same line.** Do not ask for a comment that explains a fix or
    credits a finding; ask for the reason, or for the commit message. Flag a comment the
    diff made false.
+
+**PR bodies** (the description, read beside the diff)
+
+- **A PR body that names another PR it needs before it can ship.** A PR ships to prod
+  alone, in any order with every other PR; one that needs another stays a draft until
+  that PR is in prod. On a PR that is not a draft, flag each body line, outside HTML
+  comments, that makes it wait for another PR or issue: a `PAIR:` line, a `SHIPS-AFTER`
+  line, "ships after", "depends on" or "needs" a named PR, or a `Merge after:` line
+  ending in ` on staging`. A plain `Merge after: <owner>/<repo>#<n>` line is no finding:
+  it orders merges into `develop`. Say which line, and that a ticked `Can this ship
+  alone?` box beside it contradicts it. The answer is the author's: split the change,
+  make this PR a draft, or reword a line that only gives context. Low severity and a
+  flag only: never request changes for it, and never treat it as a reason to hold the PR.
 <!-- comment-policy:end -->
