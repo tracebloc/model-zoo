@@ -37,31 +37,39 @@ BUDGET_BYTES = 4 * 1024**3
 #: The oldest SDK whose estimate this check reads.
 MIN_SDK = (1, 2, 88)
 
-#: The categories whose PyTorch templates are held to the budget.
-CATEGORIES = frozenset(
-    {
-        "image_classification",
-        "keypoint_detection",
-        "multi_label_text_classification",
-        "object_detection",
-        "semantic_segmentation",
-        "text_regression",
-    }
-)
-
-#: Templates of those categories that fit no defaults: a full fine-tune needs
-#: more than the budget at batch 1. TODO(tracebloc/model-zoo#368)
+#: PyTorch templates that fit no defaults: a full fine-tune needs more than
+#: the budget at batch 1. TODO(tracebloc/model-zoo#368)
 NOT_FITTING = frozenset(
     {
+        "causal_language_modeling/pytorch/nanogpt_style_scratch",
         "image_classification/pytorch/aimv2",
         "image_classification/pytorch/vgg_16",
         "image_classification/pytorch/vgg_custom",
         "keypoint_detection/pytorch/shg",
         "keypoint_detection/pytorch/shg_heatmap",
         "keypoint_detection/pytorch/vitpose_plus",
+        "masked_language_modeling/pytorch/bert_large_mlm",
+        "masked_language_modeling/pytorch/netmedgpt_style_scratch",
+        "masked_language_modeling/pytorch/netmedgpt_style_warmstart",
+        "masked_language_modeling/pytorch/prenorm_mlm",
+        "masked_language_modeling/pytorch/relative_position_mlm",
         "object_detection/pytorch/sparse_rcnn",
         "object_detection/pytorch/yolo_v1/model",
         "semantic_segmentation/pytorch/dpt",
+        "sentence_pair_classification/pytorch/bert_base_uncased",
+        "text_classification/pytorch/bert_base_uncased",
+        "text_classification/pytorch/bert_base_uncased_scratch",
+        "text_classification/pytorch/electra",
+        "text_classification/pytorch/gte_modernbert",
+        "text_classification/pytorch/modernbert",
+        "text_classification/pytorch/qwen2_5_0_5b",
+        "time_series_forecasting/pytorch/timesfm",
+        "token_classification/pytorch/bert_token",
+        "token_classification/pytorch/deberta_v3_token",
+        "token_classification/pytorch/electra_token",
+        "token_classification/pytorch/modernbert_token",
+        "token_classification/pytorch/roberta_token",
+        "token_classification/pytorch/xlm_roberta_token",
     }
 )
 
@@ -81,15 +89,11 @@ Estimator = Callable[[Defaults, Path], "tuple[int, Optional[str]]"]
 
 
 def checked(root: Path) -> "tuple[list[str], list[str]]":
-    """``(templates, findings)``: the index's PyTorch templates in ``CATEGORIES``
-    but not ``NOT_FITTING``, and a finding per ``NOT_FITTING`` entry the index
-    does not list there."""
+    """``(templates, findings)``: the index's PyTorch templates but not
+    ``NOT_FITTING``, and a finding per ``NOT_FITTING`` entry the index does not
+    list as a PyTorch template."""
     rows = json.loads((root / INDEX).read_text(encoding="utf-8"))["templates"]
-    ids = {
-        row["id"]
-        for row in rows
-        if row["framework"] == "pytorch" and row["category"] in CATEGORIES
-    }
+    ids = {row["id"] for row in rows if row["framework"] == "pytorch"}
     findings = [
         f"{name}: listed in NOT_FITTING but not a checked template"
         for name in sorted(NOT_FITTING - ids)

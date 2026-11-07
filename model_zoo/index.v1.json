@@ -8,7 +8,7 @@
       "framework": "pytorch",
       "model_type": "",
       "label": "DistilGPT2",
-      "batch": 4,
+      "batch": 2,
       "forecast_window": null,
       "params": 81912576,
       "averageable": true
@@ -20,7 +20,7 @@
       "framework": "pytorch",
       "model_type": "",
       "label": "Medium Causal LM",
-      "batch": 32,
+      "batch": 8,
       "forecast_window": null,
       "params": 34835258,
       "averageable": true
@@ -44,7 +44,7 @@
       "framework": "pytorch",
       "model_type": "",
       "label": "Simple Causal LM",
-      "batch": 32,
+      "batch": 16,
       "forecast_window": null,
       "params": 18948410,
       "averageable": true
@@ -584,7 +584,7 @@
       "framework": "pytorch",
       "model_type": "",
       "label": "Conv MLM",
-      "batch": 64,
+      "batch": 8,
       "forecast_window": null,
       "params": 47283002,
       "averageable": true
@@ -596,7 +596,7 @@
       "framework": "pytorch",
       "model_type": "",
       "label": "Deep Narrow MLM",
-      "batch": 32,
+      "batch": 8,
       "forecast_window": null,
       "params": 40340538,
       "averageable": true
@@ -608,7 +608,7 @@
       "framework": "pytorch",
       "model_type": "",
       "label": "Distil MLM",
-      "batch": 32,
+      "batch": 8,
       "forecast_window": null,
       "params": 66393402,
       "averageable": true
@@ -620,7 +620,7 @@
       "framework": "pytorch",
       "model_type": "",
       "label": "Medium MLM",
-      "batch": 32,
+      "batch": 16,
       "forecast_window": null,
       "params": 34835258,
       "averageable": true
@@ -692,7 +692,7 @@
       "framework": "pytorch",
       "model_type": "",
       "label": "Tiny MLM",
-      "batch": 64,
+      "batch": 32,
       "forecast_window": null,
       "params": 8174906,
       "averageable": true
@@ -704,7 +704,7 @@
       "framework": "pytorch",
       "model_type": "",
       "label": "Wide Mini MLM",
-      "batch": 32,
+      "batch": 16,
       "forecast_window": null,
       "params": 28795194,
       "averageable": true
@@ -1784,7 +1784,7 @@
       "framework": "pytorch",
       "model_type": "",
       "label": "DistilBERT",
-      "batch": 16,
+      "batch": 2,
       "forecast_window": null,
       "params": 66957317,
       "averageable": true
@@ -1796,7 +1796,7 @@
       "framework": "pytorch",
       "model_type": "",
       "label": "DistilBERT Scratch",
-      "batch": 16,
+      "batch": 2,
       "forecast_window": null,
       "params": 66957317,
       "averageable": true
@@ -2312,7 +2312,7 @@
       "framework": "pytorch",
       "model_type": "",
       "label": "Distil Token",
-      "batch": 64,
+      "batch": 16,
       "forecast_window": null,
       "params": 66369801,
       "averageable": true
