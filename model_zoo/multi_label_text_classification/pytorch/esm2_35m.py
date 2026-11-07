@@ -29,9 +29,10 @@ license = "MIT"
 category = "multi_label_text_classification"
 model_type = ""
 tokenizer_file = "esm2_35m_tokenizer.json"
-batch_size = 8
-# ESM-2 was pretrained on 1,022 residues plus <cls> and <eos>.
-sequence_length = 1024
+# Sized to train within the smallest client's memory (tools/template_memory.py);
+# ESM-2 itself was pretrained on up to 1,022 residues plus <cls> and <eos>.
+batch_size = 2
+sequence_length = 512
 output_classes = 10
 
 # Architecture config for facebook/esm2_t12_35M_UR50D, inlined so the model

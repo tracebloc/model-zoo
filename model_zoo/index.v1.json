@@ -716,7 +716,7 @@
       "framework": "pytorch",
       "model_type": "",
       "label": "ESM-2 35M",
-      "batch": 8,
+      "batch": 2,
       "forecast_window": null,
       "params": 33505211,
       "averageable": true
@@ -1868,7 +1868,7 @@
       "framework": "pytorch",
       "model_type": "",
       "label": "ESM-2 35M",
-      "batch": 8,
+      "batch": 2,
       "forecast_window": null,
       "params": 33500882,
       "averageable": true
