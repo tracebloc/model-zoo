@@ -58,7 +58,8 @@ license = "BSD-3-Clause"
 # R-CNN family: every input is resized to exactly 320x320 whatever is declared
 # here, so 320 is the only honest value.
 image_size = 320
-batch_size = 24
+# Sized to train within the smallest client's memory: see tools/template_memory.py.
+batch_size = 12
 output_classes = 12
 category = "object_detection"
 

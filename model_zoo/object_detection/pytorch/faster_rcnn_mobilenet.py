@@ -78,7 +78,8 @@ license = "BSD-3-Clause"
 # max_size=1333), so anything smaller is upscaled back to 800 inside the model.
 # The 320 low-resolution variant is faster_rcnn_mobilenet_320.py.
 image_size = 800
-batch_size = 8
+# Sized to train within the smallest client's memory: see tools/template_memory.py.
+batch_size = 2
 output_classes = 12
 category = "object_detection"
 

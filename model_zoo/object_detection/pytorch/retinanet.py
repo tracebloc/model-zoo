@@ -72,7 +72,8 @@ model_type = "torchvision_detection"
 main_method = "MyModel"
 license = "BSD-3-Clause"
 image_size = 800
-batch_size = 8
+# Sized to train within the smallest client's memory: see tools/template_memory.py.
+batch_size = 2
 output_classes = 12
 category = "object_detection"
 

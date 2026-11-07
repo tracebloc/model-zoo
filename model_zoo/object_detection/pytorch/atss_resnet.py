@@ -94,9 +94,8 @@ license = "BSD-3-Clause"
 # UPSCALES anything smaller straight back to 800, so 800 is the resolution this
 # model actually runs at.
 image_size = 800
-# Matches the retinanet template: same backbone and same head width per anchor,
-# and ATSS's single anchor per location makes the head narrower, not wider.
-batch_size = 8
+# Sized to train within the smallest client's memory: see tools/template_memory.py.
+batch_size = 2
 output_classes = 12
 category = "object_detection"
 

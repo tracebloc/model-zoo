@@ -27,7 +27,8 @@ SEED_EXCLUDED_PREFIXES = ("vit.classifier.",)
 framework = "pytorch"
 main_class = "VisionTransformer"
 image_size = 224
-batch_size = 16
+# Sized to train within the smallest client's memory: see tools/template_memory.py.
+batch_size = 8
 category = "image_classification"
 output_classes = 2
 

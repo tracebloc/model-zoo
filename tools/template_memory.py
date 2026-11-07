@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import argparse
 import ast
+import json
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -27,6 +28,7 @@ from typing import Callable, Optional, Sequence
 
 ROOT = Path(__file__).resolve().parents[1]
 ZOO = "model_zoo"
+INDEX = "model_zoo/index.v1.json"
 
 #: The smallest per-run memory a tracebloc client admits a training run at: its
 #: smallest training size, 4 GiB. A template's defaults must fit it.
@@ -35,10 +37,32 @@ BUDGET_BYTES = 4 * 1024**3
 #: The oldest SDK whose estimate this check reads.
 MIN_SDK = (1, 2, 88)
 
-#: The templates held to the budget, as ``<category>/<framework>/<name>``.
-CHECKED = (
-    "multi_label_text_classification/pytorch/esm2_35m",
-    "text_regression/pytorch/esm2_35m",
+#: The categories whose PyTorch templates are held to the budget.
+CATEGORIES = frozenset(
+    {
+        "image_classification",
+        "keypoint_detection",
+        "multi_label_text_classification",
+        "object_detection",
+        "semantic_segmentation",
+        "text_regression",
+    }
+)
+
+#: Templates of those categories that fit no defaults: a full fine-tune needs
+#: more than the budget at batch 1. TODO(tracebloc/model-zoo#368)
+NOT_FITTING = frozenset(
+    {
+        "image_classification/pytorch/aimv2",
+        "image_classification/pytorch/vgg_16",
+        "image_classification/pytorch/vgg_custom",
+        "keypoint_detection/pytorch/shg",
+        "keypoint_detection/pytorch/shg_heatmap",
+        "keypoint_detection/pytorch/vitpose_plus",
+        "object_detection/pytorch/sparse_rcnn",
+        "object_detection/pytorch/yolo_v1/model",
+        "semantic_segmentation/pytorch/dpt",
+    }
 )
 
 
@@ -54,6 +78,23 @@ class Defaults:
 
 #: ``(defaults, path) -> (needed bytes, the SDK's warning or None)``.
 Estimator = Callable[[Defaults, Path], "tuple[int, Optional[str]]"]
+
+
+def checked(root: Path) -> "tuple[list[str], list[str]]":
+    """``(templates, findings)``: the index's PyTorch templates in ``CATEGORIES``
+    but not ``NOT_FITTING``, and a finding per ``NOT_FITTING`` entry the index
+    does not list there."""
+    rows = json.loads((root / INDEX).read_text(encoding="utf-8"))["templates"]
+    ids = {
+        row["id"]
+        for row in rows
+        if row["framework"] == "pytorch" and row["category"] in CATEGORIES
+    }
+    findings = [
+        f"{name}: listed in NOT_FITTING but not a checked template"
+        for name in sorted(NOT_FITTING - ids)
+    ]
+    return sorted(ids - NOT_FITTING), findings
 
 
 def _constants(path: Path) -> dict:
@@ -122,7 +163,12 @@ def sdk_estimator() -> Estimator:
     def estimate(defaults: Defaults, path: Path):
         spec = importlib.util.spec_from_file_location("zoo_template", path)
         module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
+        # A folder template imports its siblings (``loss.py``) by bare name.
+        sys.path.insert(0, str(path.parent))
+        try:
+            spec.loader.exec_module(module)
+        finally:
+            sys.path.remove(str(path.parent))
         if hasattr(module, "MyModel"):
             model = module.MyModel()
         else:
@@ -150,12 +196,15 @@ def sdk_estimator() -> Estimator:
 
 
 def check(
-    root: Path, estimator: Estimator, templates: Sequence[str] = CHECKED
+    root: Path, estimator: Estimator, templates: Optional[Sequence[str]] = None
 ) -> "tuple[list[str], list[str]]":
     """``(report lines, findings)``: one line per template, and one finding per
-    template that is missing, unreadable, or warned about at its defaults. An
-    empty template list is a finding: a check of nothing passes nothing."""
+    template that is missing, unreadable, or warned about at its defaults.
+    ``templates`` defaults to :func:`checked`'s, with its findings. An empty
+    template list is a finding: a check of nothing passes nothing."""
     lines, findings = [], []
+    if templates is None:
+        templates, findings = checked(root)
     if not templates:
         findings.append("no template is checked")
     for template in templates:

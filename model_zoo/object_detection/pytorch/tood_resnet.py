@@ -111,10 +111,8 @@ license = "BSD-3-Clause"
 # UPSCALES anything smaller straight back to 800, so 800 is the resolution this
 # model actually runs at.
 image_size = 800
-# The interactive head keeps six 256-channel feature maps alive per level
-# simultaneously so the layer attention can weight them, which is heavier in
-# activations than a sequential tower of the same depth.
-batch_size = 4
+# Sized to train within the smallest client's memory: see tools/template_memory.py.
+batch_size = 2
 output_classes = 12
 category = "object_detection"
 

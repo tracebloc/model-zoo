@@ -6,7 +6,8 @@ framework = "pytorch"
 main_class = "MyModel"
 license = "MIT"
 image_size = 448
-batch_size = 16
+# Sized to train within the smallest client's memory: see tools/template_memory.py.
+batch_size = 2
 output_classes = 2
 category = "image_classification"
 
