@@ -1862,6 +1862,18 @@
       "averageable": true
     },
     {
+      "id": "text_regression/pytorch/esm2_35m",
+      "upload": "text_regression/pytorch/esm2_35m.py",
+      "category": "text_regression",
+      "framework": "pytorch",
+      "model_type": "",
+      "label": "ESM-2 35M",
+      "batch": 8,
+      "forecast_window": null,
+      "params": 33500882,
+      "averageable": true
+    },
+    {
       "id": "time_series_classification/pytorch/gru",
       "upload": "time_series_classification/pytorch/gru.py",
       "category": "time_series_classification",

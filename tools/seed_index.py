@@ -31,6 +31,7 @@ CONSTANT = "SEED_EXCLUDED_PREFIXES"
 #: merely contains one.
 DUMP_DIR_CATEGORY_PREFIXES = {
     "sentence_pair_": "sentence_pair_classification",
+    "text_regression_": "text_regression",
 }
 
 #: The other half of a collision: when one of the colliding dumps is named for
@@ -43,6 +44,7 @@ DUMP_DIR_CATEGORY_PREFIXES = {
 #: the fix in the message.
 DUMP_DIR_CATEGORY = {
     "bert_base_uncased": "text_classification",
+    "esm2_35m": "multi_label_text_classification",
 }
 
 

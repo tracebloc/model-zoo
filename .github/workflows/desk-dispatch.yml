@@ -2,7 +2,7 @@
 #
 # Self-contained copy of the reusable workflow `.github/workflows/desk-dispatch.yml`
 # (blob 1d0df99b40834b61ccb9e3a957025b84c16e45dc) folded with the private source repo's own caller of it,
-# `.github/workflows/desk-dispatch-caller.yml` (blob 9d6268ae17a077955be11e87fcc01d7ab34bf6ac), for a PUBLIC repo: GitHub lets a
+# `.github/workflows/desk-dispatch-caller.yml` (blob da7925b437da4dea17b83f9fff5d9516541a5076), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
 # reusable's jobs inline -- the triggers are the caller's; every `inputs.*` is
@@ -228,12 +228,10 @@ on:
       - Mutation coverage
       - Naming guard
     types: [completed]
-  # `check_suite: completed` IS subscribed, for Cursor Bugbot: it finishes after the
-  # required checks on about half of all pushes, so its own suite completing is then
-  # the event that carries the green. The callee's job `if:` passes Cursor's suite
-  # only. It cannot loop: GitHub starts no workflow for a suite GitHub Actions created.
-  check_suite:
-    types: [completed]
+  # NO `check_suite` ((internal ref) D27): every context this repo's default branch requires is
+  # posted by a workflow listed above, so no app's suite changes a required verdict
+  # (`owes_check_suite` in the private source repo's scripts/caller-drift.py). Where Cursor Bugbot
+  # finishes last, its fire waits for the private source repo's 10-minute dispatch sweep.
   # An approved PR leaving the merge path: the requeue (`REQUEUE_EVENTS` in
   # scripts/desk-dispatch.py, which desk-dispatch-selftest holds this list to).
   pull_request:
