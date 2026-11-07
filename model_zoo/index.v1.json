@@ -104,7 +104,7 @@
       "framework": "pytorch",
       "model_type": null,
       "label": "DINOv3",
-      "batch": 16,
+      "batch": 8,
       "forecast_window": null,
       "params": 85661954,
       "averageable": true
@@ -116,7 +116,7 @@
       "framework": "pytorch",
       "model_type": null,
       "label": "EVA 02",
-      "batch": 16,
+      "batch": 2,
       "forecast_window": null,
       "params": 86350082,
       "averageable": true
@@ -128,7 +128,7 @@
       "framework": "pytorch",
       "model_type": null,
       "label": "FastViT",
-      "batch": 64,
+      "batch": 32,
       "forecast_window": null,
       "params": 8450626,
       "averageable": true
@@ -152,7 +152,7 @@
       "framework": "pytorch",
       "model_type": null,
       "label": "LeNet",
-      "batch": 256,
+      "batch": 32,
       "forecast_window": null,
       "params": 5406650,
       "averageable": true
@@ -176,7 +176,7 @@
       "framework": "pytorch",
       "model_type": null,
       "label": "MaxViT",
-      "batch": 256,
+      "batch": 32,
       "forecast_window": null,
       "params": 30408648,
       "averageable": true
@@ -200,7 +200,7 @@
       "framework": "pytorch",
       "model_type": null,
       "label": "ResNet 18",
-      "batch": 256,
+      "batch": 32,
       "forecast_window": null,
       "params": 11177538,
       "averageable": true
@@ -212,7 +212,7 @@
       "framework": "pytorch",
       "model_type": null,
       "label": "SigLIP2",
-      "batch": 16,
+      "batch": 8,
       "forecast_window": null,
       "params": 92885762,
       "averageable": true
@@ -224,7 +224,7 @@
       "framework": "pytorch",
       "model_type": null,
       "label": "Simple CNN",
-      "batch": 256,
+      "batch": 32,
       "forecast_window": null,
       "params": 5406606,
       "averageable": true
@@ -236,7 +236,7 @@
       "framework": "pytorch",
       "model_type": null,
       "label": "SqueezeNet",
-      "batch": 256,
+      "batch": 32,
       "forecast_window": null,
       "params": 736450,
       "averageable": true
@@ -284,7 +284,7 @@
       "framework": "pytorch",
       "model_type": null,
       "label": "ViT",
-      "batch": 16,
+      "batch": 8,
       "forecast_window": null,
       "params": 86390786,
       "averageable": true
@@ -296,7 +296,7 @@
       "framework": "pytorch",
       "model_type": null,
       "label": "ViT B 16",
-      "batch": 16,
+      "batch": 8,
       "forecast_window": null,
       "params": 85800194,
       "averageable": true
@@ -308,7 +308,7 @@
       "framework": "pytorch",
       "model_type": null,
       "label": "ViT Google",
-      "batch": 16,
+      "batch": 8,
       "forecast_window": null,
       "params": 85800194,
       "averageable": true
@@ -344,7 +344,7 @@
       "framework": "pytorch",
       "model_type": "",
       "label": "CPM",
-      "batch": 128,
+      "batch": 32,
       "forecast_window": null,
       "params": 1883184,
       "averageable": true
@@ -356,7 +356,7 @@
       "framework": "pytorch",
       "model_type": "heatmap",
       "label": "CPM Heatmap",
-      "batch": 128,
+      "batch": 32,
       "forecast_window": null,
       "params": 1879056,
       "averageable": true
@@ -500,7 +500,7 @@
       "framework": "pytorch",
       "model_type": "",
       "label": "RTMPose",
-      "batch": 64,
+      "batch": 32,
       "forecast_window": null,
       "params": 7949728,
       "averageable": true
@@ -512,7 +512,7 @@
       "framework": "pytorch",
       "model_type": "direct",
       "label": "Sapiens",
-      "batch": 16,
+      "batch": 8,
       "forecast_window": null,
       "params": 85883955,
       "averageable": true
@@ -548,7 +548,7 @@
       "framework": "pytorch",
       "model_type": "direct",
       "label": "ViTPose",
-      "batch": 32,
+      "batch": 8,
       "forecast_window": null,
       "params": 85961489,
       "averageable": true
@@ -728,7 +728,7 @@
       "framework": "pytorch",
       "model_type": "torchvision_detection",
       "label": "ATSS ResNet",
-      "batch": 8,
+      "batch": 2,
       "forecast_window": null,
       "params": 32136529,
       "averageable": true
@@ -740,7 +740,7 @@
       "framework": "pytorch",
       "model_type": "torchvision_detection",
       "label": "Cascade R-CNN",
-      "batch": 4,
+      "batch": 1,
       "forecast_window": null,
       "params": 69333266,
       "averageable": true
@@ -752,7 +752,7 @@
       "framework": "pytorch",
       "model_type": "torchvision_detection",
       "label": "CenterNet ResNet",
-      "batch": 8,
+      "batch": 4,
       "forecast_window": null,
       "params": 27296081,
       "averageable": true
@@ -776,7 +776,7 @@
       "framework": "pytorch",
       "model_type": "torchvision_detection",
       "label": "Faster R-CNN ConvNeXt Small",
-      "batch": 2,
+      "batch": 1,
       "forecast_window": null,
       "params": 66739376,
       "averageable": true
@@ -788,7 +788,7 @@
       "framework": "pytorch",
       "model_type": "torchvision_detection",
       "label": "Faster R-CNN MobileNet",
-      "batch": 8,
+      "batch": 2,
       "forecast_window": null,
       "params": 19011004,
       "averageable": true
@@ -812,7 +812,7 @@
       "framework": "pytorch",
       "model_type": "rcnn",
       "label": "Faster R-CNN ResNet",
-      "batch": 4,
+      "batch": 2,
       "forecast_window": null,
       "params": 41408656,
       "averageable": true
@@ -848,7 +848,7 @@
       "framework": "pytorch",
       "model_type": "torchvision_detection",
       "label": "FCOS",
-      "batch": 8,
+      "batch": 2,
       "forecast_window": null,
       "params": 32142930,
       "averageable": true
@@ -860,7 +860,7 @@
       "framework": "pytorch",
       "model_type": "torchvision_detection",
       "label": "FCOS ConvNeXt Small",
-      "batch": 2,
+      "batch": 1,
       "forecast_window": null,
       "params": 57514610,
       "averageable": true
@@ -884,7 +884,7 @@
       "framework": "pytorch",
       "model_type": "torchvision_detection",
       "label": "GFL ResNet",
-      "batch": 4,
+      "batch": 2,
       "forecast_window": null,
       "params": 32286102,
       "averageable": true
@@ -896,7 +896,7 @@
       "framework": "pytorch",
       "model_type": "torchvision_detection",
       "label": "RetinaNet",
-      "batch": 8,
+      "batch": 2,
       "forecast_window": null,
       "params": 32450009,
       "averageable": true
@@ -920,7 +920,7 @@
       "framework": "pytorch",
       "model_type": "torchvision_detection",
       "label": "RTMDet S",
-      "batch": 8,
+      "batch": 4,
       "forecast_window": null,
       "params": 8860995,
       "averageable": true
@@ -956,7 +956,7 @@
       "framework": "pytorch",
       "model_type": "torchvision_detection",
       "label": "SSDLite MobileNet",
-      "batch": 24,
+      "batch": 12,
       "forecast_window": null,
       "params": 2358980,
       "averageable": true
@@ -968,7 +968,7 @@
       "framework": "pytorch",
       "model_type": "torchvision_detection",
       "label": "TOOD ResNet",
-      "batch": 4,
+      "batch": 2,
       "forecast_window": null,
       "params": 31115730,
       "averageable": true
@@ -980,7 +980,7 @@
       "framework": "pytorch",
       "model_type": "torchvision_detection",
       "label": "VFNet ResNet",
-      "batch": 4,
+      "batch": 2,
       "forecast_window": null,
       "params": 30967130,
       "averageable": true
@@ -992,7 +992,7 @@
       "framework": "pytorch",
       "model_type": "torchvision_detection",
       "label": "YOLO11 S",
-      "batch": 8,
+      "batch": 4,
       "forecast_window": null,
       "params": 9432807,
       "averageable": true
@@ -1016,7 +1016,7 @@
       "framework": "pytorch",
       "model_type": "yolo",
       "label": "YOLO V5",
-      "batch": 64,
+      "batch": 8,
       "forecast_window": null,
       "params": 13376813,
       "averageable": true
@@ -1028,7 +1028,7 @@
       "framework": "pytorch",
       "model_type": "yolo",
       "label": "YOLO V8",
-      "batch": 64,
+      "batch": 8,
       "forecast_window": null,
       "params": 9021229,
       "averageable": true
@@ -1040,7 +1040,7 @@
       "framework": "pytorch",
       "model_type": "torchvision_detection",
       "label": "YOLOv10 S",
-      "batch": 8,
+      "batch": 4,
       "forecast_window": null,
       "params": 8076398,
       "averageable": true
@@ -1052,7 +1052,7 @@
       "framework": "pytorch",
       "model_type": "torchvision_detection",
       "label": "YOLOv12 S",
-      "batch": 8,
+      "batch": 4,
       "forecast_window": null,
       "params": 9258151,
       "averageable": true
@@ -1064,7 +1064,7 @@
       "framework": "pytorch",
       "model_type": "torchvision_detection",
       "label": "YOLOv8 S",
-      "batch": 8,
+      "batch": 4,
       "forecast_window": null,
       "params": 11140615,
       "averageable": true
@@ -1076,7 +1076,7 @@
       "framework": "pytorch",
       "model_type": "torchvision_detection",
       "label": "YOLOv9 S",
-      "batch": 8,
+      "batch": 4,
       "forecast_window": null,
       "params": 7292423,
       "averageable": true
@@ -1088,7 +1088,7 @@
       "framework": "pytorch",
       "model_type": "torchvision_detection",
       "label": "YOLOX S",
-      "batch": 8,
+      "batch": 4,
       "forecast_window": null,
       "params": 8942326,
       "averageable": true
@@ -1184,7 +1184,7 @@
       "framework": "pytorch",
       "model_type": null,
       "label": "SAM2",
-      "batch": 2,
+      "batch": 1,
       "forecast_window": null,
       "params": 27219650,
       "averageable": true
@@ -1244,7 +1244,7 @@
       "framework": "pytorch",
       "model_type": null,
       "label": "UperNet",
-      "batch": 4,
+      "batch": 2,
       "forecast_window": null,
       "params": 81763236,
       "averageable": true

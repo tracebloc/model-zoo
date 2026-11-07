@@ -30,4 +30,4 @@ Categorize images into predefined labels. Every model outputs `(B, num_classes)`
 
 - **Input**: RGB images. `image_size = 224` by default; override per model. Images with any other number of channels, up to 64: `multichannel_cnn.py`, whose `input_channels` tracebloc sets to your dataset's channel count when you pick it (set it yourself when you upload the file by hand).
 - **Labels**: integer class indices. `output_classes` configurable per file.
-- **Batch size**: default 256 (PyTorch); the multichannel CNN starts at 16.
+- **Batch size**: each template's own default, sized so a run fits a client with 4 GiB of memory per run (`tools/template_memory.py`); raise it in the training plan on a client with more memory.

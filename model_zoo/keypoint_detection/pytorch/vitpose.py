@@ -52,7 +52,8 @@ model_type = "direct"
 main_method = "MyModel"
 license = "Apache-2.0"
 image_size = 256
-batch_size = 32
+# Sized to train within the smallest client's memory: see tools/template_memory.py.
+batch_size = 8
 output_classes = 1
 category = "keypoint_detection"
 num_feature_points = 17
