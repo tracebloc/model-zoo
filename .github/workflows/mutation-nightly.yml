@@ -1,7 +1,7 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/mutation-nightly.yml`
-# (blob eb907957e9a7b84dbb9819c5daea0e92b157cec7) folded with the private source repo's caller TEMPLATE for it,
+# (blob 909664804dfa30dbf34c8b245d16b8b95883279e) folded with the private source repo's caller TEMPLATE for it,
 # `.github/caller-templates/mutation-nightly-caller.yml` (blob 801e23606e2fd6431f0d178fd6553debd13267f1), the file every
 # repo's caller is rendered from, for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
@@ -149,7 +149,7 @@ jobs:
     name: mutation / run (${{ matrix.leg }})
     # The full tier, held in scripts/runner-tier.py's FULL_TIER_STAYS with its reason: a
     # mutation night runs for hours, past ubuntu-slim's 15-minute platform cap.
-    runs-on: ubuntu-latest  # runner: hosted (OQ7 unverified)
+    runs-on: ubuntu-latest  # runner: hosted (rendered for public repos)
     # `packages: read`: the entry point installs the org's private GitHub Packages with this
     # job's token ((internal ref)'s `.npmrc`; (internal ref)). A called workflow never holds more
     # than its caller grants and GitHub refuses the run at startup when it asks for more, so

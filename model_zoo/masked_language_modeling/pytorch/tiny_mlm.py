@@ -7,7 +7,8 @@ main_class = "TinyMLM"
 category = "masked_language_modeling"
 model_type = ""
 tokenizer_file = "tokenizer.json"
-batch_size = 64
+# Sized to train within the smallest client's memory: see tools/template_memory.py.
+batch_size = 32
 sequence_length = 64
 vocab_size = 30522
 

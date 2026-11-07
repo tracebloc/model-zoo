@@ -25,7 +25,7 @@ apart.
   `tokenizer(text_a, text_b)`, joining them with `[SEP]` and marking each with
   `token_type_ids`. Tokenization happens inside the model's tokenizer.
 - **Labels**: integer class indices (e.g. 0/1 for paraphrase, 0/1/2 for NLI).
-- **Batch size**: default 512.
+- **Batch size**: each template's own default, sized so a run fits a client with 4 GiB of memory per run (`tools/template_memory.py`); raise it in the training plan on a client with more memory.
 
 ## Tokenizer
 
