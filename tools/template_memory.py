@@ -40,8 +40,11 @@ MIN_SDK = (1, 2, 88)
 #: The categories whose PyTorch templates are held to the budget.
 CATEGORIES = frozenset(
     {
+        "image_classification",
+        "keypoint_detection",
         "multi_label_text_classification",
         "object_detection",
+        "semantic_segmentation",
         "text_regression",
     }
 )
@@ -50,8 +53,15 @@ CATEGORIES = frozenset(
 #: more than the budget at batch 1. TODO(tracebloc/model-zoo#368)
 NOT_FITTING = frozenset(
     {
+        "image_classification/pytorch/aimv2",
+        "image_classification/pytorch/vgg_16",
+        "image_classification/pytorch/vgg_custom",
+        "keypoint_detection/pytorch/shg",
+        "keypoint_detection/pytorch/shg_heatmap",
+        "keypoint_detection/pytorch/vitpose_plus",
         "object_detection/pytorch/sparse_rcnn",
         "object_detection/pytorch/yolo_v1/model",
+        "semantic_segmentation/pytorch/dpt",
     }
 )
 
