@@ -9,7 +9,8 @@ those facts has to carry the index change with it.
 
 Each CI job recomputes the rows its framework can build and carries the rest
 from the committed file (see the builder's docstring). The static fields --
-id, upload, category, framework, model_type, label, batch, forecast_window -- and the set of templates
+id, upload, category, framework, model_type, label, batch, forecast_window,
+onboarding -- and the set of templates
 are checked in every job.
 """
 
@@ -68,10 +69,14 @@ def test_the_index_has_one_row_per_template_with_every_field() -> None:
     assert ids == sorted(ids) and len(ids) == len(set(ids))
     assert len(ids) == len(build_index.discover())
     fields = {"id", "upload", "category", "framework", "model_type", "label", "batch"}
-    fields |= {"forecast_window"}
+    fields |= {"forecast_window", "onboarding"}
     for row in index["templates"]:
-        assert set(row) == fields | {"params", "averageable"}, row["id"]
+        assert set(row) == fields | {"params", "averageable", "family", "cpu"}, row["id"]
         assert isinstance(row["averageable"], bool), row["id"]
+        assert isinstance(row["onboarding"], bool), row["id"]
+        assert row["cpu"] is build_index.cpu_capable(row), row["id"]
+        if not row["onboarding"]:
+            assert row["family"] is None, row["id"]
         if row["category"] == build_index.FORECASTING:
             window = row["forecast_window"]
             assert set(window) == {"sequence_length", "forecast_horizon"}, row["id"]

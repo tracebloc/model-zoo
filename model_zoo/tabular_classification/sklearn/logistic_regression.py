@@ -9,6 +9,8 @@ main_method = "MyModel"
 batch_size = 4
 output_classes = 5
 category = "tabular_classification"
+# One of the three ready-made models a first run trains (index: onboarding).
+onboarding = True
 num_feature_points = 50
 
 def MyModel():

@@ -10,8 +10,11 @@
       "label": "DistilGPT2",
       "batch": 2,
       "forecast_window": null,
+      "onboarding": false,
       "params": 81912576,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     },
     {
       "id": "causal_language_modeling/pytorch/medium_causal_lm",
@@ -22,8 +25,11 @@
       "label": "Medium Causal LM",
       "batch": 8,
       "forecast_window": null,
+      "onboarding": false,
       "params": 34835258,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     },
     {
       "id": "causal_language_modeling/pytorch/nanogpt_style_scratch",
@@ -34,8 +40,11 @@
       "label": "NanoGPT Style Scratch",
       "batch": 16,
       "forecast_window": null,
+      "onboarding": false,
       "params": 109313850,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     },
     {
       "id": "causal_language_modeling/pytorch/simple_causal_lm",
@@ -46,8 +55,11 @@
       "label": "Simple Causal LM",
       "batch": 16,
       "forecast_window": null,
+      "onboarding": false,
       "params": 18948410,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     },
     {
       "id": "embeddings/pytorch/minilm",
@@ -58,8 +70,11 @@
       "label": "MiniLM",
       "batch": 16,
       "forecast_window": null,
+      "onboarding": false,
       "params": 22713216,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     },
     {
       "id": "embeddings/pytorch/simple_text_encoder",
@@ -70,8 +85,11 @@
       "label": "Simple Text Encoder",
       "batch": 16,
       "forecast_window": null,
+      "onboarding": false,
       "params": 10053632,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     },
     {
       "id": "image_classification/pytorch/aimv2",
@@ -82,8 +100,11 @@
       "label": "AIMv2",
       "batch": 16,
       "forecast_window": null,
+      "onboarding": false,
       "params": 309199874,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     },
     {
       "id": "image_classification/pytorch/convnext_v2",
@@ -94,8 +115,11 @@
       "label": "ConvNeXt V2",
       "batch": 32,
       "forecast_window": null,
+      "onboarding": false,
       "params": 27868034,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     },
     {
       "id": "image_classification/pytorch/dinov3",
@@ -106,8 +130,11 @@
       "label": "DINOv3",
       "batch": 8,
       "forecast_window": null,
+      "onboarding": false,
       "params": 85661954,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     },
     {
       "id": "image_classification/pytorch/eva_02",
@@ -118,8 +145,11 @@
       "label": "EVA 02",
       "batch": 2,
       "forecast_window": null,
+      "onboarding": false,
       "params": 86350082,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     },
     {
       "id": "image_classification/pytorch/fastvit",
@@ -130,8 +160,11 @@
       "label": "FastViT",
       "batch": 32,
       "forecast_window": null,
+      "onboarding": false,
       "params": 8450626,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     },
     {
       "id": "image_classification/pytorch/hiera",
@@ -142,8 +175,11 @@
       "label": "Hiera",
       "batch": 32,
       "forecast_window": null,
+      "onboarding": false,
       "params": 27142754,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     },
     {
       "id": "image_classification/pytorch/lenet",
@@ -154,8 +190,11 @@
       "label": "LeNet",
       "batch": 32,
       "forecast_window": null,
+      "onboarding": false,
       "params": 5406650,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     },
     {
       "id": "image_classification/pytorch/mambaout",
@@ -166,8 +205,11 @@
       "label": "MambaOut",
       "batch": 32,
       "forecast_window": null,
+      "onboarding": false,
       "params": 24244706,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     },
     {
       "id": "image_classification/pytorch/maxvit",
@@ -178,8 +220,11 @@
       "label": "MaxViT",
       "batch": 32,
       "forecast_window": null,
+      "onboarding": false,
       "params": 30408648,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     },
     {
       "id": "image_classification/pytorch/multichannel_cnn",
@@ -190,8 +235,11 @@
       "label": "Multichannel CNN",
       "batch": 16,
       "forecast_window": null,
+      "onboarding": false,
       "params": 24082,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": true
     },
     {
       "id": "image_classification/pytorch/resnet_18",
@@ -202,8 +250,11 @@
       "label": "ResNet 18",
       "batch": 32,
       "forecast_window": null,
+      "onboarding": false,
       "params": 11177538,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     },
     {
       "id": "image_classification/pytorch/siglip2",
@@ -214,8 +265,11 @@
       "label": "SigLIP2",
       "batch": 8,
       "forecast_window": null,
+      "onboarding": false,
       "params": 92885762,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     },
     {
       "id": "image_classification/pytorch/simple_cnn",
@@ -226,8 +280,11 @@
       "label": "Simple CNN",
       "batch": 32,
       "forecast_window": null,
+      "onboarding": false,
       "params": 5406606,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     },
     {
       "id": "image_classification/pytorch/squeezenet",
@@ -238,8 +295,11 @@
       "label": "SqueezeNet",
       "batch": 32,
       "forecast_window": null,
+      "onboarding": false,
       "params": 736450,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": true
     },
     {
       "id": "image_classification/pytorch/swin_transformer",
@@ -250,8 +310,11 @@
       "label": "Swin Transformer",
       "batch": 16,
       "forecast_window": null,
+      "onboarding": false,
       "params": 27520892,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     },
     {
       "id": "image_classification/pytorch/vgg_16",
@@ -262,8 +325,11 @@
       "label": "VGG 16",
       "batch": 16,
       "forecast_window": null,
+      "onboarding": false,
       "params": 134268738,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     },
     {
       "id": "image_classification/pytorch/vgg_custom",
@@ -274,8 +340,11 @@
       "label": "VGG Custom",
       "batch": 16,
       "forecast_window": null,
+      "onboarding": false,
       "params": 134277186,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     },
     {
       "id": "image_classification/pytorch/vit",
@@ -286,8 +355,11 @@
       "label": "ViT",
       "batch": 8,
       "forecast_window": null,
+      "onboarding": false,
       "params": 86390786,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     },
     {
       "id": "image_classification/pytorch/vit_b_16",
@@ -298,8 +370,11 @@
       "label": "ViT B 16",
       "batch": 8,
       "forecast_window": null,
+      "onboarding": false,
       "params": 85800194,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     },
     {
       "id": "image_classification/pytorch/vit_google",
@@ -310,8 +385,11 @@
       "label": "ViT Google",
       "batch": 8,
       "forecast_window": null,
+      "onboarding": false,
       "params": 85800194,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     },
     {
       "id": "image_classification/pytorch/wide_resnet_50_2",
@@ -322,8 +400,11 @@
       "label": "Wide ResNet 50 2",
       "batch": 16,
       "forecast_window": null,
+      "onboarding": false,
       "params": 66838338,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     },
     {
       "id": "keypoint_detection/pytorch/alphapose",
@@ -334,8 +415,11 @@
       "label": "AlphaPose",
       "batch": 128,
       "forecast_window": null,
+      "onboarding": false,
       "params": 32554752,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     },
     {
       "id": "keypoint_detection/pytorch/cpm",
@@ -346,8 +430,11 @@
       "label": "CPM",
       "batch": 32,
       "forecast_window": null,
+      "onboarding": false,
       "params": 1883184,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     },
     {
       "id": "keypoint_detection/pytorch/cpm_heatmap",
@@ -358,8 +445,11 @@
       "label": "CPM Heatmap",
       "batch": 32,
       "forecast_window": null,
+      "onboarding": false,
       "params": 1879056,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     },
     {
       "id": "keypoint_detection/pytorch/cpn",
@@ -370,8 +460,11 @@
       "label": "CPN",
       "batch": 128,
       "forecast_window": null,
+      "onboarding": false,
       "params": 27454832,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     },
     {
       "id": "keypoint_detection/pytorch/cpn_heatmap",
@@ -382,8 +475,11 @@
       "label": "CPN Heatmap",
       "batch": 128,
       "forecast_window": null,
+      "onboarding": false,
       "params": 27446608,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     },
     {
       "id": "keypoint_detection/pytorch/deeppose",
@@ -394,8 +490,11 @@
       "label": "DeepPose",
       "batch": 128,
       "forecast_window": null,
+      "onboarding": false,
       "params": 7508144,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     },
     {
       "id": "keypoint_detection/pytorch/dsnt",
@@ -406,8 +505,11 @@
       "label": "DSNT",
       "batch": 128,
       "forecast_window": null,
+      "onboarding": false,
       "params": 960896,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": true
     },
     {
       "id": "keypoint_detection/pytorch/faster_rcnn_sppe",
@@ -418,8 +520,11 @@
       "label": "Faster R-CNN SPPE",
       "batch": 128,
       "forecast_window": null,
+      "onboarding": false,
       "params": 26864752,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     },
     {
       "id": "keypoint_detection/pytorch/hrnet",
@@ -430,8 +535,11 @@
       "label": "HRNet",
       "batch": 128,
       "forecast_window": null,
+      "onboarding": false,
       "params": 1577520,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     },
     {
       "id": "keypoint_detection/pytorch/hrnet_heatmap",
@@ -442,8 +550,11 @@
       "label": "HRNet Heatmap",
       "batch": 128,
       "forecast_window": null,
+      "onboarding": false,
       "params": 1561104,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     },
     {
       "id": "keypoint_detection/pytorch/keypoint_rcnn",
@@ -454,8 +565,11 @@
       "label": "Keypoint R-CNN",
       "batch": 4,
       "forecast_window": null,
+      "onboarding": false,
       "params": 59190378,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     },
     {
       "id": "keypoint_detection/pytorch/openpose",
@@ -466,8 +580,11 @@
       "label": "OpenPose",
       "batch": 128,
       "forecast_window": null,
+      "onboarding": false,
       "params": 13809872,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     },
     {
       "id": "keypoint_detection/pytorch/resnet_50",
@@ -478,8 +595,11 @@
       "label": "ResNet 50",
       "batch": 128,
       "forecast_window": null,
+      "onboarding": false,
       "params": 34000208,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     },
     {
       "id": "keypoint_detection/pytorch/resnet_sppe",
@@ -490,8 +610,11 @@
       "label": "ResNet SPPE",
       "batch": 128,
       "forecast_window": null,
+      "onboarding": false,
       "params": 23606384,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     },
     {
       "id": "keypoint_detection/pytorch/rtmpose",
@@ -502,8 +625,11 @@
       "label": "RTMPose",
       "batch": 32,
       "forecast_window": null,
+      "onboarding": false,
       "params": 7949728,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     },
     {
       "id": "keypoint_detection/pytorch/sapiens",
@@ -514,8 +640,11 @@
       "label": "Sapiens",
       "batch": 8,
       "forecast_window": null,
+      "onboarding": false,
       "params": 85883955,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     },
     {
       "id": "keypoint_detection/pytorch/shg",
@@ -526,8 +655,11 @@
       "label": "SHG",
       "batch": 128,
       "forecast_window": null,
+      "onboarding": false,
       "params": 124161408,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     },
     {
       "id": "keypoint_detection/pytorch/shg_heatmap",
@@ -538,8 +670,11 @@
       "label": "SHG Heatmap",
       "batch": 128,
       "forecast_window": null,
+      "onboarding": false,
       "params": 124095616,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     },
     {
       "id": "keypoint_detection/pytorch/vitpose",
@@ -550,8 +685,11 @@
       "label": "ViTPose",
       "batch": 8,
       "forecast_window": null,
+      "onboarding": false,
       "params": 85961489,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     },
     {
       "id": "keypoint_detection/pytorch/vitpose_plus",
@@ -562,8 +700,11 @@
       "label": "ViTPose Plus",
       "batch": 32,
       "forecast_window": null,
+      "onboarding": false,
       "params": 125444625,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     },
     {
       "id": "masked_language_modeling/pytorch/bert_large_mlm",
@@ -574,8 +715,11 @@
       "label": "BERT Large MLM",
       "batch": 8,
       "forecast_window": null,
+      "onboarding": false,
       "params": 335172410,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     },
     {
       "id": "masked_language_modeling/pytorch/conv_mlm",
@@ -586,8 +730,11 @@
       "label": "Conv MLM",
       "batch": 8,
       "forecast_window": null,
+      "onboarding": false,
       "params": 47283002,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     },
     {
       "id": "masked_language_modeling/pytorch/deep_narrow_mlm",
@@ -598,8 +745,11 @@
       "label": "Deep Narrow MLM",
       "batch": 8,
       "forecast_window": null,
+      "onboarding": false,
       "params": 40340538,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     },
     {
       "id": "masked_language_modeling/pytorch/distil_mlm",
@@ -610,8 +760,11 @@
       "label": "Distil MLM",
       "batch": 8,
       "forecast_window": null,
+      "onboarding": false,
       "params": 66393402,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     },
     {
       "id": "masked_language_modeling/pytorch/medium_mlm",
@@ -622,8 +775,11 @@
       "label": "Medium MLM",
       "batch": 16,
       "forecast_window": null,
+      "onboarding": false,
       "params": 34835258,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     },
     {
       "id": "masked_language_modeling/pytorch/netmedgpt_style_scratch",
@@ -634,8 +790,11 @@
       "label": "NetMedGPT Style Scratch",
       "batch": 16,
       "forecast_window": null,
+      "onboarding": false,
       "params": 109512762,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     },
     {
       "id": "masked_language_modeling/pytorch/netmedgpt_style_warmstart",
@@ -646,8 +805,11 @@
       "label": "NetMedGPT Style Warmstart",
       "batch": 16,
       "forecast_window": null,
+      "onboarding": false,
       "params": 109514298,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     },
     {
       "id": "masked_language_modeling/pytorch/prenorm_mlm",
@@ -658,8 +820,11 @@
       "label": "PreNorm MLM",
       "batch": 16,
       "forecast_window": null,
+      "onboarding": false,
       "params": 109514298,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     },
     {
       "id": "masked_language_modeling/pytorch/relative_position_mlm",
@@ -670,8 +835,11 @@
       "label": "Relative Position MLM",
       "batch": 16,
       "forecast_window": null,
+      "onboarding": false,
       "params": 109119546,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     },
     {
       "id": "masked_language_modeling/pytorch/simple_mlm",
@@ -682,8 +850,11 @@
       "label": "Simple MLM",
       "batch": 32,
       "forecast_window": null,
+      "onboarding": false,
       "params": 17897786,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     },
     {
       "id": "masked_language_modeling/pytorch/tiny_mlm",
@@ -694,8 +865,11 @@
       "label": "Tiny MLM",
       "batch": 32,
       "forecast_window": null,
+      "onboarding": false,
       "params": 8174906,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     },
     {
       "id": "masked_language_modeling/pytorch/wide_mini_mlm",
@@ -706,8 +880,11 @@
       "label": "Wide Mini MLM",
       "batch": 16,
       "forecast_window": null,
+      "onboarding": false,
       "params": 28795194,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     },
     {
       "id": "multi_label_text_classification/pytorch/esm2_35m",
@@ -718,8 +895,11 @@
       "label": "ESM-2 35M",
       "batch": 2,
       "forecast_window": null,
+      "onboarding": false,
       "params": 33505211,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     },
     {
       "id": "object_detection/pytorch/atss_resnet",
@@ -730,8 +910,11 @@
       "label": "ATSS ResNet",
       "batch": 2,
       "forecast_window": null,
+      "onboarding": false,
       "params": 32136529,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     },
     {
       "id": "object_detection/pytorch/cascade_rcnn",
@@ -742,8 +925,11 @@
       "label": "Cascade R-CNN",
       "batch": 1,
       "forecast_window": null,
+      "onboarding": false,
       "params": 69333266,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     },
     {
       "id": "object_detection/pytorch/centernet_resnet",
@@ -754,8 +940,11 @@
       "label": "CenterNet ResNet",
       "batch": 4,
       "forecast_window": null,
+      "onboarding": false,
       "params": 27296081,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     },
     {
       "id": "object_detection/pytorch/efficientdet_d0",
@@ -766,8 +955,11 @@
       "label": "EfficientDet D0",
       "batch": 8,
       "forecast_window": null,
+      "onboarding": false,
       "params": 3857038,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     },
     {
       "id": "object_detection/pytorch/faster_rcnn_convnext_small",
@@ -778,8 +970,11 @@
       "label": "Faster R-CNN ConvNeXt Small",
       "batch": 1,
       "forecast_window": null,
+      "onboarding": false,
       "params": 66739376,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     },
     {
       "id": "object_detection/pytorch/faster_rcnn_mobilenet",
@@ -790,8 +985,11 @@
       "label": "Faster R-CNN MobileNet",
       "batch": 2,
       "forecast_window": null,
+      "onboarding": false,
       "params": 19011004,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     },
     {
       "id": "object_detection/pytorch/faster_rcnn_mobilenet_320",
@@ -802,8 +1000,11 @@
       "label": "Faster R-CNN MobileNet 320",
       "batch": 16,
       "forecast_window": null,
+      "onboarding": false,
       "params": 19011004,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     },
     {
       "id": "object_detection/pytorch/faster_rcnn_resnet",
@@ -814,8 +1015,11 @@
       "label": "Faster R-CNN ResNet",
       "batch": 2,
       "forecast_window": null,
+      "onboarding": false,
       "params": 41408656,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     },
     {
       "id": "object_detection/pytorch/faster_rcnn_resnet_v2",
@@ -826,8 +1030,11 @@
       "label": "Faster R-CNN ResNet V2",
       "batch": 2,
       "forecast_window": null,
+      "onboarding": false,
       "params": 43312528,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     },
     {
       "id": "object_detection/pytorch/faster_rcnn_swin_t",
@@ -838,8 +1045,11 @@
       "label": "Faster R-CNN Swin T",
       "batch": 2,
       "forecast_window": null,
+      "onboarding": false,
       "params": 44804042,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     },
     {
       "id": "object_detection/pytorch/fcos",
@@ -850,8 +1060,11 @@
       "label": "FCOS",
       "batch": 2,
       "forecast_window": null,
+      "onboarding": false,
       "params": 32142930,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     },
     {
       "id": "object_detection/pytorch/fcos_convnext_small",
@@ -862,8 +1075,11 @@
       "label": "FCOS ConvNeXt Small",
       "batch": 1,
       "forecast_window": null,
+      "onboarding": false,
       "params": 57514610,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     },
     {
       "id": "object_detection/pytorch/fcos_swin_t",
@@ -874,8 +1090,11 @@
       "label": "FCOS Swin T",
       "batch": 2,
       "forecast_window": null,
+      "onboarding": false,
       "params": 35579276,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     },
     {
       "id": "object_detection/pytorch/gfl_resnet",
@@ -886,8 +1105,11 @@
       "label": "GFL ResNet",
       "batch": 2,
       "forecast_window": null,
+      "onboarding": false,
       "params": 32286102,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     },
     {
       "id": "object_detection/pytorch/retinanet",
@@ -898,8 +1120,11 @@
       "label": "RetinaNet",
       "batch": 2,
       "forecast_window": null,
+      "onboarding": false,
       "params": 32450009,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     },
     {
       "id": "object_detection/pytorch/retinanet_v2",
@@ -910,8 +1135,11 @@
       "label": "RetinaNet V2",
       "batch": 2,
       "forecast_window": null,
+      "onboarding": false,
       "params": 36580825,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     },
     {
       "id": "object_detection/pytorch/rtmdet_s",
@@ -922,8 +1150,11 @@
       "label": "RTMDet S",
       "batch": 4,
       "forecast_window": null,
+      "onboarding": false,
       "params": 8860995,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     },
     {
       "id": "object_detection/pytorch/sparse_rcnn",
@@ -934,8 +1165,11 @@
       "label": "Sparse R-CNN",
       "batch": 2,
       "forecast_window": null,
+      "onboarding": false,
       "params": 106187574,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     },
     {
       "id": "object_detection/pytorch/ssd_vgg16",
@@ -946,8 +1180,11 @@
       "label": "SSD VGG16",
       "batch": 16,
       "forecast_window": null,
+      "onboarding": false,
       "params": 25216190,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     },
     {
       "id": "object_detection/pytorch/ssdlite_mobilenet",
@@ -958,8 +1195,11 @@
       "label": "SSDLite MobileNet",
       "batch": 12,
       "forecast_window": null,
+      "onboarding": false,
       "params": 2358980,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     },
     {
       "id": "object_detection/pytorch/tood_resnet",
@@ -970,8 +1210,11 @@
       "label": "TOOD ResNet",
       "batch": 2,
       "forecast_window": null,
+      "onboarding": false,
       "params": 31115730,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     },
     {
       "id": "object_detection/pytorch/vfnet_resnet",
@@ -982,8 +1225,11 @@
       "label": "VFNet ResNet",
       "batch": 2,
       "forecast_window": null,
+      "onboarding": false,
       "params": 30967130,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     },
     {
       "id": "object_detection/pytorch/yolo11_s",
@@ -994,8 +1240,11 @@
       "label": "YOLO11 S",
       "batch": 4,
       "forecast_window": null,
+      "onboarding": false,
       "params": 9432807,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     },
     {
       "id": "object_detection/pytorch/yolo_v1/model",
@@ -1006,8 +1255,11 @@
       "label": "YOLO V1",
       "batch": 64,
       "forecast_window": null,
+      "onboarding": false,
       "params": 267004093,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     },
     {
       "id": "object_detection/pytorch/yolo_v5/model",
@@ -1018,8 +1270,11 @@
       "label": "YOLO V5",
       "batch": 8,
       "forecast_window": null,
+      "onboarding": false,
       "params": 13376813,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     },
     {
       "id": "object_detection/pytorch/yolo_v8/model",
@@ -1030,8 +1285,11 @@
       "label": "YOLO V8",
       "batch": 8,
       "forecast_window": null,
+      "onboarding": false,
       "params": 9021229,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     },
     {
       "id": "object_detection/pytorch/yolov10_s",
@@ -1042,8 +1300,11 @@
       "label": "YOLOv10 S",
       "batch": 4,
       "forecast_window": null,
+      "onboarding": false,
       "params": 8076398,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     },
     {
       "id": "object_detection/pytorch/yolov12_s",
@@ -1054,8 +1315,11 @@
       "label": "YOLOv12 S",
       "batch": 4,
       "forecast_window": null,
+      "onboarding": false,
       "params": 9258151,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     },
     {
       "id": "object_detection/pytorch/yolov8_s",
@@ -1066,8 +1330,11 @@
       "label": "YOLOv8 S",
       "batch": 4,
       "forecast_window": null,
+      "onboarding": false,
       "params": 11140615,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     },
     {
       "id": "object_detection/pytorch/yolov9_s",
@@ -1078,8 +1345,11 @@
       "label": "YOLOv9 S",
       "batch": 4,
       "forecast_window": null,
+      "onboarding": false,
       "params": 7292423,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     },
     {
       "id": "object_detection/pytorch/yolox_s",
@@ -1090,8 +1360,11 @@
       "label": "YOLOX S",
       "batch": 4,
       "forecast_window": null,
+      "onboarding": false,
       "params": 8942326,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     },
     {
       "id": "semantic_segmentation/pytorch/deeplab",
@@ -1102,8 +1375,11 @@
       "label": "DeepLab",
       "batch": 8,
       "forecast_window": null,
+      "onboarding": false,
       "params": 39633986,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     },
     {
       "id": "semantic_segmentation/pytorch/dinov3_seg",
@@ -1114,8 +1390,11 @@
       "label": "DINOv3 Seg",
       "batch": 8,
       "forecast_window": null,
+      "onboarding": false,
       "params": 85661954,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     },
     {
       "id": "semantic_segmentation/pytorch/dpt",
@@ -1126,8 +1405,11 @@
       "label": "DPT",
       "batch": 4,
       "forecast_window": null,
+      "onboarding": false,
       "params": 343884292,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     },
     {
       "id": "semantic_segmentation/pytorch/fcn",
@@ -1138,8 +1420,11 @@
       "label": "FCN",
       "batch": 8,
       "forecast_window": null,
+      "onboarding": false,
       "params": 33606982,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     },
     {
       "id": "semantic_segmentation/pytorch/hrnet",
@@ -1150,8 +1435,11 @@
       "label": "HRNet",
       "batch": 8,
       "forecast_window": null,
+      "onboarding": false,
       "params": 11737026,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     },
     {
       "id": "semantic_segmentation/pytorch/mask2former",
@@ -1162,8 +1450,11 @@
       "label": "Mask2Former",
       "batch": 4,
       "forecast_window": null,
+      "onboarding": false,
       "params": 47403133,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     },
     {
       "id": "semantic_segmentation/pytorch/oneformer",
@@ -1174,8 +1465,11 @@
       "label": "OneFormer",
       "batch": 4,
       "forecast_window": null,
+      "onboarding": false,
       "params": 50699902,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     },
     {
       "id": "semantic_segmentation/pytorch/sam2",
@@ -1186,8 +1480,11 @@
       "label": "SAM2",
       "batch": 1,
       "forecast_window": null,
+      "onboarding": false,
       "params": 27219650,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     },
     {
       "id": "semantic_segmentation/pytorch/segformer",
@@ -1198,8 +1495,11 @@
       "label": "SegFormer",
       "batch": 8,
       "forecast_window": null,
+      "onboarding": false,
       "params": 3714658,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     },
     {
       "id": "semantic_segmentation/pytorch/segmenter",
@@ -1210,8 +1510,11 @@
       "label": "Segmenter",
       "batch": 8,
       "forecast_window": null,
+      "onboarding": false,
       "params": 3714658,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     },
     {
       "id": "semantic_segmentation/pytorch/segnet",
@@ -1222,8 +1525,11 @@
       "label": "SegNet",
       "batch": 8,
       "forecast_window": null,
+      "onboarding": false,
       "params": 24870384,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     },
     {
       "id": "semantic_segmentation/pytorch/unet",
@@ -1234,8 +1540,11 @@
       "label": "U-Net",
       "batch": 8,
       "forecast_window": null,
+      "onboarding": false,
       "params": 31037698,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     },
     {
       "id": "semantic_segmentation/pytorch/upernet",
@@ -1246,8 +1555,11 @@
       "label": "UperNet",
       "batch": 2,
       "forecast_window": null,
+      "onboarding": false,
       "params": 81763236,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     },
     {
       "id": "sentence_pair_classification/pytorch/bert_base_uncased",
@@ -1258,8 +1570,11 @@
       "label": "BERT Base Uncased",
       "batch": 16,
       "forecast_window": null,
+      "onboarding": false,
       "params": 109483778,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     },
     {
       "id": "sentence_pair_classification/pytorch/simple_sentence_pair",
@@ -1270,8 +1585,11 @@
       "label": "Simple Sentence Pair",
       "batch": 512,
       "forecast_window": null,
+      "onboarding": false,
       "params": 3923586,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     },
     {
       "id": "seq2seq/pytorch/simple_seq2seq",
@@ -1282,8 +1600,11 @@
       "label": "Simple Seq2Seq",
       "batch": 4,
       "forecast_window": null,
+      "onboarding": false,
       "params": 45578240,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     },
     {
       "id": "seq2seq/pytorch/t5_small",
@@ -1294,8 +1615,11 @@
       "label": "T5 Small",
       "batch": 8,
       "forecast_window": null,
+      "onboarding": false,
       "params": 60506624,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     },
     {
       "id": "tabular_classification/pytorch/cnn",
@@ -1306,8 +1630,11 @@
       "label": "CNN",
       "batch": 4096,
       "forecast_window": null,
+      "onboarding": false,
       "params": 215141,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": true
     },
     {
       "id": "tabular_classification/pytorch/fcn",
@@ -1318,8 +1645,11 @@
       "label": "FCN",
       "batch": 4096,
       "forecast_window": null,
+      "onboarding": true,
       "params": 15109,
-      "averageable": true
+      "averageable": true,
+      "family": "neural_network",
+      "cpu": true
     },
     {
       "id": "tabular_classification/pytorch/ft_transformer",
@@ -1330,8 +1660,11 @@
       "label": "FT Transformer",
       "batch": 512,
       "forecast_window": null,
+      "onboarding": false,
       "params": 156869,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": true
     },
     {
       "id": "tabular_classification/pytorch/lstm",
@@ -1342,8 +1675,11 @@
       "label": "LSTM",
       "batch": 4096,
       "forecast_window": null,
+      "onboarding": false,
       "params": 100741,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": true
     },
     {
       "id": "tabular_classification/pytorch/rnn",
@@ -1354,8 +1690,11 @@
       "label": "RNN",
       "batch": 4096,
       "forecast_window": null,
+      "onboarding": false,
       "params": 31621,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": true
     },
     {
       "id": "tabular_classification/pytorch/tabm",
@@ -1366,8 +1705,11 @@
       "label": "TabM",
       "batch": 1024,
       "forecast_window": null,
+      "onboarding": false,
       "params": 38085,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": true
     },
     {
       "id": "tabular_classification/sklearn/catboost_classifier",
@@ -1378,8 +1720,11 @@
       "label": "CatBoost Classifier",
       "batch": 512,
       "forecast_window": null,
+      "onboarding": false,
       "params": null,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": true
     },
     {
       "id": "tabular_classification/sklearn/decision_tree",
@@ -1390,8 +1735,11 @@
       "label": "Decision Tree",
       "batch": 4,
       "forecast_window": null,
+      "onboarding": false,
       "params": null,
-      "averageable": false
+      "averageable": false,
+      "family": null,
+      "cpu": true
     },
     {
       "id": "tabular_classification/sklearn/ebm_classifier",
@@ -1402,8 +1750,11 @@
       "label": "EBM Classifier",
       "batch": 4096,
       "forecast_window": null,
+      "onboarding": false,
       "params": null,
-      "averageable": false
+      "averageable": false,
+      "family": null,
+      "cpu": true
     },
     {
       "id": "tabular_classification/sklearn/gbm",
@@ -1414,8 +1765,11 @@
       "label": "GBM",
       "batch": 4,
       "forecast_window": null,
+      "onboarding": false,
       "params": null,
-      "averageable": false
+      "averageable": false,
+      "family": null,
+      "cpu": true
     },
     {
       "id": "tabular_classification/sklearn/hist_gradient_boosting_classifier",
@@ -1426,8 +1780,11 @@
       "label": "Hist Gradient Boosting Classifier",
       "batch": 4096,
       "forecast_window": null,
+      "onboarding": true,
       "params": null,
-      "averageable": false
+      "averageable": false,
+      "family": "boosted_trees",
+      "cpu": true
     },
     {
       "id": "tabular_classification/sklearn/lightgbm_classifier",
@@ -1438,8 +1795,11 @@
       "label": "LightGBM Classifier",
       "batch": 512,
       "forecast_window": null,
+      "onboarding": false,
       "params": null,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": true
     },
     {
       "id": "tabular_classification/sklearn/logistic_regression",
@@ -1450,8 +1810,11 @@
       "label": "Logistic Regression",
       "batch": 4,
       "forecast_window": null,
+      "onboarding": true,
       "params": null,
-      "averageable": true
+      "averageable": true,
+      "family": "linear",
+      "cpu": true
     },
     {
       "id": "tabular_classification/sklearn/logistic_regression_stability",
@@ -1462,8 +1825,11 @@
       "label": "Logistic Regression Stability",
       "batch": 4,
       "forecast_window": null,
+      "onboarding": false,
       "params": null,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": true
     },
     {
       "id": "tabular_classification/sklearn/mlp",
@@ -1474,8 +1840,11 @@
       "label": "MLP",
       "batch": 4,
       "forecast_window": null,
+      "onboarding": false,
       "params": null,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": true
     },
     {
       "id": "tabular_classification/sklearn/naive_bayes",
@@ -1486,8 +1855,11 @@
       "label": "Naive Bayes",
       "batch": 4,
       "forecast_window": null,
+      "onboarding": false,
       "params": null,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": true
     },
     {
       "id": "tabular_classification/sklearn/random_forest",
@@ -1498,8 +1870,11 @@
       "label": "Random Forest",
       "batch": 4,
       "forecast_window": null,
+      "onboarding": false,
       "params": null,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": true
     },
     {
       "id": "tabular_classification/sklearn/random_forest_stability",
@@ -1510,8 +1885,11 @@
       "label": "Random Forest Stability",
       "batch": 4,
       "forecast_window": null,
+      "onboarding": false,
       "params": null,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": true
     },
     {
       "id": "tabular_classification/sklearn/xgboost_classifier",
@@ -1522,8 +1900,11 @@
       "label": "XGBoost Classifier",
       "batch": 512,
       "forecast_window": null,
+      "onboarding": false,
       "params": null,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": true
     },
     {
       "id": "tabular_regression/pytorch/cnn",
@@ -1534,8 +1915,11 @@
       "label": "CNN",
       "batch": 512,
       "forecast_window": null,
+      "onboarding": false,
       "params": 79713,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": true
     },
     {
       "id": "tabular_regression/pytorch/fcn",
@@ -1546,8 +1930,11 @@
       "label": "FCN",
       "batch": 512,
       "forecast_window": null,
+      "onboarding": false,
       "params": 10625,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": true
     },
     {
       "id": "tabular_regression/pytorch/ft_transformer",
@@ -1558,8 +1945,11 @@
       "label": "FT Transformer",
       "batch": 512,
       "forecast_window": null,
+      "onboarding": false,
       "params": 152385,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": true
     },
     {
       "id": "tabular_regression/pytorch/mlp",
@@ -1570,8 +1960,11 @@
       "label": "MLP",
       "batch": 512,
       "forecast_window": null,
+      "onboarding": false,
       "params": 3457,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": true
     },
     {
       "id": "tabular_regression/pytorch/rnn",
@@ -1582,8 +1975,11 @@
       "label": "RNN",
       "batch": 512,
       "forecast_window": null,
+      "onboarding": false,
       "params": 27137,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": true
     },
     {
       "id": "tabular_regression/pytorch/tabm",
@@ -1594,8 +1990,11 @@
       "label": "TabM",
       "batch": 1024,
       "forecast_window": null,
+      "onboarding": false,
       "params": 32289,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": true
     },
     {
       "id": "tabular_regression/sklearn/decision_tree",
@@ -1606,8 +2005,11 @@
       "label": "Decision Tree",
       "batch": 512,
       "forecast_window": null,
+      "onboarding": false,
       "params": null,
-      "averageable": false
+      "averageable": false,
+      "family": null,
+      "cpu": true
     },
     {
       "id": "tabular_regression/sklearn/ebm_regressor",
@@ -1618,8 +2020,11 @@
       "label": "EBM Regressor",
       "batch": 4096,
       "forecast_window": null,
+      "onboarding": false,
       "params": null,
-      "averageable": false
+      "averageable": false,
+      "family": null,
+      "cpu": true
     },
     {
       "id": "tabular_regression/sklearn/elastic_net",
@@ -1630,8 +2035,11 @@
       "label": "Elastic Net",
       "batch": 512,
       "forecast_window": null,
+      "onboarding": false,
       "params": null,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": true
     },
     {
       "id": "tabular_regression/sklearn/gradient_boosting",
@@ -1642,8 +2050,11 @@
       "label": "Gradient Boosting",
       "batch": 512,
       "forecast_window": null,
+      "onboarding": false,
       "params": null,
-      "averageable": false
+      "averageable": false,
+      "family": null,
+      "cpu": true
     },
     {
       "id": "tabular_regression/sklearn/hist_gradient_boosting_regressor",
@@ -1654,8 +2065,11 @@
       "label": "Hist Gradient Boosting Regressor",
       "batch": 4096,
       "forecast_window": null,
+      "onboarding": false,
       "params": null,
-      "averageable": false
+      "averageable": false,
+      "family": null,
+      "cpu": true
     },
     {
       "id": "tabular_regression/sklearn/lasso",
@@ -1666,8 +2080,11 @@
       "label": "Lasso",
       "batch": 512,
       "forecast_window": null,
+      "onboarding": false,
       "params": null,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": true
     },
     {
       "id": "tabular_regression/sklearn/lightgbm_regressor",
@@ -1678,8 +2095,11 @@
       "label": "LightGBM Regressor",
       "batch": 512,
       "forecast_window": null,
+      "onboarding": false,
       "params": null,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": true
     },
     {
       "id": "tabular_regression/sklearn/linear_regression",
@@ -1690,8 +2110,11 @@
       "label": "Linear Regression",
       "batch": 128,
       "forecast_window": null,
+      "onboarding": false,
       "params": null,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": true
     },
     {
       "id": "tabular_regression/sklearn/mlp",
@@ -1702,8 +2125,11 @@
       "label": "MLP",
       "batch": 128,
       "forecast_window": null,
+      "onboarding": false,
       "params": null,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": true
     },
     {
       "id": "tabular_regression/sklearn/random_forest",
@@ -1714,8 +2140,11 @@
       "label": "Random Forest",
       "batch": 128,
       "forecast_window": null,
+      "onboarding": false,
       "params": null,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": true
     },
     {
       "id": "tabular_regression/sklearn/ridge",
@@ -1726,8 +2155,11 @@
       "label": "Ridge",
       "batch": 128,
       "forecast_window": null,
+      "onboarding": false,
       "params": null,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": true
     },
     {
       "id": "tabular_regression/sklearn/tweedie_regressor",
@@ -1738,8 +2170,11 @@
       "label": "Tweedie Regressor",
       "batch": 4096,
       "forecast_window": null,
+      "onboarding": false,
       "params": null,
-      "averageable": false
+      "averageable": false,
+      "family": null,
+      "cpu": true
     },
     {
       "id": "tabular_regression/sklearn/xgboost_regressor",
@@ -1750,8 +2185,11 @@
       "label": "XGBoost Regressor",
       "batch": 128,
       "forecast_window": null,
+      "onboarding": false,
       "params": null,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": true
     },
     {
       "id": "text_classification/pytorch/bert_base_uncased",
@@ -1762,8 +2200,11 @@
       "label": "BERT Base Uncased",
       "batch": 16,
       "forecast_window": null,
+      "onboarding": false,
       "params": 109486085,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     },
     {
       "id": "text_classification/pytorch/bert_base_uncased_scratch",
@@ -1774,8 +2215,11 @@
       "label": "BERT Base Uncased Scratch",
       "batch": 16,
       "forecast_window": null,
+      "onboarding": false,
       "params": 109486085,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     },
     {
       "id": "text_classification/pytorch/distilbert",
@@ -1786,8 +2230,11 @@
       "label": "DistilBERT",
       "batch": 2,
       "forecast_window": null,
+      "onboarding": false,
       "params": 66957317,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     },
     {
       "id": "text_classification/pytorch/distilbert_scratch",
@@ -1798,8 +2245,11 @@
       "label": "DistilBERT Scratch",
       "batch": 2,
       "forecast_window": null,
+      "onboarding": false,
       "params": 66957317,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     },
     {
       "id": "text_classification/pytorch/electra",
@@ -1810,8 +2260,11 @@
       "label": "ELECTRA",
       "batch": 16,
       "forecast_window": null,
+      "onboarding": false,
       "params": 109486085,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     },
     {
       "id": "text_classification/pytorch/gte_modernbert",
@@ -1822,8 +2275,11 @@
       "label": "GTE ModernBERT",
       "batch": 4,
       "forecast_window": null,
+      "onboarding": false,
       "params": 149608709,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     },
     {
       "id": "text_classification/pytorch/modernbert",
@@ -1834,8 +2290,11 @@
       "label": "ModernBERT",
       "batch": 16,
       "forecast_window": null,
+      "onboarding": false,
       "params": 149608709,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     },
     {
       "id": "text_classification/pytorch/qwen2_5_0_5b",
@@ -1846,8 +2305,11 @@
       "label": "Qwen2.5 0.5B",
       "batch": 8,
       "forecast_window": null,
+      "onboarding": false,
       "params": 494037248,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     },
     {
       "id": "text_classification/pytorch/simple_text",
@@ -1858,8 +2320,11 @@
       "label": "Simple Text",
       "batch": 512,
       "forecast_window": null,
+      "onboarding": false,
       "params": 3923973,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     },
     {
       "id": "text_regression/pytorch/esm2_35m",
@@ -1870,8 +2335,11 @@
       "label": "ESM-2 35M",
       "batch": 2,
       "forecast_window": null,
+      "onboarding": false,
       "params": 33500882,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     },
     {
       "id": "time_series_classification/pytorch/gru",
@@ -1882,8 +2350,11 @@
       "label": "GRU",
       "batch": 512,
       "forecast_window": null,
+      "onboarding": false,
       "params": 160834,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": true
     },
     {
       "id": "time_series_classification/pytorch/lstm",
@@ -1894,8 +2365,11 @@
       "label": "LSTM",
       "batch": 512,
       "forecast_window": null,
+      "onboarding": false,
       "params": 211650,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": true
     },
     {
       "id": "time_series_classification/pytorch/masked_pool_mlp",
@@ -1906,8 +2380,11 @@
       "label": "Masked Pool MLP",
       "batch": 512,
       "forecast_window": null,
+      "onboarding": false,
       "params": 34370,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": true
     },
     {
       "id": "time_series_classification/pytorch/tcn",
@@ -1918,8 +2395,11 @@
       "label": "TCN",
       "batch": 512,
       "forecast_window": null,
+      "onboarding": false,
       "params": 142466,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": true
     },
     {
       "id": "time_series_classification/pytorch/transformer",
@@ -1930,8 +2410,11 @@
       "label": "Transformer",
       "batch": 512,
       "forecast_window": null,
+      "onboarding": false,
       "params": 274626,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": true
     },
     {
       "id": "time_series_forecasting/pytorch/bidirectional_lstm",
@@ -1945,8 +2428,11 @@
         "sequence_length": 60,
         "forecast_horizon": 1
       },
+      "onboarding": false,
       "params": 554113,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": true
     },
     {
       "id": "time_series_forecasting/pytorch/gru",
@@ -1960,8 +2446,11 @@
         "sequence_length": 60,
         "forecast_horizon": 1
       },
+      "onboarding": false,
       "params": 160769,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": true
     },
     {
       "id": "time_series_forecasting/pytorch/itransformer",
@@ -1975,8 +2464,11 @@
         "sequence_length": 96,
         "forecast_horizon": 24
       },
+      "onboarding": false,
       "params": 610584,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": true
     },
     {
       "id": "time_series_forecasting/pytorch/lstm",
@@ -1990,8 +2482,11 @@
         "sequence_length": 60,
         "forecast_horizon": 1
       },
+      "onboarding": false,
       "params": 211585,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": true
     },
     {
       "id": "time_series_forecasting/pytorch/patch_tsmixer",
@@ -2005,8 +2500,11 @@
         "sequence_length": 96,
         "forecast_horizon": 24
       },
+      "onboarding": false,
       "params": 84312,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": true
     },
     {
       "id": "time_series_forecasting/pytorch/patch_tst",
@@ -2020,8 +2518,11 @@
         "sequence_length": 96,
         "forecast_horizon": 24
       },
+      "onboarding": false,
       "params": 404120,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": true
     },
     {
       "id": "time_series_forecasting/pytorch/rnn",
@@ -2035,8 +2536,11 @@
         "sequence_length": 60,
         "forecast_horizon": 1
       },
+      "onboarding": false,
       "params": 59137,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": true
     },
     {
       "id": "time_series_forecasting/pytorch/tcn",
@@ -2050,8 +2554,11 @@
         "sequence_length": 60,
         "forecast_horizon": 1
       },
+      "onboarding": false,
       "params": 142401,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": true
     },
     {
       "id": "time_series_forecasting/pytorch/tft",
@@ -2065,8 +2572,11 @@
         "sequence_length": 96,
         "forecast_horizon": 24
       },
+      "onboarding": false,
       "params": 1428312,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     },
     {
       "id": "time_series_forecasting/pytorch/time_mixer",
@@ -2080,8 +2590,11 @@
         "sequence_length": 96,
         "forecast_horizon": 24
       },
+      "onboarding": false,
       "params": 227661,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": true
     },
     {
       "id": "time_series_forecasting/pytorch/timesfm",
@@ -2095,8 +2608,11 @@
         "sequence_length": 512,
         "forecast_horizon": 128
       },
+      "onboarding": false,
       "params": 498828960,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     },
     {
       "id": "time_series_forecasting/pytorch/transformer",
@@ -2110,8 +2626,11 @@
         "sequence_length": 60,
         "forecast_horizon": 1
       },
+      "onboarding": false,
       "params": 274561,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": true
     },
     {
       "id": "time_to_event_prediction/lifelines/cox_ph",
@@ -2122,8 +2641,11 @@
       "label": "Cox PH",
       "batch": 128,
       "forecast_window": null,
+      "onboarding": false,
       "params": null,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": true
     },
     {
       "id": "time_to_event_prediction/lifelines/log_logistic_aft",
@@ -2134,8 +2656,11 @@
       "label": "Log Logistic AFT",
       "batch": 128,
       "forecast_window": null,
+      "onboarding": false,
       "params": null,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": true
     },
     {
       "id": "time_to_event_prediction/lifelines/log_normal_aft",
@@ -2146,8 +2671,11 @@
       "label": "Log Normal AFT",
       "batch": 128,
       "forecast_window": null,
+      "onboarding": false,
       "params": null,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": true
     },
     {
       "id": "time_to_event_prediction/lifelines/weibull_aft",
@@ -2158,8 +2686,11 @@
       "label": "Weibull AFT",
       "batch": 128,
       "forecast_window": null,
+      "onboarding": false,
       "params": null,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": true
     },
     {
       "id": "time_to_event_prediction/pytorch/deephit",
@@ -2170,8 +2701,11 @@
       "label": "DeepHit",
       "batch": 256,
       "forecast_window": null,
+      "onboarding": false,
       "params": 5898,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": true
     },
     {
       "id": "time_to_event_prediction/pytorch/deepsurv",
@@ -2182,8 +2716,11 @@
       "label": "DeepSurv",
       "batch": 128,
       "forecast_window": null,
+      "onboarding": false,
       "params": 2945,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": true
     },
     {
       "id": "time_to_event_prediction/pytorch/dynamic_deephit",
@@ -2194,8 +2731,11 @@
       "label": "Dynamic DeepHit",
       "batch": 128,
       "forecast_window": null,
+      "onboarding": false,
       "params": 19914,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": true
     },
     {
       "id": "time_to_event_prediction/pytorch/multilayer_norm",
@@ -2206,8 +2746,11 @@
       "label": "Multilayer Norm",
       "batch": 128,
       "forecast_window": null,
+      "onboarding": false,
       "params": 10369,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": true
     },
     {
       "id": "time_to_event_prediction/pytorch/simple_linear",
@@ -2218,8 +2761,11 @@
       "label": "Simple Linear",
       "batch": 128,
       "forecast_window": null,
+      "onboarding": false,
       "params": 13,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": true
     },
     {
       "id": "time_to_event_prediction/pytorch/simple_neural",
@@ -2230,8 +2776,11 @@
       "label": "Simple Neural",
       "batch": 128,
       "forecast_window": null,
+      "onboarding": false,
       "params": 2945,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": true
     },
     {
       "id": "time_to_event_prediction/pytorch/surv_trace",
@@ -2242,8 +2791,11 @@
       "label": "Surv Trace",
       "batch": 128,
       "forecast_window": null,
+      "onboarding": false,
       "params": 101770,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": true
     },
     {
       "id": "time_to_event_prediction/scikit_survival/cox_ph",
@@ -2254,8 +2806,11 @@
       "label": "Cox PH",
       "batch": 128,
       "forecast_window": null,
+      "onboarding": false,
       "params": null,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": true
     },
     {
       "id": "time_to_event_prediction/scikit_survival/gradient_boosted_survival",
@@ -2266,8 +2821,11 @@
       "label": "Gradient Boosted Survival",
       "batch": 128,
       "forecast_window": null,
+      "onboarding": false,
       "params": null,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": true
     },
     {
       "id": "time_to_event_prediction/scikit_survival/random_survival_forest",
@@ -2278,8 +2836,11 @@
       "label": "Random Survival Forest",
       "batch": 128,
       "forecast_window": null,
+      "onboarding": false,
       "params": null,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": true
     },
     {
       "id": "token_classification/pytorch/bert_token",
@@ -2290,8 +2851,11 @@
       "label": "BERT Token",
       "batch": 32,
       "forecast_window": null,
+      "onboarding": false,
       "params": 108898569,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     },
     {
       "id": "token_classification/pytorch/deberta_v3_token",
@@ -2302,8 +2866,11 @@
       "label": "DeBERTa V3 Token",
       "batch": 16,
       "forecast_window": null,
+      "onboarding": false,
       "params": 183838473,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     },
     {
       "id": "token_classification/pytorch/distil_token",
@@ -2314,8 +2881,11 @@
       "label": "Distil Token",
       "batch": 16,
       "forecast_window": null,
+      "onboarding": false,
       "params": 66369801,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     },
     {
       "id": "token_classification/pytorch/electra_token",
@@ -2326,8 +2896,11 @@
       "label": "ELECTRA Token",
       "batch": 32,
       "forecast_window": null,
+      "onboarding": false,
       "params": 108898569,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     },
     {
       "id": "token_classification/pytorch/modernbert_token",
@@ -2338,8 +2911,11 @@
       "label": "ModernBERT Token",
       "batch": 16,
       "forecast_window": null,
+      "onboarding": false,
       "params": 149611785,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     },
     {
       "id": "token_classification/pytorch/roberta_token",
@@ -2350,8 +2926,11 @@
       "label": "RoBERTa Token",
       "batch": 32,
       "forecast_window": null,
+      "onboarding": false,
       "params": 124061961,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     },
     {
       "id": "token_classification/pytorch/simple_token",
@@ -2362,8 +2941,11 @@
       "label": "Simple Token",
       "batch": 32,
       "forecast_window": null,
+      "onboarding": false,
       "params": 6554697,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     },
     {
       "id": "token_classification/pytorch/xlm_roberta_token",
@@ -2374,8 +2956,11 @@
       "label": "XLM RoBERTa Token",
       "batch": 16,
       "forecast_window": null,
+      "onboarding": false,
       "params": 277459977,
-      "averageable": true
+      "averageable": true,
+      "family": null,
+      "cpu": false
     }
   ]
 }

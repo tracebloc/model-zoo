@@ -40,9 +40,8 @@ rows:
   - tests/test_ingest_schema_guard.py
   - tests/test_publish_ready_made_rows.py
   - tests/test_template_memory_rows.py
+  - tests/test_onboarding_index.py
 exempt:
-  - path: tools/build_index.py
-    ticket: tracebloc/model-zoo#84
   - path: tools/check_dump_coverage.py
     ticket: tracebloc/model-zoo#84
   - path: tools/derive_seed_excluded.py

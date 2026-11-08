@@ -48,9 +48,19 @@ Each row::
                  estimator of the model a trained run uploads, and a false row
                  is still listed -- it trains on a single-edge dataset -- so a
                  picker can flag it on a multi-edge one.
+    onboarding   whether the template declares ``onboarding = True``: one of the
+                 ready-made models a first run trains, held to
+                 ``onboarding_findings``.
+    family       an onboarding row's model family (``family_of``): the final
+                 estimator's, by ``ESTIMATOR_FAMILIES``, or "neural_network" for
+                 PyTorch. Null on every other row.
+    cpu          whether a laptop CPU trains it (``cpu_capable``): every template
+                 of a framework with no GPU path, and a PyTorch one of at most
+                 ``CPU_PARAMS_LIMIT`` parameters.
 
-The static fields need nothing but the standard library. ``params`` needs torch
-and ``averageable`` needs the template's own framework, and CI runs one
+The static fields need nothing but the standard library. ``params`` needs torch,
+``averageable`` and ``family`` need the template's own framework (``cpu`` follows
+from ``params``), and CI runs one
 framework per job -- so a run computes what its environment can and CARRIES the
 rest from the committed index (``--write`` says how many rows it carried).
 Across the three CI jobs every field is recomputed by one of them.
@@ -170,6 +180,53 @@ AVERAGEABLE_ESTIMATORS = {
         ("sksurv.ensemble", "ComponentwiseGradientBoostingSurvivalAnalysis"),
     ),
 }
+
+# --- family and CPU ----------------------------------------------------------
+#
+# A family is what kind of learner the final estimator is, so that "three models
+# of different families" can be checked. Matched with ``isinstance`` after
+# unwrapping a Pipeline; an onboarding template whose estimator no entry names, or
+# two do, cannot be indexed.
+ESTIMATOR_FAMILIES = {
+    "linear": (
+        ("sklearn.linear_model", "LogisticRegression"),
+        ("sklearn.linear_model", "RidgeClassifier"),
+        ("sklearn.linear_model", "SGDClassifier"),
+        ("sklearn.svm", "LinearSVC"),
+        ("sklearn.discriminant_analysis", "LinearDiscriminantAnalysis"),
+    ),
+    "boosted_trees": (
+        ("sklearn.ensemble", "HistGradientBoostingClassifier"),
+        ("sklearn.ensemble", "GradientBoostingClassifier"),
+        ("xgboost", "XGBClassifier"),
+        ("lightgbm", "LGBMClassifier"),
+        ("catboost", "CatBoostClassifier"),
+    ),
+    "bagged_trees": (
+        ("sklearn.ensemble", "RandomForestClassifier"),
+        ("sklearn.ensemble", "ExtraTreesClassifier"),
+    ),
+    "decision_tree": (("sklearn.tree", "DecisionTreeClassifier"),),
+    "naive_bayes": (
+        ("sklearn.naive_bayes", "GaussianNB"),
+        ("sklearn.naive_bayes", "MultinomialNB"),
+        ("sklearn.naive_bayes", "BernoulliNB"),
+    ),
+    "neural_network": (("sklearn.neural_network", "MLPClassifier"),),
+}
+
+#: Every PyTorch template's family: its weights are a network's.
+PYTORCH_FAMILY = "neural_network"
+
+#: Frameworks with no GPU path: every template of theirs trains on a CPU.
+CPU_ONLY_FRAMEWORKS = frozenset({"sklearn", "lifelines", "scikit_survival"})
+
+#: The largest PyTorch model counted as CPU-capable: a million parameters, whose
+#: float32 weights, gradients and Adam state take 16 MB.
+CPU_PARAMS_LIMIT = 1_000_000
+
+#: How many onboarding rows the index holds: a first run trains three models.
+ONBOARDING_ROWS = 3
 
 # --- labels ------------------------------------------------------------------
 #
@@ -396,6 +453,9 @@ def static_row(path: pathlib.Path, consts: dict) -> dict:
     model_type = consts.get("model_type")
     if "model_type" in consts and not isinstance(model_type, str):
         raise ValueError(f"{rel}: `model_type` must be a string literal")
+    onboarding = consts.get("onboarding", False)
+    if not isinstance(onboarding, bool):
+        raise ValueError(f"{rel}: `onboarding` must be True or False, got {onboarding!r}")
     batch = consts.get("batch_size")
     # bool is an int subclass; `batch_size = True` is not a batch size.
     if type(batch) is not int or batch < 1:
@@ -411,6 +471,7 @@ def static_row(path: pathlib.Path, consts: dict) -> dict:
         "label": label_for(template_name(rel)),
         "batch": batch,
         "forecast_window": forecast_window(rel, consts),
+        "onboarding": onboarding,
     }
 
 
@@ -538,6 +599,65 @@ def is_averageable(path: pathlib.Path, consts: dict) -> bool:
     return isinstance(_final_estimator(model), tuple(allowed))
 
 
+def family_of(path: pathlib.Path, consts: dict) -> str:
+    """The model family of the template's final estimator; raises ValueError when
+    ``ESTIMATOR_FAMILIES`` names it under no family or under two."""
+    if consts["framework"] == "pytorch":
+        return PYTORCH_FAMILY
+    with contextlib.redirect_stdout(io.StringIO()):
+        estimator = _final_estimator(_load(path)())
+    found = set()
+    for family, entries in ESTIMATOR_FAMILIES.items():
+        for module_name, cls_name in entries:
+            if not _importable(module_name):
+                continue
+            cls = getattr(importlib.import_module(module_name), cls_name, None)
+            if cls is not None and isinstance(estimator, cls):
+                found.add(family)
+    if len(found) != 1:
+        raise ValueError(
+            f"{path.relative_to(MODEL_ROOT)}: {type(estimator).__name__} is in "
+            f"{len(found)} families of ESTIMATOR_FAMILIES, not one: {sorted(found)}"
+        )
+    return found.pop()
+
+
+def cpu_capable(row: dict) -> bool:
+    """Whether a laptop CPU trains the row's template: see ``CPU_PARAMS_LIMIT``."""
+    if row["framework"] in CPU_ONLY_FRAMEWORKS:
+        return True
+    params = row.get("params")
+    return type(params) is int and 0 < params <= CPU_PARAMS_LIMIT
+
+
+def onboarding_findings(index: dict) -> list[str]:
+    """Why the index's onboarding rows are not a first run's models: exactly
+    ``ONBOARDING_ROWS`` of them, for one task, each of its own family, each
+    CPU-capable. An index with no templates cannot tell, which is a finding."""
+    rows = index.get("templates") if isinstance(index, dict) else None
+    if not rows:
+        return ["the index lists no templates: cannot tell"]
+    picked = [row for row in rows if row.get("onboarding") is True]
+    findings = []
+    if len(picked) != ONBOARDING_ROWS:
+        ids = ", ".join(row["id"] for row in picked) or "none"
+        findings.append(f"{len(picked)} onboarding rows, not {ONBOARDING_ROWS}: {ids}")
+    tasks = sorted({row["category"] for row in picked})
+    if len(tasks) > 1:
+        findings.append(f"onboarding rows span {len(tasks)} tasks: {', '.join(tasks)}")
+    families = [row.get("family") for row in picked]
+    unknown = [row["id"] for row in picked if not isinstance(row.get("family"), str)]
+    if unknown:
+        findings.append(f"onboarding rows with no family: {', '.join(unknown)}")
+    shared = sorted({f for f in families if f is not None and families.count(f) > 1})
+    if shared:
+        findings.append(f"a family more than one onboarding row has: {', '.join(shared)}")
+    gpu = [row["id"] for row in picked if row.get("cpu") is not True]
+    if gpu:
+        findings.append(f"onboarding rows a laptop CPU cannot train: {', '.join(gpu)}")
+    return findings
+
+
 # --- the index ---------------------------------------------------------------
 
 
@@ -576,11 +696,17 @@ def build(committed: dict[str, dict] | None = None) -> tuple[dict, list[str]]:
                     count_params(path) if row["framework"] == "pytorch" else None
                 )
                 row["averageable"] = is_averageable(path, consts)
+                row["family"] = (
+                    family_of(path, consts) if row["onboarding"] else None
+                )
             except Exception as exc:
                 raise RuntimeError(f"{row['id']}: could not be indexed: {exc!r}") from exc
         elif row["id"] in committed:
             row["params"] = committed[row["id"]].get("params")
             row["averageable"] = committed[row["id"]].get("averageable")
+            row["family"] = (
+                committed[row["id"]].get("family") if row["onboarding"] else None
+            )
             carried.append(row["id"])
         else:
             raise RuntimeError(
@@ -588,6 +714,7 @@ def build(committed: dict[str, dict] | None = None) -> tuple[dict, list[str]]:
                 "it imports) installed to be indexed -- see "
                 ".github/requirements/<framework>.txt"
             )
+        row["cpu"] = cpu_capable(row)
         rows.append(row)
     return {"version": INDEX_VERSION, "templates": rows}, carried
 
