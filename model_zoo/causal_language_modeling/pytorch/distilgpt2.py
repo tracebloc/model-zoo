@@ -27,6 +27,7 @@ model_type = ""
 tokenizer_file = "distilgpt2_tokenizer.json"
 # Sized to train within the smallest client's memory: see tools/template_memory.py.
 batch_size = 2
+max_batch_size = 4
 # distilgpt2 supports up to 1024 positions; the causal-LM uploader caps
 # sequence_length at max_position_embeddings=512.
 sequence_length = 128
