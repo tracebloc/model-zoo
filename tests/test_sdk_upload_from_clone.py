@@ -57,7 +57,7 @@ if os.environ.get("MODEL_ZOO_SDK_UPLOAD") != "1":
     )
 
 from tracebloc.user import User  # noqa: E402
-from tracebloc.utils.general_utils import get_paths  # noqa: E402
+from tracebloc.utils.data_probes import get_paths  # noqa: E402
 from tracebloc.validation.checker import ModelChecker  # noqa: E402
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
