@@ -1,7 +1,7 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/kanban-closure-router.yml`
-# (blob 047441d23241bba1d5b595c0bf91cf43635e70dd) folded with the private source repo's own caller of it,
+# (blob f5eead955d7b81cfe70aa77dfa05f60b86cbba28) folded with the private source repo's own caller of it,
 # `.github/workflows/kanban-closure-caller.yml` (blob b38b7c1e8514240939dd944ad2e3e6add7fcfd57), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
@@ -74,6 +74,45 @@ on:
 permissions: {}
 
 jobs:
+  # NEEDS-HUMAN COMES OFF A CLOSED PR: it asks a person whether the desk takes the PR again
+  # (desk-dispatch.py `NEEDS_HUMAN_LABEL`), and a closed PR is decided. Its own job, so a red
+  # Status route costs it nothing. kanban-deploy-state-selftest.py runs its step.
+  unpark:
+    name: route / unpark
+    if: github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'needs-human')
+    runs-on: ubuntu-slim  # runner: hosted (ubuntu-slim)
+    timeout-minutes: 5
+    steps:
+      - name: Mint a token that may take a label off this repo's PR
+        id: app-token
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          app-id: ${{ secrets.RELEASE_TRAIN_APP_ID }}
+          private-key: ${{ secrets.RELEASE_TRAIN_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          # DELETE repos/{r}/issues/{n}/labels/{name} on a PR: for an App token that is a
+          # pull-requests WRITE as well as an issues one (dispatch-sweep.yml's sweep mint).
+          permission-issues: write
+          permission-pull-requests: write
+      - name: Take needs-human off the closed PR
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          REPO_FULL: ${{ github.repository }}
+          NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          # selftest:unpark-start
+          if ! out=$(gh api -X DELETE "repos/$REPO_FULL/issues/$NUMBER/labels/needs-human" 2>&1); then
+            case "$out" in
+              *"Label does not exist"*) echo "::notice::#$NUMBER carries no needs-human any more: nothing to take off" ;;
+              *) echo "::error::needs-human could not be taken off #$NUMBER: $out"; exit 1 ;;
+            esac
+          else
+            echo "→ #$NUMBER closed: needs-human off"
+          fi
+          # selftest:unpark-end
+
   route:
     name: route / route
     runs-on: ubuntu-slim  # runner: hosted (ubuntu-slim)

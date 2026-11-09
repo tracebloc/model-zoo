@@ -1,7 +1,7 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/code-quality.yml`
-# (blob 67f9fccf772c525f3b22c7aefadd0967d49db64a) folded with the private source repo's own caller of it,
+# (blob 3db0934a696408da5efd1d58b563459319c288b5) folded with the private source repo's own caller of it,
 # job `quality` of `.github/workflows/ci.yml` with that file's `on:` and
 # `permissions:` (blob ffc33eb4910df7737d1155a0e0700a85212009f0 of those lines; its
 # `concurrency:` is one group for every job it runs, so it is not
@@ -510,11 +510,12 @@ jobs:
           # ... 500`, and a clean PR was parked over it). --retry-all-errors
           # also covers resets and TLS blips, not only curl's 5xx list (runner curl is
           # Ubuntu 24.04's 8.5; the flag needs 7.71). The SHA-256 check below still
-          # decides what installs. --max-time is PER ATTEMPT: 4 x 120s + 3 x 5s stays
-          # inside this job's 14 minutes, so a stalled download fails as curl, not as
-          # a platform timeout.
-          curl -fsSL --tlsv1.2 --connect-timeout 30 --max-time 120 \
-            --retry 3 --retry-delay 5 --retry-all-errors "$URL" -o /tmp/gitleaks.tar.gz
+          # decides what installs. The window must outlast a short release-host
+          # outage (504s for 15s failed two runs in a row). --max-time is PER ATTEMPT:
+          # 7 x 60s + 6 x 20s stays inside this job's 14 minutes, so a stalled
+          # download fails as curl, not as a platform timeout.
+          curl -fsSL --tlsv1.2 --connect-timeout 30 --max-time 60 \
+            --retry 6 --retry-delay 20 --retry-all-errors "$URL" -o /tmp/gitleaks.tar.gz
           echo "${GITLEAKS_SHA256}  /tmp/gitleaks.tar.gz" | sha256sum -c -
           tar -xzf /tmp/gitleaks.tar.gz -C /tmp gitleaks
           chmod +x /tmp/gitleaks
