@@ -9,6 +9,7 @@ model_type = ""
 tokenizer_file = "bert_vocab_tokenizer.json"
 # Sized to train within the smallest client's memory: see tools/template_memory.py.
 batch_size = 16
+max_batch_size = 32
 sequence_length = 128
 vocab_size = 30522
 license = "Apache-2.0"

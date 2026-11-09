@@ -23,6 +23,7 @@ model_type = ""
 tokenizer_file = "distilbert_scratch_tokenizer.json"
 # Sized to train within the smallest client's memory: see tools/template_memory.py.
 batch_size = 2
+max_batch_size = 16
 sequence_length = 512
 output_classes = 5
 
