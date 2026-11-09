@@ -38,10 +38,10 @@ git clone https://github.com/tracebloc/model-zoo.git
 Then upload a model to tracebloc:
 
 ```python
-from tracebloc_package import User
+from tracebloc import User
 
 user = User()  # log in with your tracebloc email + password
-user.uploadModel("model-zoo/model_zoo/image_classification/pytorch/resnet_18.py")
+user.upload_model("model-zoo/model_zoo/image_classification/pytorch/resnet_18.py")
 ```
 
 Full walkthrough → [run the training notebook in your own Jupyter](https://github.com/tracebloc/quickstart/blob/main/notebooks/traceblocTrainingGuide.ipynb)
