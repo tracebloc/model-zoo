@@ -1,7 +1,7 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/advance-deploy-env.yml`
-# (blob 93d6f4ea09712722fb6ada5b5467e0fba08fc2ae) folded with the private source repo's own caller of it,
+# (blob 87665d77b876adfbc92b1b80e20b07eb8ff7bdc6) folded with the private source repo's own caller of it,
 # `.github/workflows/advance-deploy-env-caller.yml` (blob 5de24d409e5bbf2bccbb720912cd551cbe33b040), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
@@ -58,6 +58,10 @@ name: Advance deploy environment
 #                   `staging_surface: none` -- nothing of it is on staging to review
 #                   ((internal ref); scripts/branch_status_map.py reads the row)
 #   master/main  -> Status = "Prod"           (shipped to production)
+#
+# A push to staging writes Status and leaves Deploy environment as it was: `stg` is
+# written by (internal ref)'s staging deploy on the cards it serves ((internal ref) D48; the
+# mapper's `env_writer`).
 #
 # Advancement is MONOTONIC: a card is never moved backward. Back-merges and
 # fast-forwards re-push commits that already shipped further down the line
@@ -259,6 +263,9 @@ jobs:
           # repo's `main`).
           DEPLOY_ENV: ${{ steps.env.outputs.stage || steps.env.outputs.env }}
           DEPLOY_ENV_NAMES: ${{ steps.env.outputs.env_names }}
+          # `deploy` when this push must not write DEPLOY_ENV: `stg` is the staging deploy's
+          # to write, on the cards it serves (the mapper's `env_writer`, (internal ref) D48).
+          ENV_WRITER: ${{ steps.env.outputs.env_writer }}
           STATUS_NAME: ${{ steps.env.outputs.status_name }}
           REPO_FULL: ${{ github.repository }}
           PR_NUMBERS: ${{ steps.prs.outputs.prs }}
@@ -456,6 +463,9 @@ jobs:
                           status: fieldValueByName(name: "Status") {
                             ... on ProjectV2ItemFieldSingleSelectValue { name }
                           }
+                          deployenv: fieldValueByName(name: "Deploy environment") {
+                            ... on ProjectV2ItemFieldSingleSelectValue { name }
+                          }
                         }
                       }
                     }
@@ -511,16 +521,29 @@ jobs:
               RUN_FAILED=1
               continue
             fi
+            # A card the closure router already placed at the target column still
+            # owes its Deploy env when this push is the env's writer and none is set.
+            ENV_ONLY=0
             if [ "$CURRENT_RANK" -ge "$TARGET_RANK" ]; then
-              echo "::notice::#$prnum already at '${CURRENT_STATUS:-none}' (>= '$STATUS_NAME') -- not demoting"
-              continue
+              CURRENT_ENV=$(echo "$RESP" | jq -r --arg n "$PROJECT_NUMBER" '.data.repository.pullRequest.projectItems.nodes[]?
+                    | select(.project.number == ($n | tonumber)) | .deployenv.name // ""' 2>/dev/null | head -1)
+              if [ "$CURRENT_RANK" -eq "$TARGET_RANK" ] && [ -z "$CURRENT_ENV" ] && [ "${ENV_WRITER:-}" != "deploy" ]; then
+                ENV_ONLY=1   # selftest:env-only-at-target
+              else
+                echo "::notice::#$prnum already at '${CURRENT_STATUS:-none}' (>= '$STATUS_NAME') -- not demoting"
+                continue
+              fi
             fi
 
-            echo "-> PR #$prnum: Deploy env = $DEPLOY_ENV (option '$DEPLOY_OPT_NAME')"
             ITEM_ARCHIVED=0
-            update_field "$DEPLOY_FIELD" "$DEPLOY_OPT" "Deploy env=$DEPLOY_OPT_NAME"
+            if [ "${ENV_WRITER:-}" = "deploy" ]; then   # selftest:env-writer-deploy
+              echo "-> PR #$prnum: Deploy env left as it is: $DEPLOY_ENV is written by the staging deploy on the cards it serves"
+            else
+              echo "-> PR #$prnum: Deploy env = $DEPLOY_ENV (option '$DEPLOY_OPT_NAME')"
+              update_field "$DEPLOY_FIELD" "$DEPLOY_OPT" "Deploy env=$DEPLOY_OPT_NAME"
+            fi
 
-            if [ "$SKIP_STATUS" != "1" ] && [ "$ITEM_ARCHIVED" = "0" ]; then
+            if [ "$SKIP_STATUS" != "1" ] && [ "$ITEM_ARCHIVED" = "0" ] && [ "$ENV_ONLY" = "0" ]; then
               echo "-> PR #$prnum: Status = $STATUS_NAME"
               update_field "$STATUS_FIELD" "$STATUS_OPT" "Status=$STATUS_NAME"
             fi
