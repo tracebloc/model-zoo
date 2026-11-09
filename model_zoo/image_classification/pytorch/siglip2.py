@@ -30,6 +30,7 @@ license = "Apache-2.0"
 image_size = 224
 # Sized to train within the smallest client's memory: see tools/template_memory.py.
 batch_size = 8
+max_batch_size = 16
 output_classes = 2
 category = "image_classification"
 

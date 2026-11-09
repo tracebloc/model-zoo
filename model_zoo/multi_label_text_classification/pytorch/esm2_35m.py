@@ -32,6 +32,7 @@ tokenizer_file = "esm2_35m_tokenizer.json"
 # Sized to train within the smallest client's memory (tools/template_memory.py);
 # ESM-2 itself was pretrained on up to 1,022 residues plus <cls> and <eos>.
 batch_size = 2
+max_batch_size = 8
 sequence_length = 512
 output_classes = 10
 

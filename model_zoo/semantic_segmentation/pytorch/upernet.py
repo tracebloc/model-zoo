@@ -29,6 +29,7 @@ license = "MIT"
 image_size = 512
 # Sized to train within the smallest client's memory: see tools/template_memory.py.
 batch_size = 2
+max_batch_size = 4
 output_classes = 2
 category = "semantic_segmentation"
 

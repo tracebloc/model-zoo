@@ -32,6 +32,7 @@ license = "Apache-2.0"
 image_size = 1024
 # Sized to train within the smallest client's memory: see tools/template_memory.py.
 batch_size = 1
+max_batch_size = 2
 output_classes = 2
 category = "semantic_segmentation"
 

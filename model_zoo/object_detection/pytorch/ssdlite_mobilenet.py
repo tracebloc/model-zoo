@@ -60,6 +60,7 @@ license = "BSD-3-Clause"
 image_size = 320
 # Sized to train within the smallest client's memory: see tools/template_memory.py.
 batch_size = 12
+max_batch_size = 24
 output_classes = 12
 category = "object_detection"
 
