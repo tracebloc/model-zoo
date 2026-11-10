@@ -34,6 +34,10 @@ jobs:
       # ruff==0.16.0, this step installs it, and `make setup` installs the same
       # file.
       - run: make lint
+      # The Makefile's own behaviour tests (guard-toolchain, in throwaway repos).
+      # Kept out of `make check` so a local quirk cannot block a push; run here so
+      # they still run on every pull request.
+      - run: make test-hooks
 
   # `pytest tests/` deselects the mutation rows (tests/mutation_selection.py), so
   # these three jobs run each guard's behaviour tests and not its rows. The rows
@@ -75,7 +79,12 @@ jobs:
           cache: pip
           cache-dependency-path: .github/requirements/survival.txt
       - run: pip install -r .github/requirements/test.txt -r .github/requirements/survival.txt
+      # scikit-learn is installed here only as a scikit-survival dependency, at
+      # sklearn.txt's pin, so test_model_contract.py (the only reader of
+      # MODEL_ZOO_FRAMEWORKS) leaves the pure-sklearn templates to test-sklearn.
       - run: pytest tests/ -v
+        env:
+          MODEL_ZOO_FRAMEWORKS: lifelines,scikit_survival
 
   # ── Every template uploads the way a user uploads it from a clone ──
   #
