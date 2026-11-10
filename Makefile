@@ -1,6 +1,6 @@
 # Makefile for tracebloc/model-zoo — uniform entry points.
 #
-# Every active tracebloc repo exposes the SAME three targets, so "run
+# Every active tracebloc repo exposes the SAME entry points, so "run
 # your tests before you push" stops being a rule you can only obey with
 # per-repo tribal knowledge:
 #
