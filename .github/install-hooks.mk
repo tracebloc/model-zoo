@@ -12,6 +12,7 @@
 #   make hooks-status    exit 0 only when the installed hook is this file's hook
 #   make check-stamped   run `make check`, and stamp the tree it passed on, so the push of
 #                        that tree skips the hook's run (call it instead of a bare make check)
+#   make pass-record-toolchain   print the toolchain a pass record carries (THE TOOLCHAIN)
 #
 # THE STAMP. A pass of `make check` is recorded as HEAD's tree hash, an empty file in
 # `git rev-parse --git-path tracebloc-check-stamps` (this checkout's git directory, never
@@ -21,7 +22,34 @@
 # when the tree of every commit it is pushing has a stamp; a tree it cannot read runs it.
 # The hook's own passing run stamps too, so a retried push is free.
 #
-# The hook runs `make check` and nothing else. It catches forgetting, not defiance:
+# THE PASS RECORD. The stamp of a clean pass also holds the pass record of its tree, one
+# line: `pass-record/1 tree=<tree> toolchain=<make pass-record-toolchain>`. A stamp whose
+# toolchain cannot be told holds no record and still skips the hook's run. When the hook
+# lets a push to github.com through, it publishes the record of every pushed commit whose
+# tree has one, as a commit status on that commit (context `tracebloc/pass-record`, the
+# record as its description). The remote has no commit until the push ends, so a detached
+# step waits for this push's git to exit, at most 120 seconds, then makes one `gh api`
+# call per commit. No `gh` on PATH, a `gh` with no login, or a push that never lands
+# leaves no record, and CI then runs every check. A pull request's required job skips
+# what a record covers only when the record is for the head's own tree and the job's own
+# toolchain and was published by a person's account; the gates never read one.
+#
+# THE TOOLCHAIN. Each runtime the checkout pins in a version file (`.python-version`;
+# `.nvmrc` or `.node-version`; go.mod's `go` line), as this machine resolves it, cut to the
+# pin's precision: `python=3.12`. Python is the Makefile's $(PYTHON), else python3. It
+# fails, saying why, when nothing is pinned or a pin or a version is not a plain number.
+# CI runs the same target in the job a record would skip, and the two lines must match.
+#
+# THE BUDGET. The hook's run takes under a minute on a laptop, so it runs only the fast
+# kinds: lint, format, typecheck, toolchain preflight. Suites, builds and services run on
+# GitHub. A repo names its fast kinds in a `pre-push` target, which may only name targets
+# its CI also runs: nothing runs only on the laptop. A repo whose whole `make check` runs
+# under a minute may make `pre-push` just `check`, or have none.
+#
+# The hook runs `make pre-push` where the Makefile has that target and `make check` where
+# it has not, or where a match-anything rule (`%:`) hides whether it has. A `pre-push` pass
+# writes no stamp, so it skips nothing and publishes no record: only a full `make check`
+# makes one (THE STAMP, THE PASS RECORD). The hook catches forgetting, not defiance:
 # `git push --no-verify` skips it. It is written into this clone's own hooks directory,
 # `git rev-parse --git-path hooks`, which in a linked worktree (where `.git` is a file)
 # is the main clone's, so one install serves every worktree. It never writes global git
@@ -41,8 +69,10 @@ _tb_install_hooks_goal := $(.DEFAULT_GOAL)
 define _tb_prepush_hook
 #!/bin/sh
 # tracebloc pre-push hook, written by `make install-hooks` (.github/install-hooks.mk).
-# Runs `make check` before a push, so a push that would be red in CI is caught here
-# first. Rewritten by every `make install-hooks`: change the snippet, never this file.
+# Runs the repo's fast `make pre-push` before a push, or `make check` where it has none,
+# and publishes the pass record of each pushed tree a full `make check` passed (THE PASS
+# RECORD in the snippet). Rewritten by every `make install-hooks`: change the snippet,
+# never this file.
 
 # A delete or no-op push carries no new commits (local sha all zeros): nothing to check.
 z=0000000000000000000000000000000000000000
@@ -78,7 +108,7 @@ fi
 if make -n guard-toolchain >/dev/null 2>&1; then
   if ! guard_out="$$(make guard-toolchain 2>&1)"; then
     printf '%s\n' "$$guard_out"
-    echo "pre-push: the tools make check needs are missing (above), so it did not run; the push proceeds."
+    echo "pre-push: the tools the checks need are missing (above), so nothing ran; the push proceeds."
     exit 0
   fi
 fi
@@ -96,10 +126,27 @@ for sha in $$pushed; do
 done
 if [ -n "$$trees" ]; then
   echo "pre-push: make check already passed here on tree$$trees, so it did not run again."
-  exit 0
+elif pre_out="$$(LC_ALL=C make -n pre-push 2>&1)" && ! make -n tracebloc-no-such-goal >/dev/null 2>&1; then
+  # The fast kinds only (THE BUDGET): no stamp, so this push publishes no record.
+  make pre-push || exit $$?
+  echo "pre-push: make pre-push passed; it leaves no pass record, so CI runs make check."
+else
+  # No pre-push target, or a match-anything rule (`%:`) that plans every goal and so hides
+  # whether there is one, runs the full make check. A plan that fails otherwise refuses.
+  case "$$pre_out" in
+    *"No rule to make target 'pre-push'."*|*"No rule to make target \`pre-push'."*) ;;
+    *)
+      if ! make -n tracebloc-no-such-goal >/dev/null 2>&1; then
+        printf '%s\n' "$$pre_out"
+        echo "pre-push: make cannot plan pre-push (above), so the push is refused."
+        exit 1
+      fi ;;
+  esac
+$(_tb_check_stamped)
 fi
 
-$(_tb_check_stamped)
+$(_tb_publish_records)
+exit 0
 endef
 
 # Where the stamps live; the hook reads them and `check-stamped` writes them.
@@ -125,13 +172,100 @@ elif [ "$$before" != "$$after" ]; then
 elif mkdir -p "$$stamps" && : > "$$stamps/$$before"; then
   ls -t "$$stamps" | sed 1,20d | while read -r old; do rm -f "$$stamps/$$old"; done
   echo "make check passed on tree $$before; a push of it skips the pre-push run."
+  if toolchain="$$(make -s --no-print-directory pass-record-toolchain)"; then
+    printf '%s\n' "pass-record/1 tree=$$before toolchain=$$toolchain" > "$$stamps/$$before"
+    echo "Its pass record: pass-record/1 tree=$$before toolchain=$$toolchain"
+  else
+    echo "It has no pass record: its toolchain cannot be told (above), so CI runs every check."
+  fi
 else
   echo "make check passed, but its stamp could not be written in '$$stamps'."
 fi
-exit 0
 endef
 
-.PHONY: install-hooks hooks-status check-stamped
+# THE PASS RECORD, published (above): the pushed commits whose tree's stamp holds a record,
+# posted by a detached step once this push's git has exited. $$2 is the remote's URL.
+define _tb_publish_records
+case "$$2" in
+  *github.com[:/]*) slug="$${2#*github.com[:/]}" ;;
+  *) slug= ;;
+esac
+slug="$${slug%/}"
+slug="$${slug%.git}"
+case "$$slug" in
+  */*/*|*[!A-Za-z0-9_./-]*|/*|*/|.*) slug= ;;
+  */*) ;;
+  *) slug= ;;
+esac
+posts=
+if [ -n "$$slug" ] && command -v gh >/dev/null 2>&1; then
+  for sha in $$pushed; do
+    tree="$$(git rev-parse --verify -q "$$sha^{tree}")" || continue
+    case "$$(sed -n 1p "$$stamps/$$tree" 2>/dev/null)" in
+      "pass-record/1 tree=$$tree toolchain="?*) posts="$$posts $$sha" ;;
+    esac
+  done
+fi
+if [ -n "$$posts" ]; then
+  parent=$$PPID
+  (
+    n=0
+    while kill -0 "$$parent" 2>/dev/null && [ "$$n" -lt 120 ]; do
+      sleep 1
+      n=$$((n + 1))
+    done
+    for sha in $$posts; do
+      tree="$$(git rev-parse --verify -q "$$sha^{tree}")" || continue
+      record="$$(sed -n 1p "$$stamps/$$tree" 2>/dev/null)"
+      gh api -X POST "repos/$$slug/statuses/$$sha" -f state=success -f context=tracebloc/pass-record -f "description=$$record" --silent
+    done
+  ) </dev/null >/dev/null 2>&1 &
+  echo "pre-push: the pass record of$$posts goes to $$slug once this push lands."
+fi
+endef
+
+# THE TOOLCHAIN (above), as one line on stdout; a reason on stderr and exit 1 when it
+# cannot be told.
+define _tb_toolchain
+fp=
+pin() {
+  sed -n '1{s/^[[:space:]]*[vV]\{0,1\}//;s/[[:space:]]*$$//;p;}' "$$1"
+}
+add() {
+  n="$$(printf '%s' "$$2" | tr -cd . | wc -c | tr -d ' ')"
+  have="$$(printf '%s' "$$3" | cut -d. -f"1-$$((n + 1))")"
+  case "$$2" in
+    ''|.*|*.|*..*|*[!0-9.]*)
+      echo "pass-record-toolchain: $$1 is pinned to '$$2', which is not a version number" >&2
+      exit 1 ;;
+  esac
+  case "$$have" in
+    ''|.*|*.|*..*|*[!0-9.]*)
+      echo "pass-record-toolchain: the $$1 here reports '$$3', which is not a version number" >&2
+      exit 1 ;;
+  esac
+  fp="$${fp:+$$fp,}$$1=$$have"
+}
+if [ -f .python-version ]; then
+  add python "$$(pin .python-version)" "$$($(or $(PYTHON),python3) -c 'import platform; print(platform.python_version())' 2>/dev/null)"
+fi
+if [ -f .nvmrc ]; then
+  add node "$$(pin .nvmrc)" "$$(node -p process.versions.node 2>/dev/null)"
+elif [ -f .node-version ]; then
+  add node "$$(pin .node-version)" "$$(node -p process.versions.node 2>/dev/null)"
+fi
+if [ -f go.mod ]; then
+  add go "$$(sed -n 's/^go[[:space:]][[:space:]]*\([0-9][0-9.]*\)[[:space:]]*$$/\1/p' go.mod | sed -n 1p)" \
+    "$$(go env GOVERSION 2>/dev/null | sed 's/^go//')"
+fi
+if [ -z "$$fp" ]; then
+  echo "pass-record-toolchain: this checkout pins no runtime in a version file, so there is no toolchain to record" >&2
+  exit 1
+fi
+echo "$$fp"
+endef
+
+.PHONY: install-hooks hooks-status check-stamped pass-record-toolchain
 
 install-hooks: export TRACEBLOC_PREPUSH_HOOK = $(_tb_prepush_hook)
 install-hooks:
@@ -159,7 +293,7 @@ install-hooks:
 	printf '%s\n' "$$TRACEBLOC_PREPUSH_HOOK" > "$$hook.tmp.$$$$" && \
 	chmod +x "$$hook.tmp.$$$$" && \
 	mv -f "$$hook.tmp.$$$$" "$$hook" && \
-	echo "install-hooks: $$hook installed; make check runs before every push"
+	echo "install-hooks: $$hook installed; make pre-push, or make check where there is none, runs before every push"
 
 hooks-status: export TRACEBLOC_PREPUSH_HOOK = $(_tb_prepush_hook)
 hooks-status:
@@ -175,5 +309,9 @@ hooks-status:
 check-stamped: export _TB_CHECK_STAMPED = $(_tb_check_stamped)
 check-stamped:
 	@sh -c "$$_TB_CHECK_STAMPED" check-stamped
+
+pass-record-toolchain: export _TB_TOOLCHAIN = $(_tb_toolchain)
+pass-record-toolchain:
+	@sh -c "$$_TB_TOOLCHAIN" pass-record-toolchain
 
 .DEFAULT_GOAL := $(_tb_install_hooks_goal)
