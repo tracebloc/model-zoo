@@ -1,7 +1,7 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/desk-verdict-footer.yml`
-# (blob bf3cfafc7ee94632a56722e86c7554f5964fe1a0) folded with the private source repo's own caller of it,
+# (blob 41789ffde2b92ad23aa75743b7a718c27bb97033) folded with the private source repo's own caller of it,
 # `.github/workflows/desk-verdict-footer-caller.yml` (blob bcee1883d619384ab1440cca73b88bbf012e425f), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
@@ -85,11 +85,14 @@ name: Desk verdict footer
 # those seconds; the two bypasses on record took 12 s and 56 s.
 #
 # NO `concurrency:`, and none may be added. Branch protection judges a required context by
-# the run in its NEWEST-CREATED check suite, one suite per workflow run -- not the worst
-# run, not the last to finish (measured on the private source repo: five (internal ref)
-# PRs, (internal ref) to (internal ref), auto-merged over older
-# CANCELLED `Design gate` suites; (internal ref) was held 1 h 50 min by a newer-created
-# cancelled `quality` suite whose runs were older by id, start and finish). A group cancels
+# the run in its NEWEST-CREATED check suite, one suite per workflow run -- not the last to
+# finish -- and an older suite's run holds the merge only when it FAILED (measured on
+# the private source repo: five (internal ref) PRs, (internal ref) to
+# (internal ref), auto-merged over older CANCELLED `Design gate` suites;
+# (internal ref) was held 1 h 50 min by a newer-created cancelled `quality` suite whose
+# runs were older by id, start and finish; (internal ref) and
+# (internal ref) were held by an older suite's FAILED run of this job beside a
+# newer suite's pass, which is why its checkouts retry, below). A group cancels
 # in QUEUE order, and queue order and creation order invert: on (internal ref) the suite
 # created 2 s later started first and was the one cancelled.
 # Reviews come in bursts -- Bugbot's, and every desk thread reply is a `pull_request_review`
@@ -202,7 +205,24 @@ jobs:
           fi
           echo "ref=$TOOLS_REF" >> "$GITHUB_OUTPUT"
           echo "tools ref: $TOOLS_REF"
+      # EACH CHECKOUT RETRIES ONCE: a GitHub 5xx fails a step, and a failed run of this job
+      # holds an approved PR's merge (the header says why). The second attempt, after a
+      # pause, is not `continue-on-error`, so two failures still fail the job.
       - name: Check out the checker
+        id: checker
+        continue-on-error: true
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: tracebloc/org-config
+          token: ${{ steps.tools-token.outputs.token }}
+          ref: ${{ 'main' }}
+          path: .org-config-tools
+          persist-credentials: false
+      - name: Pause before checking out the checker again
+        if: steps.checker.outcome == 'failure'
+        run: sleep 15
+      - name: Check out the checker again, after a failure
+        if: steps.checker.outcome == 'failure'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: tracebloc/org-config
@@ -211,14 +231,13 @@ jobs:
           path: .org-config-tools
           persist-credentials: false
 
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
-        with:
-          python-version: '3.12'
-
-      # PyYAML, pinned: the review account is read from desk-dispatch.yml's own
-      # `reviewer` input in the same checkout, never restated in this file.
-      - name: Install PyYAML for the reviewer read
-        run: python -m pip install --quiet --disable-pip-version-check 'pyyaml==6.0.2'
+      # THE RUNNER'S OWN PYTHON (ubuntu-slim lists 3.12 and pip): no download, so none to fail.
+      # `--target`, not a venv: it needs pip alone, never `python3-venv`, which the image does
+      # not list, and it installs past PEP 668. PYTHONPATH carries it to every later `python3`.
+      - name: Install PyYAML for the reviewer read, into a directory on the runner's Python
+        run: |
+          python3 -m pip install --quiet --disable-pip-version-check --target "$RUNNER_TEMP/footer-pylib" 'pyyaml==6.0.2'
+          echo "PYTHONPATH=$RUNNER_TEMP/footer-pylib" >> "$GITHUB_ENV"
 
       # WHERE `desk.py` LIVES, from the script: `DESK_PY_SOURCE` is declared once, in
       # dispatch-sweep.py, and never restated here, and `sha`, the commit its ref names,
@@ -243,9 +262,26 @@ jobs:
       # `continue-on-error` -- because the script reads `desk.py` only when there is an
       # APPROVE to judge, so a (internal ref) outage reddens no PR that has none; with an
       # APPROVE, an empty or partial checkout is CANNOT TELL in the judge step. The commit
-      # it lands on is the one the verdict names.
+      # it lands on is the one the verdict names. It retries once, as the checker does; the
+      # second attempt keeps `continue-on-error` for the same reason, and the judge step is
+      # what fails closed on it.
       - name: Check out desk.py's directory over git
         id: desk-py
+        continue-on-error: true
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.repository_owner }}/${{ steps.desk-source.outputs.repo }}
+          token: ${{ steps.tools-token.outputs.token }}
+          ref: ${{ steps.desk-source.outputs.sha }}
+          path: .desk-py-source
+          persist-credentials: false
+          fetch-depth: 1
+          sparse-checkout: ${{ steps.desk-source.outputs.dir }}
+      - name: Pause before checking out desk.py's directory again
+        if: steps.desk-py.outcome == 'failure'
+        run: sleep 15
+      - name: Check out desk.py's directory again, after a failure
+        if: steps.desk-py.outcome == 'failure'
         continue-on-error: true
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
