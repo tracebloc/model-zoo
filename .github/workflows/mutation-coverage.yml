@@ -1,7 +1,7 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/mutation-coverage.yml`
-# (blob 55490177efa768c3732d2b01ff08511f905a419d) folded with the private source repo's own caller of it,
+# (blob 994511f97b761dfd757fffaf03f7695128877512) folded with the private source repo's own caller of it,
 # job `mutation-coverage` of `.github/workflows/ci.yml` with that file's `on:` and
 # `permissions:` (blob e0bb2c04363d1c511fe5d9eb01b175e57a83ffca of those lines; its
 # `concurrency:` is one group for every job it runs, so it is not
@@ -188,7 +188,7 @@ jobs:
           path: .org-config-tools
           persist-credentials: false
 
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
         with:
           python-version: '3.12'
 

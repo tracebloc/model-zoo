@@ -1,7 +1,7 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/mutation-nightly.yml`
-# (blob 909664804dfa30dbf34c8b245d16b8b95883279e) folded with the private source repo's caller TEMPLATE for it,
+# (blob bb06ea2100250ab318ebfbdb52608eb78bd3bdb9) folded with the private source repo's caller TEMPLATE for it,
 # `.github/caller-templates/mutation-nightly-caller.yml` (blob 801e23606e2fd6431f0d178fd6553debd13267f1), the file every
 # repo's caller is rendered from, for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
@@ -237,7 +237,7 @@ jobs:
           persist-credentials: false
 
       # No PyYAML: the filer reads no inventory, only the issues API and the board.
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
         with:
           python-version: '3.12'
 
