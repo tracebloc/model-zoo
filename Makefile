@@ -107,8 +107,8 @@ setup:
 # test-hooks: run the Makefile's own behaviour tests (guard-toolchain) on demand;
 # the installer and its hook are the generated snippet's, tested where it lives.
 # Not a `check` dependency: it runs real `make` in throwaway repos, so an
-# environment quirk (old git, noexec /tmp) could block a local push on something
-# CI never sees. Run it directly with `make test-hooks`.
+# environment quirk (old git, noexec /tmp) could block a local push. CI runs it
+# in the ruff job. Run it directly with `make test-hooks`.
 .PHONY: test-hooks
 test-hooks:
 	@sh scripts/tests/test-pre-push-hook.sh

@@ -4,9 +4,8 @@
 ``test_yolo11_s.py`` and ``test_yolov12_s.py`` each prove a hand-written
 detector with the same machinery: a ``GUARDS`` table, a ``MUTATIONS`` table of
 ``(name, anchor, replacement, target_guard)`` rows, a loader that executes the
-template from a real file, and the same handful of sweep tests. That machinery
-was copied into all five files and had begun to drift (two of them recorded
-the executed source for ``reload``, three did not). It lives here now.
+template from a real file, and the same handful of sweep tests. It lives here
+once so the five suites cannot drift apart.
 
 What stays in each file
 -----------------------
