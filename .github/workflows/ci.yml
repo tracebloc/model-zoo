@@ -275,6 +275,10 @@ jobs:
       - run: pip install -r .github/requirements/test.txt
       - name: model_zoo/ agrees with the vendored category enum
         run: pytest tests/test_zoo_category_contract.py -v
+      # Offline: each copy against the producer commit and blobs it pins.
+      - name: The vendored contract copies are held to their pins
+        if: ${{ !cancelled() }}
+        run: pytest tests/test_contract_copies_held.py -v
       # Runs even when the step above is red, so one run reports both layers.
       - name: The vendored category enum agrees with the producer release it pins
         if: ${{ !cancelled() }}
@@ -286,3 +290,41 @@ jobs:
             exit 1
           fi
           echo "ingest-schema-guard: the vendored category enum equals the producer release it pins"
+
+  # ── One required context for the lint and test jobs ──
+  #
+  # Branch protection can require `ci-gate` alone instead of the four jobs it
+  # needs, so a job added to or renamed in `needs:` changes what is required
+  # without touching protection. `if: always()` makes it report on every run:
+  # without it, a failed need SKIPS this job, and a skipped check reads as
+  # passing. A run the concurrency group cancels therefore ends red here.
+  #
+  # ONLY `success` PASSES: no job in `needs:` is skipped on purpose, so a
+  # skipped, cancelled or failed leg is red, and so is an empty result. A need
+  # that gains an `if:` must teach this step which skip is deliberate.
+  ci-gate:
+    needs: [ruff, test-pytorch, test-sklearn, test-survival]
+    if: always()
+    runs-on: ubuntu-slim  # runner: hosted (ubuntu-slim)
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - name: Every needed job succeeded
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          set -euo pipefail
+          printf '%s\n' "$NEEDS"
+          if [ -z "${RESULTS// /}" ]; then
+            echo "::error::no needed job to judge -- a gate that reads nothing has no verdict"
+            exit 1
+          fi
+          bad=0
+          for result in $RESULTS; do
+            case "$result" in
+              success) ;;
+              *) echo "::error::a needed job ended '$result'"; bad=1 ;;
+            esac
+          done
+          exit "$bad"

@@ -1,0 +1,166 @@
+name: Contract drift (weekly)
+
+# The moving half of the vendored contract copies under tests/contracts/. ci.yml's
+# required `category-contract` holds each copy to the producer commit it pins,
+# offline (tests/test_contract_copies_held.py). This run re-derives the copies on
+# this repo's develop, staging and main from the producer's branch of the same
+# name, and files one issue when a leg disagrees: the cue to refresh with
+# tools/contract_copies.py --write. It is required nowhere, and runs on a schedule
+# or by hand, never on a pull request.
+#
+# The comparison is tools/ at the commit this runs; the copies are the branch's
+# blobs, read with git archive. The log names files and fields, never a producer
+# value. The ingestor's copy is category-drift.yml's.
+
+on:
+  schedule:
+    # Mondays 04:41 UTC, off the on-the-hour spike.
+    - cron: '41 4 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  drift:
+    timeout-minutes: 10
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        branch: [develop, staging, main]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Mint a producer-read token
+        id: producer-token
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          app-id: ${{ secrets.RELEASE_TRAIN_APP_ID }}
+          private-key: ${{ secrets.RELEASE_TRAIN_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: |
+            backend
+            tracebloc-engine
+            tracebloc-py-package
+          permission-contents: read
+      - name: Check out the backend's sources
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.repository_owner }}/backend
+          ref: ${{ matrix.branch }}
+          token: ${{ steps.producer-token.outputs.token }}
+          path: _producer/backend
+          persist-credentials: false
+          sparse-checkout: |
+            /experiments/models/experiment.py
+            /bandit_tracebloc_model_validation/bandit_plugins/import_names.py
+          sparse-checkout-cone-mode: false
+      - name: Check out the engine's sources
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.repository_owner }}/tracebloc-engine
+          ref: ${{ matrix.branch }}
+          token: ${{ steps.producer-token.outputs.token }}
+          path: _producer/tracebloc-engine
+          persist-credentials: false
+          sparse-checkout: |
+            /core/schema/object_detection_families.v2.json
+          sparse-checkout-cone-mode: false
+      - name: Check out the SDK's sources
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.repository_owner }}/tracebloc-py-package
+          ref: ${{ matrix.branch }}
+          token: ${{ steps.producer-token.outputs.token }}
+          path: _producer/tracebloc-py-package
+          persist-credentials: false
+          sparse-checkout: |
+            /tracebloc/upload/skl_tabular_base.py
+            /tracebloc/upload/skl_tabular_classifier.py
+            /tracebloc/upload/skl_tabular_regression.py
+          sparse-checkout-cone-mode: false
+      - name: Assert this branch's copies match the producer's branch
+        env:
+          BRANCH: ${{ matrix.branch }}
+        run: |
+          set -euo pipefail
+          work="$(mktemp -d "${RUNNER_TEMP:-/tmp}/contract-copies.XXXXXX")"
+          git archive "origin/$BRANCH" tests/contracts | tar -x -C "$work"
+          echo "copies: tests/contracts at origin/$BRANCH; comparison: tools/ at $(git rev-parse HEAD)"
+          status=0
+          python3 -I tools/contract_copies.py --copies "$work/tests/contracts" \
+            --tree backend=_producer/backend \
+            --tree tracebloc-engine=_producer/tracebloc-engine \
+            --tree tracebloc-py-package=_producer/tracebloc-py-package \
+            > "$work/report.log" 2>&1 || status=$?
+          # DRIFT lines name a file and a field, nothing from the producer.
+          grep '^DRIFT: ' "$work/report.log" || true
+          if [ "$status" -eq 0 ]; then
+            echo "contract copies OK: $BRANCH agrees with the producers' $BRANCH"
+            exit 0
+          elif [ "$status" -eq 1 ] && grep -q '^DRIFT: ' "$work/report.log"; then
+            echo "::error::CONTRACT DRIFT — a copy on $BRANCH disagrees with its producer's $BRANCH"
+          else
+            echo "::error::CONTRACT CHECK FAILED — no verdict for $BRANCH (exit $status)"
+          fi
+          exit 1
+
+  # One issue, only on a scheduled red, and only one open at a time. Its text is
+  # fixed: it names no producer value, because the producers are not public.
+  triage:
+    needs: drift
+    if: ${{ failure() && github.event_name == 'schedule' }}
+    timeout-minutes: 5
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - name: Open one drift issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          title="Contract drift: a vendored contract copy disagrees with its producer"
+          # --search overrides --state, so the open filter lives in the query.
+          open_count="$(gh issue list --repo "$GITHUB_REPOSITORY" \
+            --search "is:open \"$title\" in:title" --json number --jq 'length')"
+          if [ "$open_count" -ne 0 ]; then
+            echo "An open drift issue already exists; not filing a duplicate."
+            exit 0
+          fi
+          body_file="$(mktemp)"
+          {
+            echo "The weekly contract drift run failed: $RUN_URL"
+            echo ""
+            echo "Each leg compares this repo's branch with the producers' branch of the same name, and its DRIFT lines name the copy and field. On develop, run \`python3 tools/contract_copies.py --write --ref develop\`, reconcile the templates the change touches, and commit both in one pull request; staging and main follow by promotion. A leg that gave no verdict (the token, a checkout, a refusal) could not look: fix that and re-run it."
+          } > "$body_file"
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" \
+            --body-file "$body_file" --label "work-type:bug" \
+            || gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --body-file "$body_file"
+
+  # A green scheduled run closes the open drift issue, so a later drift files a
+  # fresh one instead of being dropped as a duplicate of a stale one.
+  settle:
+    needs: drift
+    if: ${{ success() && github.event_name == 'schedule' }}
+    timeout-minutes: 5
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - name: Close the drift issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          title="Contract drift: a vendored contract copy disagrees with its producer"
+          for number in $(gh issue list --repo "$GITHUB_REPOSITORY" \
+            --search "is:open \"$title\" in:title" --json number --jq '.[].number'); do
+            gh issue close "$number" --repo "$GITHUB_REPOSITORY" --reason completed \
+              --comment "The weekly contract drift run is green again: $RUN_URL"
+          done
