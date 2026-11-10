@@ -50,5 +50,19 @@
     "case_insensitive": true,
     "whitespace_stripped": true,
     "empty_or_absent": "Defaulted upstream by use_cases/object_detection/main.py::_infer_model_type (to the rcnn family, or yolo when the model id / class name contains 'yolo') before it ever reaches resolve_family. An empty value is therefore NOT rejected — only an explicit unrecognised one is."
+  },
+  "generated_from": {
+    "repo": "tracebloc/tracebloc-engine",
+    "paths": [
+      "core/schema/object_detection_families.v2.json"
+    ],
+    "ref": "0756e34014feccc0c693d64787654f6884a00167",
+    "ref_branch": "develop",
+    "ref_date": "2026-11-10",
+    "blobs": {
+      "core/schema/object_detection_families.v2.json": "a1cad9cc921a7bdcc4a52c9f01b36b11137e4821"
+    },
+    "fields_sha256": "a78ed071fa85906bd00fe2b37f68293911b86f165bc821b2384c282bd0479cc4",
+    "method": "the schema's version, families (routing keys), accepted_model_type_values and not_accepted.examples. Written by tools/contract_copies.py --write; never hand-edit."
   }
 }

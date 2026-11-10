@@ -3,7 +3,7 @@
 
 The defect this pins
 --------------------
-``metaApi.models.Experiment.model_type`` is a Django ``CharField`` with
+``Experiment.model_type`` (``experiments/models/experiment.py``) is a Django ``CharField`` with
 ``choices=MODEL_TYPE_CHOICES``. A value outside that set is refused by the
 ChoiceField when the experiment is created — a **400 before the model file is
 looked at**, with nothing in the error naming the template as the cause. So a

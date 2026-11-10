@@ -7,10 +7,11 @@ from its source by AST.
 
 - **Upstream:** `tracebloc-py-package` —
   `tracebloc/upload/skl_tabular_{base,classifier,regression}.py`
-- **Pinned ref:** see `generated_from.ref` in the JSON (with `ref_branch` and
-  `ref_date`). That is also the ref the hand-written mirror in
-  `tests/test_zoo_sklearn_model_type_trainable.py::_as_sdk_sees_it` was
-  verified against.
+- **Pinned ref:** `generated_from` in the JSON: the SDK commit, its branch,
+  each source file's blob sha there, and the digest of `accepted_by_family`.
+  The hand-written mirror in
+  `tests/test_zoo_sklearn_model_type_trainable.py::_as_sdk_sees_it` is
+  re-checked against the source whenever a refresh moves a blob.
 
 ## Why this is a DIFFERENT gate from `tracebloc_backend/model_type_choices.v1.json`
 
@@ -28,54 +29,20 @@ going to work by that route either.
 
 ## Refreshing this copy
 
-`tracebloc-py-package` is private, so use an authenticated `gh` read. This
-derives the sets mechanically — **never hand-transcribe them**, which is how the
-earlier OD vocabulary drift shipped. From a checkout, with `gh` logged in:
+The derivation — the keys of each `_ensemble_prefixes` dict, unioned with every
+string literal compared against `model_type` inside `average_estimators` and
+`_average_family_specific` — is `derive_sklearn_types` in
+`tools/contract_copies.py`, which also holds the copy offline on every pull
+request and weekly against the SDK's branch of the same name:
 
 ```bash
-SDK_REF=<sdk-sha>            # record this in generated_from.ref
-mkdir -p /tmp/sdkderive && for f in base classifier regression; do
-  gh api "repos/tracebloc-py-package/contents/tracebloc/upload/skl_tabular_${f}.py?ref=${SDK_REF}" \
-    -H "Accept: application/vnd.github.raw" > "/tmp/sdkderive/skl_tabular_${f}.py"
-done
-
-python3 - <<'PY'
-import ast, glob, json, collections
-acc = collections.defaultdict(set)
-FAM = {"classifier": "classifier", "regression": "regression"}
-for path in sorted(glob.glob("/tmp/sdkderive/skl_tabular_*.py")):
-    fam = next((v for k, v in FAM.items() if path.endswith(f"{k}.py")), None)
-    tree = ast.parse(open(path).read())
-    for node in ast.walk(tree):
-        # 1. keys of the _ensemble_prefixes dict (the ensemble-packed types)
-        if isinstance(node, ast.Assign) and any(
-            getattr(t, "attr", getattr(t, "id", None)) == "_ensemble_prefixes"
-            for t in node.targets
-        ) and isinstance(node.value, ast.Dict):
-            for k in node.value.keys:
-                if isinstance(k, ast.Constant) and isinstance(k.value, str):
-                    for f in ([fam] if fam else FAM.values()):
-                        acc[f].add(k.value)
-        # 2. literals compared against `model_type` in the averaging strategies
-        if isinstance(node, ast.FunctionDef) and node.name in (
-            "average_estimators", "_average_family_specific"
-        ):
-            for cmp in (n for n in ast.walk(node) if isinstance(n, ast.Compare)):
-                if getattr(cmp.left, "id", None) == "model_type":
-                    for c in cmp.comparators:
-                        vals = c.elts if isinstance(c, (ast.Tuple, ast.List, ast.Set)) else [c]
-                        for v in vals:
-                            if isinstance(v, ast.Constant) and isinstance(v.value, str):
-                                for f in ([fam] if fam else FAM.values()):
-                                    acc[f].add(v.value)
-print(json.dumps({k: sorted(v) for k, v in acc.items()}, indent=2))
-PY
+python3 tools/contract_copies.py --ref develop --show
+python3 tools/contract_copies.py --write --ref develop --only tracebloc_sdk/sklearn_model_types.v1.json
 ```
 
-Diff that output against `accepted_by_family`. If it differs: bump
-`generated_from.ref`/`ref_date`, update the sets, **re-check the mirror** in
-`test_zoo_sklearn_model_type_trainable.py` against the new ref, reconcile any
-sklearn template `model_type` declarations, and commit the lot in one PR.
+If the sets change, re-check the mirror in
+`test_zoo_sklearn_model_type_trainable.py`, reconcile any sklearn template
+`model_type` declarations, and commit the lot in one pull request.
 
 `tests/test_zoo_sklearn_model_type_trainable.py` reads this file and needs no
 network.
