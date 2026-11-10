@@ -9,6 +9,7 @@ model_type = ""
 tokenizer_file = "tokenizer.json"
 # Sized to train within the smallest client's memory: see tools/template_memory.py.
 batch_size = 8
+max_batch_size = 64
 sequence_length = 128
 vocab_size = 30522
 
