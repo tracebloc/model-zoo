@@ -1,6 +1,6 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
-# Public-safe copy of `.github/workflows/commit-hygiene.yml` (blob d2b76c92bec044b070bd890bfd8ffc8bba40bf38) for a PUBLIC repo:
+# Public-safe copy of `.github/workflows/commit-hygiene.yml` (blob 1eb5fd2ad71013e159b491f4563c029e43ccd5e1) for a PUBLIC repo:
 # the same workflow, byte for byte, except that its comments are scrubbed as
 # described below and that 11 line(s) are LEFT OUT: the source brackets them
 # `# public-render: omit-begin` .. `# public-render: omit-end`, and each one wires a secret a
@@ -48,8 +48,12 @@ name: Commit hygiene
 # anonymous reader, parameters included, so the names the org must never publish
 # were published as the rule meant to keep them private. The regex is generic now
 # (cross-repo `name#N`, org-qualified repo names, RFC ids), which left the tenant
-# half with no enforcement. This workflow scans every commit of a pull request;
-# the logic is scripts/commit-hygiene.py, this file is the wiring. It has TWO
+# half with no enforcement. This workflow scans every commit of a pull request,
+# and the pull request's own title and description (outside HTML comments), read
+# live from the API: a public repo's PR text is as public as its log
+# ((internal ref)). The job keeps its `commit-messages` name so the status
+# context an admin arms stays the same. The logic is scripts/commit-hygiene.py,
+# this file is the wiring. It has TWO
 # SHAPES, and the inventory's `visibility` picks which one a repo carries:
 #
 #   * THIS ORIGINAL (private repos) wires the tenant needles from the org secret
@@ -74,8 +78,9 @@ name: Commit hygiene
 #
 # FAIL CLOSED (CLAUDE.md rule 3), and the script says which way:
 #   exit 0  every commit scanned, clean
-#   exit 1  a hit -- `commit <sha7>: subject/body matches private needle #N`, or
-#           `commit <sha7>: subject/body carries an internal reference (<kind>, ...)`
+#   exit 1  a hit -- `commit <sha7>: subject/body matches private needle #N`,
+#           `commit <sha7>: subject/body carries an internal reference (<kind>, ...)`,
+#           or `pull request title|body: ...` the same way, by kind and body line
 #   exit 2  could not tell: a fork head (no secrets), needles that are WIRED but
 #           resolved EMPTY (the secret did not reach this repository -- the scan
 #           did not run), a needle that does not compile, an inventory the rule
@@ -89,19 +94,21 @@ name: Commit hygiene
 # for the shape where it is reached (HEAD_IS_FORK), and the suite proves that one.
 #
 # PULL-REQUEST-CONTROLLED INPUT NEVER REACHES A SHELL. The script reads the
-# commit messages from the API into Python and matches them there; nothing from a
-# commit message is interpolated into a command line or printed.
+# commit messages, title and description from the API into Python and matches them
+# there; none of them is interpolated into a command line or printed.
 
+# `edited` is a change to the title or description: it re-scans the whole PR.
 on:
   pull_request:
-    types: [opened, synchronize, reopened]
+    types: [opened, edited, synchronize, reopened]
 
-# One run per pull request head: a new push makes the previous scan moot.
+# One run per pull request: a new push or edit makes the previous scan moot, and
+# the run it starts scans everything again.
 concurrency:
   group: commit-hygiene-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-# `pull-requests: read` is what the one `gh api .../pulls/N/commits` read needs;
+# `pull-requests: read` is what the two `gh api .../pulls/N[/commits]` reads need;
 # `contents: read` is for nothing this workflow does in the calling repo (the
 # tools checkout uses its own token) and is granted so `github.token` is not a
 # zero-permission token, which some API paths reject outright.
@@ -170,7 +177,7 @@ jobs:
       # checks run is read off the ENVIRONMENT'S KEYS, never its values: the tenant
       # needles are wired below in the private original and left out of the public
       # render, and the script scans tenants only where the key is present.
-      - name: Scan the pull request's commit messages
+      - name: Scan the pull request's commit messages, title and description
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
