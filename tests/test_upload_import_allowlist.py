@@ -6,9 +6,9 @@ The backend runs Bandit over every uploaded model file, together with its own
 plugin (TBT001), and refuses the upload on ANY finding. TBT001's first rule is
 an import allowlist. A file whose imports reach a top-level name outside
 ``ALLOWED_PYTHON_PACKAGE_IMPORTS`` is refused. That includes the standard
-library: ``from typing import List`` or ``import copy`` is enough. Nothing here
-checked this, so ``cascade_rcnn.py`` / ``sparse_rcnn.py`` (``typing``) and
-``yolov10_s.py`` (``copy``) shipped and could not be uploaded (model-zoo#142).
+library: ``from subprocess import run`` or ``import os`` is enough. Nothing here
+checked this, so templates importing names outside the list shipped and could not
+be uploaded (model-zoo#142).
 
 The allowlist is vendored in
 ``tests/contracts/tracebloc_backend/upload_import_allowlist.v1.json`` (refresh
@@ -143,9 +143,8 @@ def test_template_imports_only_allowlisted_packages(path: pathlib.Path) -> None:
     assert not refused, (
         f"{rel} imports {sorted(refused)}, which the backend's upload scan refuses "
         "(TBT001 allowlist, tests/contracts/tracebloc_backend/"
-        "upload_import_allowlist.v1.json). Standard-library modules are refused "
-        "too: use built-in generics instead of `typing`, and build a second "
-        "module instead of `copy.deepcopy`."
+        "upload_import_allowlist.v1.json). Standard-library modules outside the "
+        "list are refused too."
     )
 
 

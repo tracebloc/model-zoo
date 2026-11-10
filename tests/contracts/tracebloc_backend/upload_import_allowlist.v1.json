@@ -1,6 +1,6 @@
 {
   "version": "1",
-  "description": "The top-level packages an uploaded model file may import. The backend's upload scan (Bandit plugin TBT001) refuses an upload whose file imports any other top-level name -- standard library included (typing, copy, os, ...) -- unless the name is a sibling file of the same upload. A template is a single file, so for the zoo this list is exact about names. Some of these modules are admitted member by member upstream, so importing one does not admit every name in it. Read by tests/test_upload_import_allowlist.py.",
+  "description": "The top-level packages an uploaded model file may import. The backend's upload scan (Bandit plugin TBT001) refuses an upload whose file imports any other top-level name -- standard library included (subprocess, os, ...) -- unless the name is a sibling file of the same upload. A template is a single file, so for the zoo this list is exact about names. Some of these modules are admitted member by member upstream, so importing one does not admit every name in it. Read by tests/test_upload_import_allowlist.py.",
   "generated_from": {
     "repo": "tracebloc/backend",
     "paths": [

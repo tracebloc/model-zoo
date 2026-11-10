@@ -65,9 +65,9 @@ in the backend's upload-scan Bandit plugin (TBT001).
 - **Upstream:** `backend` — `bandit_tracebloc_model_validation/bandit_plugins/import_names.py`
 - **Pinned ref:** `generated_from` in the JSON, as above.
 - **Why it exists:** the scan refuses an upload whose file imports any other top-level name,
-  **standard library included**. `from typing import List` or `import copy` is enough. Nothing in
-  this repo checked it, so `cascade_rcnn.py`, `sparse_rcnn.py` and `yolov10_s.py` shipped and could
-  not be uploaded.
+  **standard library included**. `from subprocess import run` or `import os` is enough. Nothing in
+  this repo checked it, so templates importing names outside the list shipped and could not be
+  uploaded.
 
 `tests/test_upload_import_allowlist.py` reads this file. It is stdlib only and runs in every CI
 framework job.
