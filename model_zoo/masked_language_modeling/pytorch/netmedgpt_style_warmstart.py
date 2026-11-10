@@ -25,7 +25,9 @@ main_class = "NetMedGPTWarmStart"
 category = "masked_language_modeling"
 model_type = ""
 tokenizer_file = "netmedgpt_style_warmstart_tokenizer.json"
-batch_size = 16
+# Sized to train within the smallest client's memory: see tools/template_memory.py.
+batch_size = 2
+max_batch_size = 16
 sequence_length = 128
 # Must match the bert-base-uncased tokenizer's vocab (30522). The previous
 # value (30000) shrank the embedding table below the tokenizer, so token ids
