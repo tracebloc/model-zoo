@@ -26,123 +26,77 @@ request instead, and the weekly run refuses a rows file in which no test is a ro
 <!-- org-standards:begin -->
 ## tracebloc engineering standards (org-wide)
 
-<!-- Canonical source: the private source repo/org-standards.md.
-     Synced into every repo's CLAUDE.md between org-standards markers — never
-     edit it inside a consuming repo; open a PR against the private source repo.
-     Meta-rule: the moment a rule below becomes mechanically enforced (a lint
-     rule, a house-rules grep, a required check), delete the sentence here and
-     let the check carry it. Prose is only for what tooling can't judge. -->
+A digest, one line per rule, of the binding org-standards.md. Read its section before acting on a line. Never edit it here.
 
 ### Where the rules and the automation live
 
-- Org-wide automation — the reusable workflows every repo calls, `repo-inventory.yml`, this file, the review dispatcher — lives in `the private source repo`; per-repo callers pin `@main`. `tracebloc/.github` is the org's public profile (README + issue templates) and carries no workflows; nothing new goes there.
-- **Mirrors take no work.** A `visibility: public` row carrying `mirror_of:` in `repo-inventory.yml` is a publish target of the private source that row names — releases, a Helm index, a README — and nothing else. Never open a PR, push a branch, or file an issue about internal work on a mirror; do it in the source. Publishing is the source's `mirror-publish` workflow through its publish guard and `.publish-forbidden` list, and the weekly anonymous exposure audit checks the mirror's tree against that same list. Which repos are mirrors today is the inventory's answer, not this file's.
+- Org automation lives in `the private source repo`; per-repo callers pin `@main`; nothing new goes to `tracebloc/.github`.
+- Mirrors take no work: no PR, branch or internal issue on a `mirror_of:` row; work in its source.
 
 ### Branches & PRs
 
-- Branch model, **for a repo on the release train**: `develop → staging → main`. Branch off `develop`; every PR targets `develop`. Never open PRs to `staging` or `main` — promotions are the train's job.
-- **For a repo not on the train, do not infer the branch model from this file — read `repo-inventory.yml`.** `release_train:` says whether the model above applies at all, and the per-branch `exempt:` anchors record which branches actually exist. This bullet used to enumerate the exceptions by name and **drifted from the inventory on every one of them**: `(internal ref)` was called `main`-only while it had been on the train since 2026-08-04 (`release_train: true`, `develop: required`, staging present), and `(internal ref)` was called `main`-only while it had a `develop` taking merges (measured 2026-08-22, (internal ref) / (internal ref)). Restating the authority is the defect; pointing at it is the fix.
-- **Trap, recorded in the inventory and caught by no check:** a `develop` created on a non-train repo and left **unprotected** is invisible to the guards — that is the `develop_unprotected_non_train` anchor, and the inventory notes "a `develop` created and left UNPROTECTED is not flagged … no check was going to surface it." So creating one to satisfy the first bullet **forks the repo silently**: PRs split between the new branch and the repo's existing convention, nothing promotes between them, and the two heads diverge until someone reconciles by hand. If a repo appears to lack a `develop`, that is a fact to verify in the inventory, not a gap to fill.
-- Before starting any task: `git fetch` and branch from the current tip of `develop` — never build on a stale checkout. A branch that lives more than a day gets `develop` merged back in before review. We move fast; stale starts mean silent divergence and duplicated work.
-- One self-contained change per PR. A few hundred changed lines reviews well; at 1000+ split it. Refactors ship in separate PRs from behavior changes.
-- Branches are short-lived (aim to merge within a day or two), single-author, and based on `develop` — no stacked PRs on top of other open PRs.
-- **A producer's contract change lands with its consumers' updates.** A pull request that changes a contract another repo vendors, pins or derives a golden from opens each consumer's update with it, and the PRs merge back to back, in the order that keeps every `develop` green, so no consumer sits red on a stale contract. A consumer whose caller of `contract-pin-bump.yml` moves that pin is exempt: the bot's pull request is its update. This rule goes when the bot covers every pair ((internal ref)).
-- Your branches are yours to clean up. Merged ones now delete themselves server-side, so this is about the rest: run `git reap` (from `the private source repo/scripts/git-reap`) in your checkouts now and then. It is dry-run by default and only proposes a branch when it can prove the work landed. Nobody else can do this for you — you are the only one who knows whether an *unmerged* branch of yours still matters, and `git branch --merged` will not tell you, because we squash-merge and a squashed branch is not an ancestor of `develop`.
-- **"Yours" is the branch you opened the PR for, never the branch whose last commit is yours.** Pushing a review fixup onto someone else's branch makes you its tip-commit author and changes nothing about whose work it is — so a "my branches" list built from `%(authorname)`, or from the tip author in any form, aims your cleanup at other people's work. Measured: two of Shujaat's `client` branches showed up on such a list and were one confirmation step away from `--delete` ((internal ref)). If you are building any list that reasons about ownership, call `the private source repo/scripts/branch_owner.py` rather than re-deriving it; a branch it cannot attribute comes back as `unattributable`, which is the answer to act on, not to fill in.
-- Names and commits: `feat/ fix/ docs/ sec/ ci/ chore/ test/` + issue number + short slug (`fix/1234-ingest-timeout`); commit subjects `type(scope): summary`, referencing the ticket (`(internal ref)`). **`(scope)` is the component — `mint-scope`, `kanban` — never the ticket number.** A number in a PR title (`sec(2157): …`) is read by `closing-ref` as a reference the body must make good, in one of two forms: `Closes <owner>/<repo>#N` when this PR really finishes the ticket, or `Part of <owner>/<repo>#N` when it does not. Both satisfy the check; only `Closes` closes the ticket and moves its card, so never write it for partial work — and a bare `Closes #N` resolves against the repo you are in, which for a `(internal ref)` ticket links the wrong issue. Keeping the number in the title is right either way: naming the parent is traceability, not a promise to close it ((internal ref)).
-- When you open a PR: assign yourself. The review account `tracebloc-review` is the default — and the only required — reviewer: request it (on a repo whose `repo-inventory.yml` row **requires or carries a `copy` of** `desk-dispatch.yml`, the repo's CODEOWNERS rule `* @tracebloc-review` requests it on every PR, whoever opened it — the review dispatcher does not staff, so that rule is the route that covers every PR). Where that dispatcher runs, it gives the PR to one **desk owner** — the review account or one of the engineers who run the desk from their own routines — requests that owner on it, and fires that owner's routine ((internal ref)). The owner's review is produced once the head's checks are terminal and green, and their approval satisfies branch protection's required review. Add a human reviewer only when you want one by name; there is no per-repo human default, and a PR with neither request, on a repo the review dispatcher does not cover, stalls by construction.
-- **A PR body carries the template's `Release note:` and `Surface:` fields, and whatever writes the body writes them.** A body sent from a file (`gh pr create --body-file`, the body an agent skill composes) never passes through `.github/pull_request_template.md`, so nothing fills them in for you. Where the repo's `repo-inventory.yml` row says `audience: customer`, `release-note / check` requires them on every `feat`/`fix` PR; what it cannot judge is the answer: ONE line in the customer's voice — what a user notices, never what the code does, and never a ticket number, repo name or customer name — with the `Surface:` where they notice it, or the literal `none` for CI, tests, refactors and internal tooling. `none` is legal, and it is a decision, never a default. The template's `Billing / metering / numerics` box line belongs in the body too, ticked or not: on those repos the same check reads it on every PR as the author's decision, asks a person whether customers are told when it is ticked, and flags a body that carries no box line. A note that is true only once a feature is live goes on the PR that makes it visible, the feature's last PR or its flag switch, never on a `PAIR:` line: a PR ships alone (next bullet), so no body writes one, and the release train honours the lines already written only until its PAIR handling is deleted ((internal ref) D18). The train also holds a note whose surface is behind a frontend flag that is off in production ((internal ref)).
-- **A PR ships alone.** (internal ref) D18, decided by Lukas on 5 Nov 2026: "A PR merges to develop only when it can ship to prod alone, in any order with every other PR. It is additive (expand, then contract), or dark behind a flag that is off by default, or it stays a draft (In progress, before Code review) until what it needs is in Prod. Only the PR that needs the others waits, and PRs never travel as a group." The template's `Can this ship alone?` box is the author's answer. When it is no, split the change: each part that can ship alone does, and only the part that needs another PR waits, as a draft, until that PR is in Prod. A change that breaks both sides and can be made neither additive nor dark is the RFC's one exception, risk class R7, and leaves the box unticked. No PR body names another PR it needs before it can ship (a `PAIR:` line, "ships after", "depends on"); Bugbot flags one.
-- **`Merge after:` orders merges into `develop`, never a release.** A PR that ships alone but must merge after another writes `Merge after: tracebloc/<repo>#<n>` at the start of a line in the body; one pull request per line, and several lines mean all of them. It never waits on another PR's release, so it takes no ` on staging` ((internal ref) D18). Where the repo's `repo-inventory.yml` row requires `merge-after.yml`, the `merge-after` status stays pending until every line is met and turns red on a line it cannot read; once `develop` requires that context, auto-merge stays armed and lands the pull request by itself. A PR that needs another PR in Prod is not a `Merge after:` line but a draft, and it is one before review: converting an approved pull request to draft cancels its auto-merge, and someone has to queue it again by hand.
-- When a human is asked to review by name: first response within one business day. Where the review dispatcher runs — every repo whose `repo-inventory.yml` row **requires or carries a `copy` of** `desk-dispatch.yml`, which is the list, and which today is every repo this file reaches — it answers every green head within its next sweep; where it does not, the human you named is the whole of the review. Read the cell, not the word `required`: a `copy` row (`model-zoo`, `quickstart` — both public, so they cannot `uses:` a private reusable and carry the content-asserted render under `.github/workflows/` instead) runs the same dispatcher (list `.github/self-contained/` for the renders that exist; a count here went stale the day a twelfth render landed).
-- **Lock labels are a session at work.** Any `claude-*` label on a PR or issue is one. `claude-desk:claim-<N>` is the PR's one claim, held by whichever session is working it: the desk dispatcher takes it for every session it fires, and the session adopts it ((internal ref), (internal ref)). `claude-bugfix:driving` marks a bug-fix session on its issue, and `claude-bugfix:driving-<N>` is that session's claim. Never push to, re-request review on, or merge a PR carrying one — wait for the label to clear or for the session's comment. The retired lock names `claude-ship:driving`, `claude-ship:driving-<N>`, `claude-ship:handback` and `claude-desk:reviewing` exist in no repository any more ((internal ref)): nothing writes or reads them, so never create one again. A claim past its window is a dead session's, and the next session the dispatcher fires recovers it, not a human. A claim or lock whose age nothing can read is the one a human takes off, and it is reported under more than one spelling because more than one tool reports it — the dispatchers print `UNREADABLE-CLAIM` or `UNREADABLE-LOCK`, and a `--pr` desk session that still reads the marker refuses with `LOCK AGE UNREADABLE` — so search the logs for each. None of them fires anything on an unreadable age, exactly as none fires on a held one, so that state clears only by hand.
+- On the train, branch off and target `develop`, never `staging` or `main`.
+- Off it, `repo-inventory.yml` says the model; never create a missing `develop`.
+- `git fetch`, branch from the tip of `develop`, one author, no stacking; a day-old branch merges `develop` before review.
+- One self-contained change per PR, split at 1000+ lines; refactors apart from behaviour.
+- A contract change opens its consumers' updates; all merge back to back, every `develop` green.
+- Clean up your branches (`git reap`): those whose PR you opened (`scripts/branch_owner.py`).
+- Branches `feat/ fix/ docs/ sec/ ci/ chore/ test/` + issue + slug; commits `type(scope): summary`; `(scope)` is the component, never the ticket number.
+- A title number needs `Closes <owner>/<repo>#N` (done) or `Part of <owner>/<repo>#N` (partial).
+- Assign yourself; `tracebloc-review` is the only required reviewer; add a human only by name.
+- Bodies carry `Release note:`, `Surface:` (customer voice, or `none` by decision) and the Billing box.
+- A PR ships alone: additive, dark behind a default-off flag, or a draft until its need is in Prod.
+- `Merge after: tracebloc/<repo>#<n>` orders merges into `develop`, never a release, so it takes no ` on staging`; a PR that needs another PR in Prod is a draft, and it is one before review.
+- A human named as reviewer answers within one business day.
+- A `claude-*` label is a session at work: never push to, re-request review on or merge its PR.
 
 ### Quality bar
 
-- Before every push: run the linter and the tests that cover your change. Never push a branch you believe is red — CI is the backstop, not the first run.
-- Read the full diff before opening the PR. You own every line you ship, whoever — or whatever — wrote it.
-- AI sessions end with evidence, not assertion: run the relevant check (tests, build, lint) and show the output. A change that could not be verified does not ship.
-- Fix the class, not the instance. The bug you just fixed is a member of a class; check the rest of the class before you push. Two shapes, and aiming at only the first catches half of them: **other call sites** — grep the symbol or pattern you changed — and **other inputs to the same guard** — what else reaches this branch? If the class can't be cheaply enumerated, say so in the PR rather than leaving it implied that you covered it.
-- After opening a PR the review loop takes it **wherever the review dispatcher runs** (the `desk-dispatch.yml` rows above): the PR's desk owner reviews a green head and, with FIX MODE on, is fired on a red or conflicting head to fix it — Bugbot, CI and review findings — and the PR merges through GitHub auto-merge once branch protection's bar holds ((internal ref); the ship dispatcher that used to fix and merge as you retired under (internal ref)). **Where it runs**, do not poll CI or Bugbot yourself (`gh pr checks --watch`, `gh run watch`, a loop of either): the account's GitHub API budget is one bucket shared by every session, routine and CI job, and polling has emptied it. **Where it does not, triaging your own PR is still yours.** What comes back to you is `needs-human` — a session stood down on something it may not or cannot fix; read its comment and decide. No silent dismissals: every finding is fixed or answered on its thread, because unresolved threads block the merge and stall the release train's settle stage.
-- **A Bugbot finding measured unreachable is pinned, not argued, and waits for nobody's word.** When a finding, or a ticket filed for one, names code that no input reaches, it is settled by this path, in this order:
+- Before every push, lint and test your change; never push a branch you believe is red.
+- Read the full diff before opening the PR: you own every line.
+- End with evidence, the check's output; an unverified change does not ship.
+- Fix the class: other call sites and other inputs to the guard, or say it cannot be listed.
+- Where the desk runs, never poll CI or Bugbot; elsewhere triage your PR. Fix or answer every finding.
+- A Bugbot finding measured unreachable takes this path:
 <!-- unreachable-finding-path:begin -->
   1. **Measure and post.** Construct the input the finding needs, run it, and post the input, the command and the result on its thread.
   2. **Pin it in the same PR.** The PR that answers it adds a test or guard that goes red once an input reaches the code; the thread names it.
   3. **Second reader.** The review account, never whoever measured, checks both and resolves the thread; missing either, it stays a finding.
   4. **Close.** The pinning PR `Closes` any ticket filed for the finding, and its opener posts one comment there whose first line is exactly `Closed: unreachable, pinned by <owner>/<repo>#<number>`, naming the PR. That marker counts only on a ticket the named PR closed. It tells; it asks nobody.
 <!-- unreachable-finding-path:end -->
-- A finding that recurs across PRs becomes a rule: add it to `.cursor/BUGBOT.md`, and if it is grep-expressible, to code-quality's house-rules — then stop re-arguing it in comments.
-- Style and naming rules live in tooling (black/ruff, eslint/prettier, house-rules), never in prose. If a rule matters, encode it; do not restate linter rules in CLAUDE.md files.
-- Never commit secrets, tokens, or customer data — not in code, config, tests, issues, or commit messages. gitleaks catches secrets in **code**. Nothing scans PR titles or descriptions: the public PII gate that did was retired on 2026-08-06 ((internal ref)), so keeping customer names out of PR prose on public repos is on you, not on a check. Commit messages are the one exception, and only on a public repo whose `repo-inventory.yml` row requires the `commit-hygiene.yml` copy (the content repos): `hygiene / commit-messages` scans every commit of a PR for internal references — ticket numbers into private repos, private repo names, RFC ids, derived from the inventory — and names a hit by kind and message line, never by text ((internal ref), (internal ref)). What it does NOT scan for on a public repo is tenant names: the public render carries no tenant needles, because the needles are tenant names and a public repository's runner is not where they belong — the org ruleset that used to refuse those names there had to spell them in a regex GitHub serves anonymously. So on a public repo, keeping customer names out of commit messages is on you, exactly as it is for PR prose. (The private original of that workflow keeps the tenant scan — needles from the org secret, a hit by needle number, a refusal rather than a pass when the wired secret resolves empty or the head is a fork — and its job is gated to public repositories, so the public render is the live shape.) On every other `visibility: public` row, and for PR titles and bodies everywhere, internal references are on you as well: the exposure audit scans the files this org delivers there, not the prose you type.
-- **A guard reads the real thing, and fails closed.** Derive, never restate: a check holding its own copy of the rule agrees with itself while disagreeing with reality, so it parses the real declaration. An unreadable input, an absent file or zero parsed items means "cannot tell", and "cannot tell" is a finding, never a pass. The reasoning, and the ~23 guards that verified nothing, are in (internal ref).
-- **A guard is proven by breaking it.** Every guard, check or test that claims to catch something is mutation-proved: break the thing it guards, watch its named case go red, restore it, and assert that the mutation's anchor actually applied, because an inert mutation and real coverage print the same log. The mutation calls the code under test, never an inline copy of its rule, and the inputs are written down independently of the matcher: a list tested against itself is blind. For an enum, alias or vocabulary, derive the input domain from the producer's declared surface and test all of it; mutation coverage cannot see a value nobody wrote down. Arm a gate only while it is green. A red nightly mutation run is a bug, not noise: it goes in as a `work-type:bug`, so into `Ready`, and is fixed like one. Whether every guard has a mutation row at all is the coverage gate's to check ((internal ref)), not this bullet's.
-
-<!-- comment-policy:begin -->
-**Comments** (code comments and docstrings)
-
-1. **State the current reason, in three lines or fewer.** A comment records a
-   constraint, hazard, invariant or contract the code cannot show. History goes in the
-   commit message: what it used to do, review rounds, reviewer or bot names, "this PR",
-   "the first version", incident arithmetic. A contract docstring (parameters, units,
-   raises) may be longer; it must not restate the signature.
-2. **One canonical site per rationale.** Put it on the symbol that owns the decision.
-   Every other site gets a one-line pointer to that symbol (`# NULL semantics: see
-   CycleInformation.size_bytes`), never a copy.
-3. **Nothing that goes stale silently.** No line numbers, no `file.py:NNN`, no counts of
-   call sites or instances, no "today", "currently", "for now", "this week". Name the
-   symbol. Cite a ticket only as a TODO (rule 4) or as a pointer to where a decision is
-   argued (an RFC); never the ticket that fixed something, because `git blame` finds it.
-   A regression test may name the bug it pins.
-4. **Deferred work is `TODO(tracebloc/<repo>#N)`**, with an open ticket. No `FIXME`,
-   no `XXX`, no "left to a follow-up". In a public repo the ticket is in that repo.
-5. **Edit, don't append.** When you change code under a comment, rewrite that comment to
-   match. Answering a review finding means changing the code and, if needed, the existing
-   comment's reason — never adding a block that records the finding.
-6. **Reviewers hold the same line.** Do not ask for a comment that explains a fix or
-   credits a finding; ask for the reason, or for the commit message. Flag a comment the
-   diff made false.
-
-**PR bodies** (the description, read beside the diff)
-
-- **A PR body that names another PR it needs before it can ship.** A PR ships to prod
-  alone, in any order with every other PR; one that needs another stays a draft until
-  that PR is in prod. On a PR that is not a draft, flag each body line, outside HTML
-  comments, that makes it wait for another PR or issue: a `PAIR:` line, a `SHIPS-AFTER`
-  line, "ships after", "depends on" or "needs" a named PR, or a `Merge after:` line
-  ending in ` on staging`. A plain `Merge after: <owner>/<repo>#<n>` line is no finding:
-  it orders merges into `develop`. Say which line, and that a ticked `Can this ship
-  alone?` box beside it contradicts it. The answer is the author's: split the change,
-  make this PR a draft, or reword a line that only gives context. Low severity and a
-  flag only: never request changes for it, and never treat it as a reason to hold the PR.
-<!-- comment-policy:end -->
+- A recurring finding becomes a `.cursor/BUGBOT.md` rule; style rules live in tooling, not prose.
+- Never commit secrets, tokens or customer data; keep internal refs out of public PR text.
+- A guard reads the real thing and fails closed: derive, never restate; "cannot tell" is a finding.
+- A guard is proven by breaking it: assert the mutation applied; for an enum, alias or vocabulary, derive the input domain from the producer's declared surface and test all of it; arm while green; a red nightly is a bug.
+- Comments give the current reason once, in three lines or fewer; no history, line numbers or "today".
+- Deferred work is `TODO(tracebloc/<repo>#N)`; edit comments, never append; reviewers hold that line.
 
 ### Engineer kanban
 
-- Every ticket on the board carries a `Status` — no card sits at "No Status": the weekly `kanban-reconcile` sweep places any open card it finds there by the rule this bullet states ((internal ref)). New tickets start in `Backlog`. **Bugs are the exception:** label them `work-type:bug` (the Bug template does it) and automation moves the card straight into `Ready` — defects don't wait for refinement. This holds in every repo, and the exception that used to be written here is gone rather than kept accurate by hand: the labels exist fleet-wide, and `triage-labels.yml` asserts daily that every label the templates apply and the caller fires on exists in every repo declaring that caller. A hand-written exception list drifts on every entry — it named two repos while the inventory said three — so the fix was to empty it ((internal ref)).
-- **The one card that stays off: an issue labelled `off-board`.** It marks a standing ledger or a bot's record, never a work item. The weekly `kanban-reconcile` sweep never adds or restores its card and archives a live one, so labelling an existing issue takes it off within a week. Use it only for such records. It is for issues only: a PR carrying it stays on the board, because `fr-gate` fails closed on a PR missing from it. The name is declared once, in `scripts/lib/off-board.json`: a reader reads it from there, and a copy anywhere else is held to it by a check.
-- Picking up work: the team coordinates. `Ready` is the refined queue — bugs excepted, per the line above — and the first choice when it's stocked; pulling from `Backlog` is normal when refinement hasn't caught up — say what you're taking.
-- Merging to `develop` moves the card to `On dev` automatically; there is no dev-side review.
-- Functional review happens once, on staging: when it passes, comment `/fr-pass` on the PR or drag the card to `Ready for prod`. Self-signoff is allowed. A repo whose `repo-inventory.yml` row declares `staging_surface: none` puts nothing on staging to review, so the staging push moves its cards straight to `Ready for prod`; absence of the cell keeps the review. A (internal ref) promotion PR is the train's plumbing, not a work item: when it merges, its card goes to `Done`, never to a deploy column.
-- `fr-gate` is a required check on promotions. If it blocks, the board or the work isn't ready — fix that. If it fails with the annotation `FR gate could not verify` (exit 3), it judged nothing: GitHub did not answer a read it needed (a rate limit, an unanswered API call, an unreadable board, a range whose changed files it could not count), and it has already walked once more where the wait fitted the job, so re-run the check once GitHub answers; nothing on the board needs fixing. `skip-fr-gate` is audited, for emergencies only.
+- Every ticket has a `Status`, new ones `Backlog`; a `work-type:bug` goes straight to `Ready`.
+- `off-board` is only for an issue that is a ledger or a bot's record.
+- Take from `Ready` first; a `Backlog` pull is normal: say what you take.
+- No dev-side review: FR is once, on staging, by `/fr-pass` or `Ready for prod`; self-signoff counts.
+- `fr-gate` blocks: fix the board or the work; exit 3: re-run it. `skip-fr-gate` is for emergencies.
 
 ### Releases & publishing
 
-- The release train is the only path to `staging`, `main`, and every package registry. Never hand-cut a `v*` tag or publish an artifact — every legal publish path is inventoried in (internal ref)'s `PUBLISH-PATHS.md`. The train also numbers the patch, at tag time ((internal ref)), so no PR owes a version bump: a PR moves a version file only to declare a new minor or major line, as `X.Y.0`. _(Until (internal ref) the opposite held — `version-bump-gate` refused a published change on an already-released version, "it never bumps for you", and the bump a feature PR shipped was the train's input. Both the bump and `post-release-bump` are retired; do not reinstate either.)_
-- Findings on a promotion PR are fixed on the source branch (`develop`/`staging`), then the train re-prepares. Never push fixes onto a promotion PR — every push re-rolls its review.
+- The release train is the only path to `staging`, `main` and registries; bump a version only to `X.Y.0`.
+- Fix a promotion PR's findings on its source branch, never on the PR.
 
 ### Filing issues
 
-- Internal work — planning, epics, security findings, infrastructure, anything mentioning a customer — is filed in `(internal ref)` (the private catch-all), never in a public repo. When in doubt: `(internal ref)`.
-- Public repos -- every `visibility: public` row in `the private source repo/repo-inventory.yml` -- only get issues a stranger could act on: about the public artifact itself, with no customer names, internal URLs, or internal paths. This bullet used to enumerate them by name and drifted. Restating the authority is the defect; the inventory is the list.
+- Internal work (plans, epics, security, infra, any customer) goes in `(internal ref)`, never a public repo. When in doubt: `(internal ref)`.
+- A public repo gets only issues a stranger could act on; its PR text names nothing private.
 
 ### Product words
 
-- **Every user-facing word comes from `TERMINOLOGY.md` in the docs repository (branch `develop`)**: CLI and installer output, the dashboard, docs, the website, emails, support replies. Read it before you write or change copy. A word you need that isn't there goes into it first, in its own docs PR. Link to the file; never copy its table into another file. A copy drifts: the CLI's and the installer's `STYLE.md` term tables were still saying "collaborators" on 2026-10-23, six weeks after the dictionary moved to "peers".
-- **Where a repo keeps a copy catalog** (golden files of exactly what users see), change copy by editing the golden first, then make the code match. When a golden holds copy someone else wrote, never regenerate it to turn a test green: change the code, or ask the person who wrote it.
+- Every user-facing word comes from `TERMINOLOGY.md` in docs; a missing word goes there first; never copy its table into another file.
+- With a copy catalog, edit the golden first; never regenerate another's golden to go green.
 
 ### AI-assisted sessions (Claude Code, etc.)
 
-- An interactive AI session may open PRs and push its own branches. It never: merges a PR, closes another person's PR, deletes another person's branch, or force-pushes — each of those needs an explicit instruction from the human running it. The one exception is the desk session the dispatcher fires on a desk owner's routine, the review account's or an engineer owner's ((internal ref)): its APPROVE arms GitHub auto-merge on the PR it approved ((internal ref)), so GitHub merges it when — and only when — branch protection's bar holds; that routine's firing is the standing instruction. (The ship dispatcher's `ship --pr` session held this exception until it retired, (internal ref).)
-- **Functional sign-off is a person's.** An AI session never comments `/fr-pass` and never removes `fr-hold`, even when it writes with your own token. The handler refuses a machine account, a comment an App posted, and a hold a machine released. A session using a person's token is that person to GitHub, though, so no check can refuse it and this rule is the only guard. The handler knows a machine User only if it is declared: a new machine account with no `[bot]` suffix (a service or review account, a session's own login) goes into `scripts/lib/machine_logins.py`, in lower case, in the PR that gives it write access. An account nobody declared is a person to every check that asks ((internal ref)).
-- If your change makes a statement in any CLAUDE.md, BUGBOT.md, or runbook false, update that file in the same PR.
+- A session never merges, closes another's PR, deletes another's branch or force-pushes unless told.
+- Functional sign-off is a person's: a session never comments `/fr-pass` or removes `fr-hold`.
+- If your change makes a CLAUDE.md, BUGBOT.md or runbook false, fix it in the same PR.
 <!-- org-standards:end -->
