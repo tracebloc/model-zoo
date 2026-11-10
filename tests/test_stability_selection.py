@@ -1,8 +1,15 @@
 """Behavioural tests for the stability-selection tabular templates.
 
 The logistic template is checked here on a small planted problem (seeded, a few
-seconds), and on the platform's first-run example data in the CI job that checks
-out the ingestor (the ``ingest_producer`` marker, deselected everywhere else).
+seconds), and on the platform's first-run example data (the ``ingest_producer``
+marker). No CI job runs the marked tests: the example data lives in the private
+ingestor repo, and reading it needs the producer token, which
+tests/test_ingest_schema_guard.py confines to the drift job, a job that runs no
+repo tests. They are deselected unless ``-m ingest_producer`` is passed; run them
+by hand against a checkout of the ingestor at the pinned release:
+
+    INGEST_PRODUCER_CHECKOUT=<checkout> pytest -m ingest_producer <this file>
+
 The random-forest template keeps the behaviour tests it was parked with, and
 gets the logistic template's pickle checks.
 """
@@ -181,8 +188,8 @@ def test_an_unfitted_model_keeps_its_class(monkeypatch):
 
 # --- the logistic template on the first-run example data -------------------
 
-#: Env var naming a checkout of the ingestor; set only by the CI job that
-#: selects the marked tests below.
+#: Env var naming a checkout of the ingestor, for a run that selects the marked
+#: tests below (see the module docstring).
 PRODUCER_CHECKOUT_ENV = "INGEST_PRODUCER_CHECKOUT"
 BUNDLE = pathlib.Path("templates") / "examples" / "biomarker_discovery"
 LABEL, ID_COLUMN = "recurrence_5y", "patient_id"
