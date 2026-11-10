@@ -91,6 +91,8 @@ import tempfile
 
 import pytest
 
+import _od_mutation as harness
+
 ROOT = pathlib.Path(__file__).parent.parent
 OD_PYTORCH = ROOT / "model_zoo" / "object_detection" / "pytorch"
 TEMPLATE = OD_PYTORCH / "yolov12_s.py"
@@ -112,63 +114,8 @@ pytestmark = [
 # --------------------------------------------------------------------------
 
 
-def _exec_source(source: str, stem: str):
-    """Import ``source`` as a fresh module.
-
-    Written to a real file rather than ``exec``-ed into a dict so tracebacks
-    point somewhere, and so the module behaves exactly as the uploaded template
-    does — a template is a file, and the SDK loads it as one.
-    """
-    with tempfile.TemporaryDirectory(prefix="tb-mutate-") as raw:
-        target = pathlib.Path(raw) / f"{stem}.py"
-        target.write_text(source, encoding="utf-8")
-        spec = importlib.util.spec_from_file_location(stem, target)
-        assert spec and spec.loader, f"cannot build a spec for {target}"
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
-        return module
-
-
-def _load():
-    return _exec_source(TEMPLATE.read_text(encoding="utf-8"), TEMPLATE.stem)
-
-
-def _mutate(anchor: str, replacement: str):
-    """Load the template with ``anchor`` replaced by ``replacement``.
-
-    THE ANCHOR MUST APPEAR EXACTLY ONCE, and that assertion is the whole point.
-    A patch whose anchor has drifted silently changes nothing, the guard is then
-    pointed at a pristine template, and the mutation reports "passed" — which is
-    indistinguishable from a genuine survivor and reads as the opposite of what
-    it means. So a drifted anchor fails here instead.
-
-    ⚠️ THE ANCHOR MUST BE THE CODE, NOT A DOCSTRING MENTION OF IT. A harness on
-    a sibling PR patched a constant's appearance inside prose and produced a
-    false survivor; the uniqueness check below is what catches that, because a
-    constant that is also discussed in a comment occurs more than once. Anchor
-    on the assignment line, not on the bare name.
-    """
-    source = TEMPLATE.read_text(encoding="utf-8")
-    occurrences = source.count(anchor)
-    assert occurrences == 1, (
-        f"{TEMPLATE.name}: mutation anchor occurs {occurrences} times, expected "
-        f"1. The template moved under the mutation; re-anchor it rather than "
-        f"loosening this check.\nanchor:\n{anchor}"
-    )
-    mutated = source.replace(anchor, replacement)
-    assert mutated != source, "the replacement is identical to the anchor"
-    return _exec_source(mutated, f"mutated_{TEMPLATE.stem}")
-
-
-def _build(module, num_classes: int, input_size=None):
-    entry_name = getattr(module, "main_class", None) or getattr(
-        module, "main_method", None
-    )
-    assert entry_name, f"{module.__name__}: no main_class / main_method"
-    entry = getattr(module, entry_name)
-    if input_size is None:
-        return entry(num_classes)
-    return entry(num_classes, input_size)
+_load, _mutate = harness.loaders(TEMPLATE)
+_build = harness.build
 
 
 # --------------------------------------------------------------------------
@@ -4408,161 +4355,26 @@ _SILENT_MUTATIONS = frozenset(
 )
 
 
-def test_no_mutation_baseline() -> None:
-    """The zero row of the sweep.
+test_no_mutation_baseline = harness.no_mutation_baseline(GUARDS, _load)
 
-    A mutation sweep without a no-mutation baseline cannot distinguish "the
-    guard caught the mutation" from "the guard fails on everything", and a
-    ``_mutate`` anchor that no longer applies would otherwise report a pristine
-    template as a caught mutation. This runs the whole table against the
-    unmutated file in ONE module load, so the baseline is cheap and always
-    present.
-    """
-    module = _load()
-    failures = []
-    for name, guard in GUARDS.items():
-        try:
-            guard(module)
-        except AssertionError as error:  # pragma: no cover — reported, not hit
-            failures.append(f"{name}: {error}")
-    assert not failures, (
-        "guard(s) fail on the UNMUTATED template, so every 'mutation caught' "
-        "result below is meaningless:\n" + "\n\n".join(failures)
-    )
-
-
-@pytest.mark.parametrize("guard_name", sorted(GUARDS))
-def test_guard_passes_on_the_shipped_template(guard_name: str) -> None:
-    """The per-guard positive control, so a failure names one guard."""
-    GUARDS[guard_name](_load())
-
-
-@pytest.mark.parametrize(
-    "name,anchor,replacement,target",
-    MUTATIONS,
-    ids=[entry[0] for entry in MUTATIONS],
+test_guard_passes_on_the_shipped_template = (
+    harness.guard_passes_on_the_shipped_template(GUARDS, _load)
 )
-def test_mutation_is_caught_by_its_guard(
-    name: str, anchor: str, replacement: str, target: str
-) -> None:
-    """Point ONE named guard at a template edited to break exactly what it
-    checks.
 
-    ⚠️ THE ATTRIBUTION IS THE POINT, and it is why this runs a single guard
-    rather than the whole table. A sweep that runs every guard against every
-    mutation proves that *something* reddened, not that the guard under test
-    did — so a guard that is defined and never actually exercised looks covered.
-    Here the mutation names its guard and only that guard runs, so a red is
-    attributable and a green is a genuine survivor.
+test_mutation_is_caught_by_its_guard = harness.mutation_is_caught_by_its_guard(
+    GUARDS, MUTATIONS, _mutate
+)
 
-    A guard that cannot be made to fail proves nothing about the code it covers,
-    and for a hand-written detector "it returned a loss dict" is our own code
-    answering its own question. Keeping the mutation in the suite is what stops
-    a guard rotting into a tautology as the template changes.
-    """
-    mutated = _mutate(anchor, replacement)
-    guard = GUARDS[target]
+test_every_guard_has_a_mutation = harness.every_guard_has_a_mutation(
+    GUARDS, MUTATIONS
+)
 
-    with pytest.raises(AssertionError) as excinfo:
-        guard(mutated)
+test_every_mutation_targets_a_real_guard = harness.every_mutation_targets_a_real_guard(
+    GUARDS, MUTATIONS
+)
 
-    message = str(excinfo.value)
-    assert message.strip(), f"{name}: the guard failed with an empty message"
-    # The failure must be the guard's own, not a fixture-degeneracy assertion:
-    # several guards carry those, and a mutation that trips one has told us the
-    # fixture stopped exercising the rule, not that the rule is guarded.
-    assert "fixture is degenerate" not in message and "fixture:" not in message, (
-        f"{name}: the mutation tripped a fixture-degeneracy assertion rather "
-        f"than the guard itself — the fixture no longer exercises the rule "
-        f"under test:\n{message}"
-    )
+test_mutation_names_are_unique = harness.mutation_names_are_unique(MUTATIONS)
 
-
-@pytest.mark.parametrize("guard_name", sorted(GUARDS))
-def test_every_guard_has_a_mutation(guard_name: str) -> None:
-    """No guard may be un-proven.
-
-    Without this, adding a guard and forgetting its mutation leaves an assertion
-    nobody has ever seen fail — which is how a wrong assigner ships green.
-    """
-    covered = {target for *_, target in MUTATIONS}
-    assert guard_name in covered, (
-        f"{guard_name} has no entry in MUTATIONS. Every guard here must be shown "
-        f"able to go red; add the textual edit that breaks it."
-    )
-
-
-def test_every_mutation_targets_a_real_guard() -> None:
-    """The other direction: a mutation naming a renamed guard would be skipped
-    silently by the parametrized test's ``KeyError``-free lookup."""
-    unknown = sorted({target for *_, target in MUTATIONS} - set(GUARDS))
-    assert not unknown, f"MUTATIONS name guards that do not exist: {unknown}"
-
-
-def test_mutation_names_are_unique() -> None:
-    """Two mutations sharing a name make the sweep's report ambiguous — the
-    pytest id collides and one of them is indistinguishable from the other in
-    any table published from this suite."""
-    names = [entry[0] for entry in MUTATIONS]
-    duplicates = sorted({name for name in names if names.count(name) > 1})
-    assert not duplicates, f"duplicate mutation names: {duplicates}"
-
-
-def test_silent_mutations_still_train() -> None:
-    """The point of this whole file, stated as a test: the mutations do NOT
-    break training.
-
-    Each mutation named in ``_SILENT_MUTATIONS`` leaves
-    ``model(images, targets)`` returning a finite loss dict and
-    ``model(images)`` returning well-formed predictions, so the family
-    train-step test stays green against every one of them. That is the reason
-    the guards above exist, and asserting it here stops someone concluding the
-    family test already covers this template.
-    """
-    import torch
-
-    selected = [entry for entry in MUTATIONS if entry[0] in _SILENT_MUTATIONS]
-    assert len(selected) == len(_SILENT_MUTATIONS), (
-        f"_SILENT_MUTATIONS names "
-        f"{sorted(_SILENT_MUTATIONS - {e[0] for e in MUTATIONS})} which are not "
-        f"in MUTATIONS"
-    )
-    stale = sorted(_NOT_SILENT - {entry[0] for entry in MUTATIONS})
-    assert not stale, (
-        f"_NOT_SILENT excludes {stale}, which are not in MUTATIONS — an "
-        f"exclusion that matches nothing quietly shrinks this sweep"
-    )
-
-    targets = [
-        {
-            "boxes": torch.tensor(
-                [[10.0, 10.0, 60.0, 60.0], [70.0, 70.0, 110.0, 120.0]]
-            ),
-            "labels": torch.tensor([1, 3], dtype=torch.int64),
-        },
-        {
-            "boxes": torch.zeros((0, 4), dtype=torch.float32),
-            "labels": torch.zeros((0,), dtype=torch.int64),
-        },
-    ]
-    images = [torch.rand(3, 128, 160), torch.rand(3, 144, 128)]
-
-    for name, anchor, replacement, _ in selected:
-        module = _mutate(anchor, replacement)
-        model = _build(module, 3, 128)
-        model.train()
-        losses = model(images, targets)
-        assert isinstance(losses, dict) and losses, f"{name}: no loss dict"
-        for key, value in losses.items():
-            assert torch.isfinite(value).all(), f"{name}: loss {key} is {value!r}"
-        model.eval()
-        with torch.no_grad():
-            predictions = model(images)
-        assert isinstance(predictions, list) and len(predictions) == len(images), (
-            f"{name}: eval returned {predictions!r}"
-        )
-        for prediction in predictions:
-            assert {"boxes", "scores", "labels"} <= set(prediction), (
-                f"{name}: eval prediction is missing keys"
-            )
-        del model, module
+test_silent_mutations_still_train = harness.silent_mutations_still_train(
+    MUTATIONS, _SILENT_MUTATIONS, _mutate, not_silent=_NOT_SILENT
+)

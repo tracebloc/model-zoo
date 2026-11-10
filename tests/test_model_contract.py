@@ -22,6 +22,7 @@ the import-only test stayed green.
 
 import importlib
 import importlib.util
+import os
 import pathlib
 import re
 
@@ -37,6 +38,18 @@ FRAMEWORK_IMPORT_NAME = {
     "scikit_survival": "sksurv",
 }
 KNOWN_FRAMEWORKS = set(FRAMEWORK_IMPORT_NAME)
+
+#: Comma-separated frameworks this job runs templates for; unset runs every
+#: installed one. test-survival sets it to the survival frameworks: scikit-learn
+#: comes in there only as a scikit-survival dependency, at sklearn.txt's pin, so
+#: running the pure-sklearn templates again would repeat test-sklearn's items.
+FRAMEWORKS_ENV = "MODEL_ZOO_FRAMEWORKS"
+
+
+def _selected_frameworks(raw: str | None) -> set[str] | None:
+    if raw is None:
+        return None
+    return {name.strip() for name in raw.split(",") if name.strip()}
 
 OPTIONAL_THIRD_PARTY = {
     "xgboost",
@@ -169,6 +182,10 @@ def _load_or_skip(path: pathlib.Path):
         f"{path}: declared framework {framework!r} is not in {KNOWN_FRAMEWORKS}"
     )
 
+    selected = _selected_frameworks(os.environ.get(FRAMEWORKS_ENV))
+    if selected is not None and framework not in selected:
+        pytest.skip(f"{framework} is not in {FRAMEWORKS_ENV} for this CI job")
+
     if not _is_installed(framework):
         pytest.skip(f"{framework} not installed in this CI job")
 
@@ -266,6 +283,25 @@ def test_no_runtime_hub_fetch_patterns() -> None:
         "hub is a closed door, build from an inlined config / uploaded weights "
         "(design note D6):\n" + "\n".join(offenders)
     )
+
+
+def test_framework_filter_names_only_known_frameworks() -> None:
+    """A misspelt name in the filter would silently skip that framework's
+    templates in the job that sets it."""
+    selected = _selected_frameworks(os.environ.get(FRAMEWORKS_ENV))
+    if selected is None:
+        pytest.skip(f"{FRAMEWORKS_ENV} is not set in this job")
+    assert selected, f"{FRAMEWORKS_ENV} is set but names no framework"
+    unknown = selected - KNOWN_FRAMEWORKS
+    assert not unknown, f"{FRAMEWORKS_ENV} names unknown frameworks: {sorted(unknown)}"
+
+
+def test_framework_filter_parses_a_comma_list() -> None:
+    assert _selected_frameworks(None) is None
+    assert _selected_frameworks(" lifelines, scikit_survival ,") == {
+        "lifelines",
+        "scikit_survival",
+    }
 
 
 def test_ci_ram_skip_entries_exist() -> None:

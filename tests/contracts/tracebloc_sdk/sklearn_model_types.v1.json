@@ -3,16 +3,22 @@
   "description": "The model_type values the tracebloc SDK's SKLEARN TABULAR upload path accepts, per family. This is a DIFFERENT gate from model_type_choices.v1.json: that one says what the backend can STORE, this one says what survives the SDK's model_func_checks. A value can be storable and still fail here -- an empty declaration is stored by the backend as 'default' but the SDK coerces it to None (tracebloc/validation/rewriter.py::_parse_constant_rhs) and no accepted set contains None, so average_estimators raises 'model type None is not supported for Sklearn' and the template is untrainable end to end. That is the EBM declaration incident: both ebm templates shipped \"\" and neither could train. 'default' itself is also absent from every set below, so the blank was never going to work by that route either.",
   "owner": "tracebloc-py-package -- tracebloc/upload/skl_tabular_{base,classifier,regression}.py",
   "generated_from": {
-    "repo": "tracebloc-py-package",
+    "repo": "tracebloc/tracebloc-py-package",
     "paths": [
       "tracebloc/upload/skl_tabular_base.py",
       "tracebloc/upload/skl_tabular_classifier.py",
       "tracebloc/upload/skl_tabular_regression.py"
     ],
-    "ref": "293ac3245a9b9ffd0970af8c1e9505e20d0ced3a",
+    "ref": "da7d1bc010233af1186247e73c59e68b26769de1",
     "ref_branch": "develop",
-    "ref_date": "2026-09-10",
-    "method": "ast.parse of each module: the keys of the ClassDef's _ensemble_prefixes dict (the ensemble-packed types), unioned with every string literal compared against the `model_type` parameter inside average_estimators and _average_family_specific (the parameter-averaged and family strategies). Derived mechanically, never hand-transcribed -- a hand-copied list is how the earlier OD vocabulary drift shipped."
+    "ref_date": "2026-11-10",
+    "blobs": {
+      "tracebloc/upload/skl_tabular_base.py": "e6f9de812071bdf5c7644ff92c0261f27b770997",
+      "tracebloc/upload/skl_tabular_classifier.py": "ac64269154fd6caf9ceb605d49a8269486b9d110",
+      "tracebloc/upload/skl_tabular_regression.py": "844e33ecd150e92a312694dee510f06bf76ee69b"
+    },
+    "fields_sha256": "e29d8358171789bf5b9c1f288ee72ba985644c518e75f25e29eed46be7e4dd57",
+    "method": "ast.parse: _ensemble_prefixes keys plus literals compared with model_type in the averaging strategies. Written by tools/contract_copies.py --write; never hand-edit."
   },
   "note_not_averageability": "Membership means the upload-time smoke fit ROUTES, not that the estimator is federated-averageable. SklTabularBase._ensemble_prefixes says so explicitly: several entries have no cross-edge parameter average and are refused for a multi-edge dataset by the client's link-time gate and the averaging-service refuse-list. Do not read averageability into this file (SDK #361).",
   "accepted_by_family": {

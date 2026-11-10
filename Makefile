@@ -1,13 +1,17 @@
 # Makefile for tracebloc/model-zoo — uniform entry points.
 #
-# Every active tracebloc repo exposes the SAME three targets, so "run
+# Every active tracebloc repo exposes the SAME entry points, so "run
 # your tests before you push" stops being a rule you can only obey with
 # per-repo tribal knowledge:
 #
+#   make pre-push   lint only: what the git pre-push hook runs. Budget: seconds.
 #   make check      lint + fast tests.   Budget: under 60 s.
 #   make check-all  everything CI runs (bar the CI-only heavy suites).
 #   make setup      install what those targets need, and a git pre-push hook
-#                   that runs `make check` (skip once with --no-verify).
+#                   that runs `make pre-push` (skip once with --no-verify).
+#
+# CI first: the laptop keeps only the fast kinds (the toolchain preflight and
+# ruff); the test suite runs on GitHub, in ci.yml's pytest jobs.
 #
 # This file is a THIN WRAPPER over ci.yml. It introduces no new tool,
 # no new config and no new rule. When ci.yml changes, change the
@@ -40,10 +44,11 @@ MUTATION_VENV ?= .venv-mutation
 help:
 	@echo "tracebloc/model-zoo — make targets"
 	@echo
-	@echo "  check       ruff + the model-contract tests — run this before every push"
+	@echo "  pre-push    ruff — what the pre-push hook runs; the tests run in CI"
+	@echo "  check       ruff + the model-contract tests"
 	@echo "  check-all   the same, verbose — CI's extra width is four framework envs"
 	@echo "  setup       pip install the lint + FRAMEWORK requirement sets; installs the pre-push hook"
-	@echo "  install-hooks  (re)install the git pre-push hook that runs 'make check'"
+	@echo "  install-hooks  (re)install the git pre-push hook that runs 'make pre-push'"
 	@echo
 	@echo "  individual: lint test index"
 	@echo
@@ -54,7 +59,20 @@ help:
 	@echo "  pytorch, sklearn, survival. Locally you have one."
 	@echo "  Pick it with:  make setup FRAMEWORK=sklearn"
 
-# ---- check: the pre-push tier ------------------------------------
+# ---- pre-push: the laptop tier --------------------------------------
+#
+# The pre-push hook runs `make pre-push` when this target exists, else
+# `make check`. It names only fast kinds, and each also runs in a CI job on
+# every pull request:
+#   lint    ci.yml's `ruff` job runs `make lint`.
+# The hook runs guard-toolchain itself, before this target, and lets the push
+# through when the toolchain is missing; so it is not named here. The tests
+# (`make test`) run only on GitHub: ci.yml's pytest jobs, once per framework env.
+.PHONY: pre-push
+pre-push: lint
+	@echo "==> pre-push: green (the tests run in CI)"
+
+# ---- check: lint + tests -----------------------------------------
 #
 # The whole suite here is two files of contract tests, so the fast tier
 # and the full tier differ only in verbosity. What CI has that a laptop
@@ -107,15 +125,16 @@ setup:
 # test-hooks: run the Makefile's own behaviour tests (guard-toolchain) on demand;
 # the installer and its hook are the generated snippet's, tested where it lives.
 # Not a `check` dependency: it runs real `make` in throwaway repos, so an
-# environment quirk (old git, noexec /tmp) could block a local push on something
-# CI never sees. Run it directly with `make test-hooks`.
+# environment quirk (old git, noexec /tmp) could block a local push. CI runs it
+# in the ruff job. Run it directly with `make test-hooks`.
 .PHONY: test-hooks
 test-hooks:
 	@sh scripts/tests/test-pre-push-hook.sh
 
 # The one pre-push installer, generated: `make install-hooks` writes the hook that runs
-# `make check`, `make hooks-status` says whether it is current. Never edit
-# .github/install-hooks.mk here; it is rendered from the org's canonical copy.
+# `make pre-push` (or `make check` where there is none), `make hooks-status` says whether
+# it is current. Never edit .github/install-hooks.mk here; it is rendered from the org's
+# canonical copy.
 include .github/install-hooks.mk
 
 # ---- individual targets ------------------------------------------
