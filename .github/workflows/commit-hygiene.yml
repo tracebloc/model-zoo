@@ -1,6 +1,6 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
-# Public-safe copy of `.github/workflows/commit-hygiene.yml` (blob e5665754d9de6723fe5aaf500af0185989dd424a) for a PUBLIC repo:
+# Public-safe copy of `.github/workflows/commit-hygiene.yml` (blob d2b76c92bec044b070bd890bfd8ffc8bba40bf38) for a PUBLIC repo:
 # the same workflow, byte for byte, except that its comments are scrubbed as
 # described below and that 11 line(s) are LEFT OUT: the source brackets them
 # `# public-render: omit-begin` .. `# public-render: omit-end`, and each one wires a secret a
@@ -155,7 +155,7 @@ jobs:
           path: .org-config-tools
           persist-credentials: false
 
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
         with:
           python-version: '3.12'
 

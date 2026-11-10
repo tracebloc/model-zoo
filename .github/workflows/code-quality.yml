@@ -1,7 +1,7 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/code-quality.yml`
-# (blob 3db0934a696408da5efd1d58b563459319c288b5) folded with the private source repo's own caller of it,
+# (blob de9a9b567f1146180dfb0b90423daa280f46f462) folded with the private source repo's own caller of it,
 # job `quality` of `.github/workflows/ci.yml` with that file's `on:` and
 # `permissions:` (blob ffc33eb4910df7737d1155a0e0700a85212009f0 of those lines; its
 # `concurrency:` is one group for every job it runs, so it is not
@@ -229,7 +229,7 @@ jobs:
       # PyYAML IS PROVISIONED, NEVER ASSUMED: the YAML phase imports it and a
       # missing import is exit 2 -- a HARD failure regardless of soft-fail -- so
       # the runner image's contents are not relied on. Same pin as selftests.yml.
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
         if: ${{ steps.gates.outputs.early_close == 'true' && steps.gates.outputs.yaml_run_blocks == 'true' }}
         with:
           python-version: '3.12'
@@ -395,7 +395,7 @@ jobs:
           echo "Changed Python files: $COUNT"
 
       # setup-python rather than `pipx`, for the reason #ruff records above.
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
         if: ${{ !cancelled() && steps.gates.outputs.format == 'true' && (steps.files.outputs.mode == 'all' || steps.files.outputs.count != '0') }}
         with:
           python-version: '3.12'
