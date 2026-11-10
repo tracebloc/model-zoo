@@ -289,10 +289,11 @@ jobs:
 
   # ── One required context for the lint and test jobs ──
   #
-  # Branch protection reads `ci-gate`, not the four jobs it needs, so a job
-  # added to or renamed in `needs:` changes what is required without touching
-  # protection. `if: always()` makes it report on every run: without it, a
-  # failed need SKIPS this job, and a skipped check reads as passing.
+  # Branch protection can require `ci-gate` alone instead of the four jobs it
+  # needs, so a job added to or renamed in `needs:` changes what is required
+  # without touching protection. `if: always()` makes it report on every run:
+  # without it, a failed need SKIPS this job, and a skipped check reads as
+  # passing. A run the concurrency group cancels therefore ends red here.
   #
   # ONLY `success` PASSES: no job in `needs:` is skipped on purpose, so a
   # skipped, cancelled or failed leg is red, and so is an empty result. A need
