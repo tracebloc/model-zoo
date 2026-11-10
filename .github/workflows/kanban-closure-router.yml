@@ -1,7 +1,7 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/kanban-closure-router.yml`
-# (blob f5eead955d7b81cfe70aa77dfa05f60b86cbba28) folded with the private source repo's own caller of it,
+# (blob d83edabd47cd0a9ab732e2e3b64f6d76e50aae27) folded with the private source repo's own caller of it,
 # `.github/workflows/kanban-closure-caller.yml` (blob b38b7c1e8514240939dd944ad2e3e6add7fcfd57), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
@@ -207,7 +207,7 @@ jobs:
       # step writes the holding state and labels the card, the path every unreadable
       # mapping already takes. A failed job writes nothing, and "Item closed" sets
       # Cancelled ((internal ref)).
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
         if: github.event_name == 'pull_request' && github.event.pull_request.merged && github.event.pull_request.base.ref == 'staging'
         continue-on-error: true
         with:
