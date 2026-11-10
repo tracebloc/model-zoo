@@ -1,14 +1,20 @@
 {
   "version": "1",
-  "description": "The complete model_type vocabulary the tracebloc platform accepts, across ALL task types. metaApi.models.Experiment.model_type is a Django CharField with choices=MODEL_TYPE_CHOICES, so a value outside this set is refused by the ChoiceField at experiment creation with a 400 -- before the model file is looked at, and with nothing in the error naming the template as the cause. Published here so the model-zoo can assert in its own CI that every template's declared model_type is one the platform can actually store (model-zoo#273). This is a SUPERSET of the per-task-type routing vocabularies: object_detection_families.v2.json narrows the OD subset to {rcnn, torchvision_detection, yolo}, and the engine's keypoint strategy routes only {rcnn, heatmap} specially. Membership here means STORABLE, not necessarily well-routed for a given category.",
-  "owner": "backend -- metaApi/models/Experiment.py (Experiment.MODEL_TYPE_CHOICES)",
+  "description": "The complete model_type vocabulary the tracebloc platform accepts, across ALL task types. Experiment.model_type (experiments/models/experiment.py) is a Django CharField with choices=MODEL_TYPE_CHOICES, so a value outside this set is refused by the ChoiceField at experiment creation with a 400 -- before the model file is looked at, and with nothing in the error naming the template as the cause. Published here so the model-zoo can assert in its own CI that every template's declared model_type is one the platform can actually store (model-zoo#273). This is a SUPERSET of the per-task-type routing vocabularies: object_detection_families.v2.json narrows the OD subset to {rcnn, torchvision_detection, yolo}, and the engine's keypoint strategy routes only {rcnn, heatmap} specially. Membership here means STORABLE, not necessarily well-routed for a given category.",
+  "owner": "backend -- experiments/models/experiment.py (Experiment.MODEL_TYPE_CHOICES)",
   "generated_from": {
-    "repo": "backend",
-    "path": "metaApi/models/Experiment.py",
-    "ref": "daa607e5c7e1d051eb4ee7b8ffcd023f3b5c0371",
+    "repo": "tracebloc/backend",
+    "paths": [
+      "experiments/models/experiment.py"
+    ],
+    "ref": "70d0626cf57aa156056333570f75e991e26f9495",
     "ref_branch": "develop",
-    "ref_date": "2026-09-07",
-    "method": "ast.parse of Experiment.MODEL_TYPE_CHOICES, resolving each choice's MODEL_TYPE_* constant to its string literal. Derived mechanically, never hand-transcribed -- a hand-copied list is how the OD vocabulary drift shipped."
+    "ref_date": "2026-11-10",
+    "blobs": {
+      "experiments/models/experiment.py": "f72bec4f17f70cbeeb20f11c69d0e2bdc8f6365f"
+    },
+    "fields_sha256": "0501368e155ca2d01f7d97b559db7ade858f8187f6bf2b474eec82f410abbb59",
+    "method": "ast.parse of Experiment.MODEL_TYPE_CHOICES, each MODEL_TYPE_* constant resolved to its literal. Written by tools/contract_copies.py --write; never hand-edit."
   },
   "blank_is_accepted": true,
   "blank_note": "The field is blank=True/null=True and ExperimentSerializer.validate_model_type coerces a falsy value to 'default', so an empty declaration is STORED, not refused. Most zoo templates declare \"\". Note this is only about the backend: the engine's keypoint _infer_model_type falls an empty value through to an RCNN_FAMILY fallback, so \"\" is not automatically the right declaration for a keypoint model.",

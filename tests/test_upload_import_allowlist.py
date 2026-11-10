@@ -116,12 +116,12 @@ def test_the_walk_sees_what_the_gate_refuses() -> None:
     """A control that the walk catches each import shape that refused a real template."""
     allowed = _allowed()
     probes = {
-        "from typing import List\n": {"typing"},
-        "import copy\n": {"copy"},
+        "from subprocess import run\n": {"subprocess"},
+        "import json\n": {"json"},
         "def f():\n    import os.path\n": {"os"},
-        "from __future__ import annotations\n": {"__future__"},
         "from . import sibling\n": {"."},
         "import torch.nn\nfrom collections import OrderedDict\n": set(),
+        "from __future__ import annotations\nfrom typing import List\n": set(),
     }
     for source, expected in probes.items():
         assert _refused_imports(source, allowed) == expected, source

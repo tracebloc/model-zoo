@@ -1,22 +1,38 @@
 {
   "version": "1",
-  "description": "The top-level packages an uploaded model file may import. The backend's upload scan (Bandit plugin TBT001) refuses an upload whose file imports any other top-level name -- standard library included (typing, copy, os, ...) -- unless the name is a sibling file of the same upload. A template is a single file, so for the zoo this list is exact. Read by tests/test_upload_import_allowlist.py.",
+  "description": "The top-level packages an uploaded model file may import. The backend's upload scan (Bandit plugin TBT001) refuses an upload whose file imports any other top-level name -- standard library included (typing, copy, os, ...) -- unless the name is a sibling file of the same upload. A template is a single file, so for the zoo this list is exact about names. Some of these modules are admitted member by member upstream, so importing one does not admit every name in it. Read by tests/test_upload_import_allowlist.py.",
   "generated_from": {
-    "repo": "backend",
-    "path": "bandit_tracebloc_model_validation/bandit_plugins/import_names.py",
-    "symbol": "ALLOWED_PYTHON_PACKAGE_IMPORTS",
-    "ref": "17dab7907ffa2c5f7f90da0e24609ce9651db50b",
-    "branch": "main",
-    "date": "2026-10-22"
+    "repo": "tracebloc/backend",
+    "paths": [
+      "bandit_tracebloc_model_validation/bandit_plugins/import_names.py"
+    ],
+    "ref": "70d0626cf57aa156056333570f75e991e26f9495",
+    "ref_branch": "develop",
+    "ref_date": "2026-11-10",
+    "blobs": {
+      "bandit_tracebloc_model_validation/bandit_plugins/import_names.py": "4a622468e2861088766146edfe3dbcea3a354061"
+    },
+    "fields_sha256": "9267eeef30e7e2fea4a277b0e940106847a8cb81ae3328e1bf8df38a350f53a5",
+    "method": "ast.literal_eval of ALLOWED_PYTHON_PACKAGE_IMPORTS, sorted. Written by tools/contract_copies.py --write; never hand-edit."
   },
   "allowed_top_level_packages": [
+    "__future__",
+    "abc",
     "catboost",
     "collections",
+    "copy",
+    "dataclasses",
+    "einops",
+    "enum",
+    "functools",
     "interpret",
+    "itertools",
     "lifelines",
     "lightgbm",
     "math",
+    "numbers",
     "numpy",
+    "operator",
     "peft",
     "pycox",
     "pytorch_forecasting",
@@ -26,6 +42,8 @@
     "torch",
     "torchvision",
     "transformers",
+    "typing",
+    "warnings",
     "xgboost"
   ]
 }

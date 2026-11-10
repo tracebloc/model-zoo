@@ -275,6 +275,10 @@ jobs:
       - run: pip install -r .github/requirements/test.txt
       - name: model_zoo/ agrees with the vendored category enum
         run: pytest tests/test_zoo_category_contract.py -v
+      # Offline: each copy against the producer commit and blobs it pins.
+      - name: The vendored contract copies are held to their pins
+        if: ${{ !cancelled() }}
+        run: pytest tests/test_contract_copies_held.py -v
       # Runs even when the step above is red, so one run reports both layers.
       - name: The vendored category enum agrees with the producer release it pins
         if: ${{ !cancelled() }}

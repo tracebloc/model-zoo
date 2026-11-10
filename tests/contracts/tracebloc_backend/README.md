@@ -2,10 +2,11 @@
 
 The complete `model_type` vocabulary the platform accepts, across **all** task
 types — derived from `Experiment.MODEL_TYPE_CHOICES`, the `choices=` of the
-`model_type` field on `metaApi.models.Experiment`.
+`model_type` field on `Experiment`.
 
-- **Upstream:** `backend` — `metaApi/models/Experiment.py`
-- **Pinned ref:** `daa607e5c7e1d051eb4ee7b8ffcd023f3b5c0371` (`develop`, 2026-09-07)
+- **Upstream:** `backend` — `experiments/models/experiment.py`
+- **Pinned ref:** `generated_from` in the JSON: the producer commit, its branch,
+  the blob sha of each source file there, and the digest of the derived fields.
 - **Why it exists:** `model_type` is a Django `ChoiceField`. A value outside the
   choice set is refused at experiment creation with a **400, before the model
   file is looked at** — and nothing in that error names the template as the
@@ -44,38 +45,15 @@ R-CNN. Declare the family explicitly there.
 
 ## Refreshing this copy
 
-`backend` is a private repo, so use an authenticated `gh` read. The file is
-**generated, not copied** — the values are resolved from the AST so a
-hand-transcription cannot drift (a hand-copied list is how the OD vocabulary
-drift shipped):
+Both copies in this directory are written by `tools/contract_copies.py`; how
+they are held, and how to refresh them, is in that module's docstring and in
+[the drift section below](#how-these-copies-are-held). Never hand-edit a
+contract field: the offline check fails on a field that disagrees with
+`generated_from.fields_sha256`.
 
-```bash
-sha=$(gh api repos/backend/commits/develop --jq .sha)
-gh api "repos/backend/contents/metaApi/models/Experiment.py?ref=$sha" \
-  -H "Accept: application/vnd.github.raw" > /tmp/Experiment.py
-python3 - "$sha" <<'PY'
-import ast, json, sys
-src = open("/tmp/Experiment.py").read()
-cls = next(n for n in ast.walk(ast.parse(src))
-           if isinstance(n, ast.ClassDef) and n.name == "Experiment")
-consts = {t.id: n.value.value
-          for n in cls.body if isinstance(n, ast.Assign)
-          for t in n.targets
-          if isinstance(t, ast.Name) and t.id.startswith("MODEL_TYPE_")
-          and isinstance(n.value, ast.Constant) and isinstance(n.value.value, str)}
-choices = next(n.value for n in cls.body if isinstance(n, ast.Assign)
-               and any(isinstance(t, ast.Name) and t.id == "MODEL_TYPE_CHOICES"
-                       for t in n.targets))
-print(sys.argv[1])
-print(sorted(consts[e.elts[0].id] for e in choices.elts))
-PY
-```
-
-Then update `accepted_model_type_values`, `choices`, and `generated_from.ref` in
-the JSON, reconcile any template declaration the change strands, and commit the
-lot in one PR. Narrowing the set is a **breaking** change for this repo (a value
-a template still declares stops being storable), which is what the `version`
-field is for.
+Narrowing the set is a **breaking** change for this repo (a value a template
+still declares stops being storable): reconcile any template declaration the
+refresh strands in the same pull request.
 
 ---
 
@@ -85,7 +63,7 @@ The top-level packages an uploaded model file may import: `ALLOWED_PYTHON_PACKAG
 in the backend's upload-scan Bandit plugin (TBT001).
 
 - **Upstream:** `backend` — `bandit_tracebloc_model_validation/bandit_plugins/import_names.py`
-- **Pinned ref:** `17dab7907ffa2c5f7f90da0e24609ce9651db50b` (`main`, 2026-10-22; `develop` identical)
+- **Pinned ref:** `generated_from` in the JSON, as above.
 - **Why it exists:** the scan refuses an upload whose file imports any other top-level name,
   **standard library included**. `from typing import List` or `import copy` is enough. Nothing in
   this repo checked it, so `cascade_rcnn.py`, `sparse_rcnn.py` and `yolov10_s.py` shipped and could
@@ -94,20 +72,22 @@ in the backend's upload-scan Bandit plugin (TBT001).
 `tests/test_upload_import_allowlist.py` reads this file. It is stdlib only and runs in every CI
 framework job.
 
-## Refreshing this copy
+Some of these modules are admitted member by member upstream: importing one does not
+admit every name in it, and this copy lists only the top-level names.
+
+## How these copies are held
+
+- **On every pull request, offline**: `tests/test_contract_copies_held.py` (in the required
+  `category-contract` check) holds each copy to the producer commit, source blobs and field digest
+  its `generated_from` records.
+- **Weekly, against the producer**: `.github/workflows/contract-drift.yml` re-derives the copies on
+  this repo's `develop`, `staging` and `main` from the producer's branch of the same name. So the
+  copy that reaches `main` must equal the producer's `main`, which is what prod runs.
+  It is required nowhere and opens one issue when a leg disagrees.
+
+Refresh from the producer branch, then reconcile the templates in the same pull request:
 
 ```bash
-sha=$(gh api repos/tracebloc/backend/commits/main --jq .sha)
-gh api "repos/tracebloc/backend/contents/bandit_tracebloc_model_validation/bandit_plugins/import_names.py?ref=$sha" \
-  -H "Accept: application/vnd.github.raw" > /tmp/import_names.py
-python3 - "$sha" <<'PY'
-import ast, sys
-tree = ast.parse(open("/tmp/import_names.py").read())
-value = next(n.value for n in tree.body if isinstance(n, ast.Assign)
-             and any(getattr(t, "id", "") == "ALLOWED_PYTHON_PACKAGE_IMPORTS" for t in n.targets))
-print(sys.argv[1]); print(sorted(ast.literal_eval(value)))
-PY
+python3 tools/contract_copies.py --ref develop                 # what differs
+python3 tools/contract_copies.py --write --ref develop --only tracebloc_backend/upload_import_allowlist.v1.json
 ```
-
-Then update `allowed_top_level_packages` and `generated_from.ref`. Pin `main` (what prod runs),
-not `develop`: a name that is only on `develop` is still refused by prod.
