@@ -79,9 +79,7 @@ jobs:
           cache: pip
           cache-dependency-path: .github/requirements/survival.txt
       - run: pip install -r .github/requirements/test.txt -r .github/requirements/survival.txt
-      # scikit-learn is installed here only as a scikit-survival dependency, at
-      # sklearn.txt's pin, so test_model_contract.py (the only reader of
-      # MODEL_ZOO_FRAMEWORKS) leaves the pure-sklearn templates to test-sklearn.
+      # Why MODEL_ZOO_FRAMEWORKS is set: see FRAMEWORKS_ENV in tests/test_model_contract.py.
       - run: pytest tests/ -v
         env:
           MODEL_ZOO_FRAMEWORKS: lifelines,scikit_survival
