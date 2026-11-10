@@ -560,7 +560,7 @@
       "framework": "pytorch",
       "model_type": "direct",
       "label": "ViTPose Plus",
-      "batch": 32,
+      "batch": 16,
       "forecast_window": null,
       "params": 125444625,
       "averageable": true
@@ -632,7 +632,7 @@
       "framework": "pytorch",
       "model_type": "",
       "label": "NetMedGPT Style Scratch",
-      "batch": 16,
+      "batch": 2,
       "forecast_window": null,
       "params": 109512762,
       "averageable": true
@@ -644,7 +644,7 @@
       "framework": "pytorch",
       "model_type": "",
       "label": "NetMedGPT Style Warmstart",
-      "batch": 16,
+      "batch": 2,
       "forecast_window": null,
       "params": 109514298,
       "averageable": true
@@ -656,7 +656,7 @@
       "framework": "pytorch",
       "model_type": "",
       "label": "PreNorm MLM",
-      "batch": 16,
+      "batch": 2,
       "forecast_window": null,
       "params": 109514298,
       "averageable": true
@@ -668,7 +668,7 @@
       "framework": "pytorch",
       "model_type": "",
       "label": "Relative Position MLM",
-      "batch": 16,
+      "batch": 2,
       "forecast_window": null,
       "params": 109119546,
       "averageable": true
@@ -2288,7 +2288,7 @@
       "framework": "pytorch",
       "model_type": "",
       "label": "BERT Token",
-      "batch": 32,
+      "batch": 4,
       "forecast_window": null,
       "params": 108898569,
       "averageable": true
@@ -2324,7 +2324,7 @@
       "framework": "pytorch",
       "model_type": "",
       "label": "ELECTRA Token",
-      "batch": 32,
+      "batch": 4,
       "forecast_window": null,
       "params": 108898569,
       "averageable": true
@@ -2348,7 +2348,7 @@
       "framework": "pytorch",
       "model_type": "",
       "label": "RoBERTa Token",
-      "batch": 32,
+      "batch": 2,
       "forecast_window": null,
       "params": 124061961,
       "averageable": true
