@@ -3,6 +3,8 @@ paths:
   - "tools/*.py"
   - "tests/mutation_selection.py"
   - "tests/*_rows.py"
+  - "tests/test_*_guard.py"
+  - "tests/test_folder_template_zips.py"
   - ".github/mutation-coverage.yml"
   - ".github/workflows/mutation-nightly.yml"
 ---
