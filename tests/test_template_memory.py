@@ -1,4 +1,5 @@
-"""Every checked template trains, at its defaults, within the smallest client's memory.
+"""Every checked template trains, at its defaults, within the smallest client's memory,
+and every listed one is sized by the SDK as ``NOT_FITTING`` says.
 
 Runs ``tools/template_memory.py`` with the tracebloc SDK's own estimate, so it
 needs the SDK: like ``test_sdk_upload_from_clone.py`` it runs in the
@@ -43,3 +44,9 @@ def test_every_checked_template_fits_at_its_defaults():
     lines, findings = tool.check(ROOT, tool.sdk_estimator())
     assert not findings, "\n".join(findings)
     assert len(lines) == len(templates) > 0
+
+
+def test_every_listed_template_is_sized_as_listed():
+    lines, findings = tool.check_listed(ROOT, tool.sdk_sizer())
+    assert not findings, "\n".join(findings)
+    assert len(lines) == len(tool.NOT_FITTING) > 0

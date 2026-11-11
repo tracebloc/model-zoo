@@ -1,9 +1,9 @@
 # mutates: tools/template_memory.py
 """Mutation rows for ``tools/template_memory.py``.
 
-The SDK's estimate is not installed where the rows run, so each row gives the
-tool a recorded estimator: the figure and the warning the SDK returns for the
-template's real defaults. The rows break the tool's own half, reading a
+The SDK is not installed where the rows run, so each row gives the tool a
+recorded estimator or sizer: what the SDK returns for the template's real
+defaults. The rows break the tool's own half, reading a
 template's defaults and reporting, on a copy of the real ``model_zoo/``.
 """
 
@@ -109,16 +109,68 @@ def test_row_checked_lists_every_pytorch_template(zoo):
     templates, findings = tool.checked(zoo)
     assert findings == []
     assert TEMPLATE in templates
-    assert not set(templates) & tool.NOT_FITTING
+    assert not set(templates) & tool.NOT_FITTING.keys()
     index = json.loads((zoo / tool.INDEX).read_text())["templates"]
     pytorch = {row["id"] for row in index if row["framework"] == "pytorch"}
-    assert set(templates) == pytorch - tool.NOT_FITTING
+    assert set(templates) == pytorch - tool.NOT_FITTING.keys()
 
 
 def test_row_a_stale_not_fitting_entry_is_a_finding(zoo, not_fitting):
-    tool.NOT_FITTING = tool.NOT_FITTING | {"object_detection/pytorch/no_such"}
+    tool.NOT_FITTING = {**tool.NOT_FITTING, "object_detection/pytorch/no_such": tool.LORA}
     _, findings = tool.checked(zoo)
     assert findings == [
         "object_detection/pytorch/no_such: listed in NOT_FITTING but not a "
         "checked template"
+    ]
+
+
+LISTED = "token_classification/pytorch/xlm_roberta_token"
+
+
+def recorded_sizing(defaults, path):
+    """The SDK's sizing of the listed template's committed defaults on the budget
+    (batch 16: LoRA on, batch 5), and a fit without LoRA at any smaller batch."""
+    if defaults.batch_size == 16:
+        return tool.LORA, 5
+    return tool.FITS, defaults.batch_size
+
+
+def _listed_only(zoo):
+    """Every listed template but ``LISTED`` off the index, so the row sizes one."""
+    path = zoo / tool.INDEX
+    index = json.loads(path.read_text())
+    index["templates"] = [
+        row
+        for row in index["templates"]
+        if row["id"] == LISTED or row["id"] not in tool.NOT_FITTING
+    ]
+    path.write_text(json.dumps(index))
+
+
+def test_row_a_listed_template_sized_as_listed_passes(zoo):
+    _listed_only(zoo)
+    lines, findings = tool.check_listed(zoo, recorded_sizing)
+    assert findings == []
+    assert lines == [f"lora  {LISTED}: batch 5 (listed)"]
+
+
+def test_row_a_listed_template_that_fits_is_a_finding(zoo):
+    _listed_only(zoo)
+    path = zoo / tool.ZOO / f"{LISTED}.py"
+    text = path.read_text()
+    assert "batch_size = 16\n" in text
+    path.write_text(text.replace("batch_size = 16\n", "batch_size = 4\n"))
+    _, findings = tool.check_listed(zoo, recorded_sizing)
+    assert findings == [
+        f"{LISTED}: listed in NOT_FITTING, but the SDK fits it at batch 4 without "
+        "LoRA; lower its defaults and take it off the list"
+    ]
+
+
+def test_row_a_listed_template_sized_otherwise_is_a_finding(zoo, not_fitting):
+    _listed_only(zoo)
+    tool.NOT_FITTING = {**tool.NOT_FITTING, LISTED: tool.REFUSED}
+    _, findings = tool.check_listed(zoo, recorded_sizing)
+    assert findings == [
+        f"{LISTED}: listed in NOT_FITTING as refused, but the SDK's sizing says lora"
     ]
