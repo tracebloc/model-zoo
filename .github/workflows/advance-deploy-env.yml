@@ -1,7 +1,7 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/advance-deploy-env.yml`
-# (blob 62344dad968fbd94a9c2062db88f01683205dc71) folded with the private source repo's own caller of it,
+# (blob e8d3e6e5671caad5108e14442ab101ef6713ea48) folded with the private source repo's own caller of it,
 # `.github/workflows/advance-deploy-env-caller.yml` (blob 5de24d409e5bbf2bccbb720912cd551cbe33b040), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
@@ -244,10 +244,11 @@ jobs:
           # short-attributed earlier run left behind is advanced (monotonic, capped).
           WALK_BASE_REF: ${{ github.ref_name == 'staging' && 'origin/main' || '' }}
         # DERIVE each commit's PR from GitHub, not from its subject text
-        # ((internal ref): the `(#N)` slot carries a ticket as often as a PR). The
-        # script falls back to the subject only when the API is empty, with a
-        # `::warning::`; it lives in the tools checkout above and `git log` runs
-        # against the caller's checkout (cwd). Selftest: scripts/tests/extract-advanced-prs-selftest.sh.
+        # ((internal ref): the `(#N)` slot carries a ticket as often as a PR). When the
+        # API is empty, a PR the subject names counts only as the FR gate verifies it
+        # (`fr-gate-walk.sh merge-sha`), with a `::warning::`; both scripts live in the
+        # tools checkout above and `git log` runs against the caller's checkout (cwd).
+        # Selftest: scripts/tests/extract-advanced-prs-selftest.sh.
         run: bash .org-config-tools/scripts/extract-advanced-prs.sh
 
       - name: Update project fields for each PR
@@ -443,9 +444,8 @@ jobs:
             # limit, a 403 or an exit-0 `errors[]` payload used to read as "not on
             # project" in a GREEN run. A failed read is a could-not-tell, recorded
             # as one. ONE shape is benign -- a number that is not a pull request
-            # (the extract step's subject fallback can name an issue) comes back
-            # as NOT_FOUND on exactly `repository.pullRequest` -- and only that is a
-            # quiet skip ((internal ref)); everything else fails closed
+            # comes back as NOT_FOUND on exactly `repository.pullRequest` -- and
+            # only that is a quiet skip ((internal ref)); everything else fails closed
             # (kanban-item-lookup-selftest.py holds every shape).
             # A FAILURE ON GITHUB'S SIDE IS TRIED AGAIN ((internal ref)): a read is
             # idempotent, so up to 3 attempts; only what `graphql_transient` names
