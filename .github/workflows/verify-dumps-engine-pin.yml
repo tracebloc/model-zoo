@@ -298,7 +298,7 @@ jobs:
           && vars.ZOO_WEIGHTS_READ_ROLE_ARN != ''
           && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
         with:
-          python-version: "3.11"
+          python-version-file: .python-version
           cache: pip
           cache-dependency-path: tools/requirements-engine-pin.txt
       # Install the engine's pinned stack (guard above proved it == the engine).
@@ -549,7 +549,7 @@ jobs:
           fetch-depth: 0
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
-          python-version: "3.11"
+          python-version-file: .python-version
           cache: pip
           cache-dependency-path: tools/requirements-engine-pin.txt
       # The drift guard above proved this mirror == the engine's live pin.
