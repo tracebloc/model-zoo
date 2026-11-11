@@ -299,9 +299,9 @@ jobs:
   # org-config's push-verdict, run as its own job because a public repo cannot `uses:` the
   # private action. On a pull request it records the tree the run tests; on a develop push it
   # says whether the merged PR's newest run was green on this same tree. RECORD-ONLY: no job
-  # reads `reuse` yet, so every job still runs on every push, and a `reused verdict` notice
-  # here names what a gated push would skip. The script comes from
-  # org-config `main` with a read-only token, in a job that runs no code from this checkout.
+  # reads `reuse`, so every job runs on every push; the verdict is logged as a notice.
+  # The script comes from org-config `main` with a read-only token, in a job that runs no
+  # code from this checkout.
   # Every step may fail (a fork PR has no secrets): the verdict is then "no reuse".
   push-verdict:
     # Above the script's worst case (each API read up to 3 tries of 30 s each):
