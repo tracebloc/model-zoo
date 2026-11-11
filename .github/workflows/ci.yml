@@ -13,7 +13,10 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  # Lint and the Makefile's own tests run on pull requests only: a develop push repeats a
+  # PR run's verdict on lint, and promotion PRs into staging and main still run this job.
   ruff:
+    if: ${{ github.event_name == 'pull_request' }}
     timeout-minutes: 10
     runs-on: ubuntu-latest
     steps:
