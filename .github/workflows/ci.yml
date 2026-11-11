@@ -13,7 +13,10 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  # Lint and the Makefile's own tests run on pull requests only: a develop push repeats a
+  # PR run's verdict on lint, and promotion PRs into staging and main still run this job.
   ruff:
+    if: ${{ github.event_name == 'pull_request' }}
     timeout-minutes: 10
     runs-on: ubuntu-latest
     steps:
@@ -291,6 +294,60 @@ jobs:
           fi
           echo "ingest-schema-guard: the vendored category enum equals the producer release it pins"
 
+  # ── Does a develop push repeat the PR run that tested its tree? ──
+  #
+  # org-config's push-verdict, run as its own job because a public repo cannot `uses:` the
+  # private action. On a pull request it records the tree the run tests; on a develop push it
+  # says whether the merged PR's newest run was green on this same tree. RECORD-ONLY: no job
+  # reads `reuse`, so every job runs on every push; the verdict is logged as a notice.
+  # The script comes from org-config `main` with a read-only token, in a job that runs no
+  # code from this checkout.
+  # Every step may fail (a fork PR has no secrets): the verdict is then "no reuse".
+  push-verdict:
+    # Above the script's worst case (each API read up to 3 tries of 30 s each):
+    # ci-gate needs this job, so a timeout here would redden it.
+    timeout-minutes: 15
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      checks: read
+      contents: read
+      pull-requests: read
+    outputs:
+      reuse: ${{ steps.verdict.outputs.reuse }}
+    steps:
+      - name: Mint a read-only token for org-config (private; the caller's own token cannot read it)
+        id: org-config-token
+        continue-on-error: true
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          app-id: ${{ secrets.RELEASE_TRAIN_APP_ID }}
+          private-key: ${{ secrets.RELEASE_TRAIN_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: org-config
+          permission-contents: read
+      - name: Check out the push-verdict script
+        id: tools
+        if: ${{ steps.org-config-token.outcome == 'success' }}
+        continue-on-error: true
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: tracebloc/org-config
+          ref: main
+          token: ${{ steps.org-config-token.outputs.token }}
+          path: .org-config-tools
+          persist-credentials: false
+          sparse-checkout: scripts
+      - name: Reuse the verdict of the PR run that tested this tree?
+        id: verdict
+        if: ${{ steps.tools.outcome == 'success' }}
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PUSH_VERDICT_CHECK_RUN_ID: ${{ job.check_run_id }}
+          PUSH_VERDICT_BASE: ${{ github.event.repository.default_branch }}
+        run: python3 -I .org-config-tools/scripts/push_verdict.py step
+
   # ── One required context for every job above ──
   #
   # Branch protection requires `ci-gate` alone, so a job added to or renamed in
@@ -299,7 +356,7 @@ jobs:
   # skipped check reads as passing. The judge is org-config's template, unchanged
   # (the audit compares its steps); a need that gains an `if:` skips on purpose.
   ci-gate:
-    needs: [ruff, test-pytorch, test-sklearn, test-survival, sdk-upload, ingest-schema-guard, category-contract]
+    needs: [ruff, test-pytorch, test-sklearn, test-survival, sdk-upload, ingest-schema-guard, category-contract, push-verdict]
     if: always()
     runs-on: ubuntu-slim  # runner: hosted (ubuntu-slim)
     timeout-minutes: 5
