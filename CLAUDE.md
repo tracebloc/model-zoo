@@ -1,8 +1,9 @@
+<!-- claude-budget: armed -->
+<!-- root = commands, the area map, rules every session needs; module rules in `<dir>/CLAUDE.md` or `.claude/rules/` with `paths:`; reference in `docs/`; history in commit messages -->
 # CLAUDE.md
 
-Repo-specific guidance for Claude Code sessions goes here, above the
-managed org block: build/test commands, architecture notes, gotchas,
-and this repo's default reviewer. Rollout: (internal ref).
+Public zoo of model files for tracebloc training: `model_zoo/` holds the models by task and
+framework, `tools/` the scripts and guards that build and check them, `tests/` their tests.
 
 ## Before you push
 
@@ -10,18 +11,12 @@ and this repo's default reviewer. Rollout: (internal ref).
 `make setup` installs the hook in this clone, which covers every worktree of it, and
 `make hooks-status` says whether the installed hook is current.
 
-## Mutation rows run weekly, not on pull requests
+## Map
 
-The files listed under `rows:` in `.github/mutation-coverage.yml` hold the mutation rows
-for the guards in `tools/`. `pytest tests/`, `make check` and CI's test jobs deselect the
-rows; `make mutation-nightly` runs them and nothing else, and
-`.github/workflows/mutation-nightly.yml` runs that target weekly and files an issue when
-it fails. A pull request still runs each guard's behaviour tests, and
-`mutation-coverage / check` still requires every guard to have a row, so a guard a pull
-request breaks is caught by the next weekly run. `tests/mutation_selection.py` decides
-which tests are rows: every test of a `*_rows.py` file, else the `test_row_*` and
-`test_MUTATION_*` tests. Name a new row that way: a row named otherwise runs on every pull
-request instead, and the weekly run refuses a rows file in which no test is a row.
+- `model_zoo/`: the model files, by task and framework.
+- `tools/`: build and publish scripts and the guards; mutation rows: `.claude/rules/mutation-rows.md`.
+- `tests/`: `pytest tests/`; mutation rows run weekly, see `.claude/rules/mutation-rows.md`.
+- `.github/workflows/`: CI; `.github/mutation-coverage.yml` declares guards and rows.
 
 <!-- org-standards:begin -->
 ## tracebloc engineering standards (org-wide)
