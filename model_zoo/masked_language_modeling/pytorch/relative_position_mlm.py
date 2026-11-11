@@ -9,7 +9,9 @@ main_class = "RelativePositionMLM"
 category = "masked_language_modeling"
 model_type = ""
 tokenizer_file = "tokenizer.json"
-batch_size = 16
+# Sized to train within the smallest client's memory: see tools/template_memory.py.
+batch_size = 2
+max_batch_size = 16
 sequence_length = 128
 vocab_size = 30522
 
