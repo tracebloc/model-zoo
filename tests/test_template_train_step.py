@@ -62,24 +62,27 @@ def _semantic_segmentation(torch, m):
 
 
 def _text_classification(torch, m):
-    ids = torch.randint(1, 1000, (4, m.sequence_length))
+    n = max(4, m.output_classes)  # every class, the last included, appears in the batch
+    ids = torch.randint(1, 1000, (n, m.sequence_length))
     mask = torch.ones_like(ids)
     mask[1, m.sequence_length // 2 :] = 0
-    y = torch.arange(4) % m.output_classes
+    y = torch.arange(n) % m.output_classes
     return (ids, mask), y, torch.nn.functional.cross_entropy
 
 
 def _tabular_classification(torch, m):
-    x = torch.randn(8, m.num_feature_points)
+    n = max(8, m.output_classes)  # every class, the last included, appears in the batch
+    x = torch.randn(n, m.num_feature_points)
     x[0, 0] = float("nan")  # the platform's tables carry missing values
-    y = torch.arange(8) % m.output_classes
+    y = torch.arange(n) % m.output_classes
     return (x,), y, torch.nn.functional.cross_entropy
 
 
 def _time_series_classification(torch, m):
-    x = torch.randn(4, m.sequence_length, m.num_feature_points)
+    n = max(4, m.output_classes)  # every class, the last included, appears in the batch
+    x = torch.randn(n, m.sequence_length, m.num_feature_points)
     x[1, m.sequence_length // 2 :] = 0.0  # zero post-padding, as the dataset emits it
-    y = torch.arange(4) % m.output_classes
+    y = torch.arange(n) % m.output_classes
     return (x,), y, torch.nn.functional.cross_entropy
 
 
