@@ -1,7 +1,7 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/code-quality.yml`
-# (blob de9a9b567f1146180dfb0b90423daa280f46f462) folded with the private source repo's own caller of it,
+# (blob 96b862d7c5fdf022974117614be1f7824a2ea280) folded with the private source repo's own caller of it,
 # job `quality` of `.github/workflows/ci.yml` with that file's `on:` and
 # `permissions:` (blob ffc33eb4910df7737d1155a0e0700a85212009f0 of those lines; its
 # `concurrency:` is one group for every job it runs, so it is not
@@ -812,6 +812,14 @@ jobs:
           fi
 
           python3 "$CHECKER" "$@"
+
+      # Every PowerShell `run:` must parse, or a step only a release reaches fails on its first
+      # run. Rides THIS job for dead-weight's reason; WHOLE-TREE, never soft. A workflow it cannot
+      # read, or no pwsh or yq on the runner, is red: the check cannot tell, so it refuses.
+      - name: Run the PowerShell parse checker
+        run: |
+          set -uo pipefail
+          python3 .org-config-tools/scripts/pwsh-parse.py --root . --github --summary "$GITHUB_STEP_SUMMARY"
 
   # Whole-tree action-pin gate ((internal ref), D10). Hand-pinning does not hold:
   # two PRs pinned and re-added the same action in non-overlapping hunks and
