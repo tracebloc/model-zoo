@@ -43,4 +43,13 @@ shows the shape. Presence is asserted by the conformance audit
   alone?` box beside it contradicts it. The answer is the author's: split the change,
   make this PR a draft, or reword a line that only gives context. Low severity and a
   flag only: never request changes for it, and never treat it as a reason to hold the PR.
+
+**Instruction files** (a root `CLAUDE.md`, or any file under `.claude/rules/`)
+
+- **Text that belongs in a narrower tier.** These files load into every session they
+  match. Flag added text that is history, an incident narrative, rationale, or reference
+  for one module, and name its tier: a `<dir>/CLAUDE.md` or a `.claude/rules/<topic>.md`
+  with `paths:` for guidance one area needs, `docs/` for reference, the commit message
+  for history. Low severity and a flag only: never request changes for it, and never
+  treat it as a reason to hold the PR.
 <!-- comment-policy:end -->
