@@ -177,6 +177,28 @@ jobs:
           owner: ${{ github.repository_owner }}
           repositories: data-ingestors
           permission-contents: read
+      # A FRESH APP TOKEN CAN READ AS "NOT FOUND" FOR A FEW SECONDS, and the
+      # checkout does not retry the sparse checkout's blob fetch. Wait until the
+      # token reads the pinned tag three times in a row, for at most 90 s.
+      - name: Wait until the ingestor token reads the pinned tag
+        env:
+          GH_TOKEN: ${{ steps.ingestor-token.outputs.token }}
+          PRODUCER: ${{ github.repository_owner }}/data-ingestors
+          TAG: ${{ steps.pin.outputs.tag }}
+        run: |
+          set -euo pipefail
+          ok=0
+          for _ in $(seq 1 30); do
+            if gh api "repos/$PRODUCER/git/ref/tags/$TAG" --silent 2>/dev/null; then
+              ok=$((ok + 1))
+              [ "$ok" -ge 3 ] && { echo "the token reads $PRODUCER at $TAG"; exit 0; }
+            else
+              ok=0
+            fi
+            sleep 3
+          done
+          echo "::error::the ingestor token did not read $PRODUCER at $TAG three times in a row within 90 s"
+          exit 1
       - name: Check out the producer's ingest schema
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
