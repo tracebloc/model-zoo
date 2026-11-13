@@ -1,7 +1,7 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/code-quality.yml`
-# (blob 96b862d7c5fdf022974117614be1f7824a2ea280) folded with the private source repo's own caller of it,
+# (blob 4e65015e55c082ab8526cf567555815882e8882c) folded with the private source repo's own caller of it,
 # job `quality` of `.github/workflows/ci.yml` with that file's `on:` and
 # `permissions:` (blob ffc33eb4910df7737d1155a0e0700a85212009f0 of those lines; its
 # `concurrency:` is one group for every job it runs, so it is not
@@ -71,6 +71,8 @@ name: Code quality
 #   gitleaks     credential scanning (on by default)
 #   house-rules  the org's own grep-level rules (on by default)
 #   action-pins  every `uses:` pinned to a commit SHA (on by default)
+#   runtime-pins every setup-python / setup-node step reads a version file (check 8b
+#                of the pipeline contract, (internal ref); armed by the inventory floor)
 #   format + pipefail early-close
 #                black --check (opt in with `format: true`) and the pipefail
 #                SIGPIPE gate (on by default, whole-tree) in ONE job, because
@@ -182,9 +184,11 @@ jobs:
           echo "format=${FORMAT} early-close=${EARLY_CLOSE} yaml-run-blocks=${YAML_RUN_BLOCKS}"
 
       # ---- the pipefail early-close half (on by default) ----
+      # The tools checkout serves both halves: the early-close checker and the
+      # `.python-version` both set Python up from, so it runs when either is armed.
       - name: Mint a read-only token for org-config (private; the caller's own token cannot read it)
         id: org-config-token
-        if: ${{ steps.gates.outputs.early_close == 'true' }}
+        if: ${{ steps.gates.outputs.early_close == 'true' || steps.gates.outputs.format == 'true' }}
         uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
         with:
           app-id: ${{ secrets.RELEASE_TRAIN_APP_ID }}
@@ -200,7 +204,7 @@ jobs:
       # actionlint's `job` schema (1.7.12) does not know `workflow_sha`.
       - name: Resolve the tools ref, refusing an empty one
         id: tools-ref
-        if: ${{ steps.gates.outputs.early_close == 'true' }}
+        if: ${{ steps.gates.outputs.early_close == 'true' || steps.gates.outputs.format == 'true' }}
         env:
           TOOLS_REF: ${{ 'main' }}
           JOB_CONTEXT: ${{ toJSON(job) }}
@@ -217,7 +221,7 @@ jobs:
           echo "ref=$TOOLS_REF" >> "$GITHUB_OUTPUT"
           echo "tools ref: $TOOLS_REF"
       - name: Check out the shared checker
-        if: ${{ steps.gates.outputs.early_close == 'true' }}
+        if: ${{ steps.gates.outputs.early_close == 'true' || steps.gates.outputs.format == 'true' }}
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: tracebloc/org-config
@@ -232,7 +236,7 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
         if: ${{ steps.gates.outputs.early_close == 'true' && steps.gates.outputs.yaml_run_blocks == 'true' }}
         with:
-          python-version: '3.12'
+          python-version-file: .org-config-tools/.python-version
       - name: Install PyYAML for the YAML run-block phase
         if: ${{ steps.gates.outputs.early_close == 'true' && steps.gates.outputs.yaml_run_blocks == 'true' }}
         # RETRIED, BECAUSE THIS SITS ON A GATE IN 18 REPOS: one PyPI hiccup
@@ -356,20 +360,6 @@ jobs:
       # `!cancelled()` on every step here: the early-close half above may have
       # FAILED on a finding, and this half must still report its own.
 
-      # THE SHARED WORKSPACE IS NOT SHARED WITH BLACK (Bugbot on (internal ref)):
-      # the early-close half checks the private source repo out at `.org-config-tools`, and
-      # black walks the directory rather than the git index, so all-files mode
-      # would judge the private source repo's Python under the CALLER's `black-version` -- a
-      # version skew there is an `error:`, hard even under soft-fail. Removed
-      # rather than excluded: a command-line `--exclude` OVERRIDES the caller's
-      # `pyproject.toml` excludes. Nothing after this point reads the tree; a
-      # no-op when the early-close half is off.
-      - name: Drop the shared checker before black walks the tree
-        if: ${{ !cancelled() && steps.gates.outputs.format == 'true' }}
-        run: |
-          set -euo pipefail
-          rm -rf .org-config-tools
-
       - name: Resolve the file set
         id: files
         if: ${{ !cancelled() && steps.gates.outputs.format == 'true' }}
@@ -398,7 +388,16 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
         if: ${{ !cancelled() && steps.gates.outputs.format == 'true' && (steps.files.outputs.mode == 'all' || steps.files.outputs.count != '0') }}
         with:
-          python-version: '3.12'
+          python-version-file: .org-config-tools/.python-version
+
+      # Black walks the directory, not the git index, so the tools checkout would be
+      # judged under the caller's `black-version`. Removed, not excluded (`--exclude`
+      # overrides the caller's excludes), after setup-python reads its `.python-version`.
+      - name: Drop the shared checker before black walks the tree
+        if: ${{ !cancelled() && steps.gates.outputs.format == 'true' }}
+        run: |
+          set -euo pipefail
+          rm -rf .org-config-tools
 
       - name: Install black
         if: ${{ !cancelled() && steps.gates.outputs.format == 'true' && (steps.files.outputs.mode == 'all' || steps.files.outputs.count != '0') }}
@@ -821,6 +820,15 @@ jobs:
           set -uo pipefail
           python3 .org-config-tools/scripts/pwsh-parse.py --root . --github --summary "$GITHUB_STEP_SUMMARY"
 
+      # Claude Code memory has a byte budget per tier, or every session pays for text in the wrong
+      # one ((internal ref)). Rides THIS job for dead-weight's reason; WHOLE-TREE, never soft; the
+      # repo's `claude_budget:` exception is read from the tools tree's inventory.
+      - name: Run the CLAUDE.md budget check
+        run: |
+          set -uo pipefail
+          python3 .org-config-tools/scripts/claude-budget.py --root . --github --summary "$GITHUB_STEP_SUMMARY" \
+            --inventory .org-config-tools/repo-inventory.yml --repo "${GITHUB_REPOSITORY#*/}"
+
   # Whole-tree action-pin gate ((internal ref), D10). Hand-pinning does not hold:
   # two PRs pinned and re-added the same action in non-overlapping hunks and
   # both merged cleanly ((internal ref), (internal ref)). WHOLE-TREE, NEVER
@@ -838,6 +846,18 @@ jobs:
   #   owner/action[/path]@<40-hex sha>  D10 pin (trailing "# vX.Y.Z" comment is
   #                                     convention but not enforced here)
   #   docker://image@sha256:<digest>    digest-pinned images only
+  # ------------------------------------------------------------ runtime pins ----
+  # RULE 8B IN THE REPO'S OWN CI ((internal ref)). The fleet audit
+  # (caller-drift.yml's `pipeline` job) judges every repo's workflows once a day and
+  # gates nothing; this job judges THIS repo's on every pull request, so a literal
+  # `python-version:` or `node-version:` is refused where it is written. One judge for
+  # both: scripts/runtime-pin-check.py loads pipeline.py's `runtime_findings` and
+  # `read_declarations`. WHOLE-TREE (the workflows directory is small, and a literal
+  # left in an untouched file is still the drift). A finding the inventory's
+  # `pipeline_declared` names for this repo, or for `*`, is a warning until the repo
+  # is moved and its entry deleted; anything the checker cannot read is exit 2, a red
+  # whatever `soft-fail` says. The `caller_inputs` floor arms it and onboard_repo.py
+  # re-renders each caller and copy.
   action-pins:
     name: quality / action-pins
     runs-on: ubuntu-slim  # runner: hosted (ubuntu-slim)

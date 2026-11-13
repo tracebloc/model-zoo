@@ -1,7 +1,7 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/desk-dispatch.yml`
-# (blob 1e5d3d2d299b62a8f104cdb103b03f4a7a203999) folded with the private source repo's own caller of it,
+# (blob 1bde58967f2f8c4e725055d07b5aefb7dc2a61d0) folded with the private source repo's own caller of it,
 # `.github/workflows/desk-dispatch-caller.yml` (blob da7925b437da4dea17b83f9fff5d9516541a5076), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
@@ -366,7 +366,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
         with:
-          python-version: '3.12'
+          python-version-file: .org-config-tools/.python-version
       # THE PRE-CHECK ((internal ref)): the SAME script, on the job's own
       # token only, before the App mints below. It stops the run -- `go=false`,
       # after the same concurrency hold `main` takes -- only on a verdict the

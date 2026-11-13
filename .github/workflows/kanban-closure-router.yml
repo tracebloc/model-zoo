@@ -1,7 +1,7 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/kanban-closure-router.yml`
-# (blob d83edabd47cd0a9ab732e2e3b64f6d76e50aae27) folded with the private source repo's own caller of it,
+# (blob 908caa6aa7109731eb9954c2dabedb23eeef315a) folded with the private source repo's own caller of it,
 # `.github/workflows/kanban-closure-caller.yml` (blob b38b7c1e8514240939dd944ad2e3e6add7fcfd57), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
@@ -211,7 +211,7 @@ jobs:
         if: github.event_name == 'pull_request' && github.event.pull_request.merged && github.event.pull_request.base.ref == 'staging'
         continue-on-error: true
         with:
-          python-version: '3.12'
+          python-version-file: .org-config-tools/.python-version
       - name: Install PyYAML for the inventory loader
         if: github.event_name == 'pull_request' && github.event.pull_request.merged && github.event.pull_request.base.ref == 'staging'
         continue-on-error: true
