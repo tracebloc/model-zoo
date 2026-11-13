@@ -1,7 +1,7 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/advance-deploy-env.yml`
-# (blob e8d3e6e5671caad5108e14442ab101ef6713ea48) folded with the private source repo's own caller of it,
+# (blob 534523b38752201eff6537f11d0d9fcb67179d3c) folded with the private source repo's own caller of it,
 # `.github/workflows/advance-deploy-env-caller.yml` (blob 5de24d409e5bbf2bccbb720912cd551cbe33b040), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
@@ -161,7 +161,7 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
         if: github.ref_name == 'staging'
         with:
-          python-version: '3.12'
+          python-version-file: .org-config-tools/.python-version
       - name: Install PyYAML for the inventory loader
         if: github.ref_name == 'staging'
         run: python -m pip install --quiet --disable-pip-version-check 'pyyaml==6.0.2'
