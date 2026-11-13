@@ -1,7 +1,7 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/mutation-nightly.yml`
-# (blob bb06ea2100250ab318ebfbdb52608eb78bd3bdb9) folded with the private source repo's caller TEMPLATE for it,
+# (blob 265ecc25b5c46787d920224a3700635cb8d2dfaf) folded with the private source repo's caller TEMPLATE for it,
 # `.github/caller-templates/mutation-nightly-caller.yml` (blob 801e23606e2fd6431f0d178fd6553debd13267f1), the file every
 # repo's caller is rendered from, for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
@@ -174,6 +174,12 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      # A repo that declares its Node in `.nvmrc` runs on that version: the runner image caches
+      # only some majors, so an entry point that looks the `.nvmrc` major up would not find a new one.
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        if: ${{ hashFiles('.nvmrc') != '' }}
+        with:
+          node-version-file: .nvmrc
       - name: Run this leg's mutation rows
         env:
           ENTRY: ${{ 'make mutation-nightly' }}
@@ -239,7 +245,7 @@ jobs:
       # No PyYAML: the filer reads no inventory, only the issues API and the board.
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
         with:
-          python-version: '3.12'
+          python-version-file: .org-config-tools/.python-version
 
       # LEAST PRIVILEGE, DERIVED FROM THE FILER'S CALLS. `repositories:` narrows the issue
       # writes to the caller's repo; org projects are unaffected by repo scoping
@@ -255,12 +261,30 @@ jobs:
           permission-issues: write # the label, the issue, its comments and the close
           permission-organization-projects: write # the bug's card: project read, add, Status write
 
+      # R15's OWNER ROUTING reads the red run's workflow, its earlier runs and the commit
+      # compare. Its own optional mint: an installation without these grants must not fail
+      # the filer's mint, so the bug is still filed with a "cannot tell" owner line.
+      - name: Mint the owner router's token (the caller's runs and commits, read-only)
+        id: route-token
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          app-id: ${{ secrets.RELEASE_TRAIN_APP_ID }}
+          private-key: ${{ secrets.RELEASE_TRAIN_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-actions: read
+          permission-contents: read
+
       - name: A red night files one bug in Ready; a green one closes it
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           # The board placement (nightly-red-issue.py's KANBAN_TOKEN_ENV): the same App token,
           # whose `organization-projects: write` above is what the placement needs -- no PAT.
           KANBAN_TOKEN: ${{ steps.app-token.outputs.token }}
+          # R15's reads (nightly-red-issue.py's ROUTE_TOKEN_ENV); empty when its mint failed.
+          ROUTE_TOKEN: ${{ steps.route-token.outputs.token }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           NEEDS: ${{ toJSON(needs) }}
         run: >-
@@ -277,9 +301,9 @@ jobs:
       # night files nothing here: the step above already filed it. A dispatch prints the
       # reading and files nothing, since it may be a branch being proved.
       #
-      # ITS OWN READ TOKEN: listing this run's jobs needs `actions: read`, which the
-      # filer's token does not carry and should not. The issue write reuses that token's
-      # `issues: write`.
+      # ITS OWN READ TOKEN: listing this run's jobs needs `actions: read`, which the filer's
+      # token does not carry. This mint is the narrower token, read-only and nothing else.
+      # The issue write reuses the filer's `issues: write`.
       #
       # ADVISORY, NEVER THE NIGHT'S VERDICT: both steps are `continue-on-error`. A
       # headroom read that cannot run -- an installation without `actions: read`, a job
