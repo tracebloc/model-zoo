@@ -1,9 +1,9 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/code-quality.yml`
-# (blob 4e65015e55c082ab8526cf567555815882e8882c) folded with the private source repo's own caller of it,
+# (blob 1922dc4518515277dfec6cb71c223c50195efc60) folded with the private source repo's own caller of it,
 # job `quality` of `.github/workflows/ci.yml` with that file's `on:` and
-# `permissions:` (blob ffc33eb4910df7737d1155a0e0700a85212009f0 of those lines; its
+# `permissions:` (blob 784eceb2bec4993728e09adfc56d990878075adf of those lines; its
 # `concurrency:` is one group for every job it runs, so it is not
 # carried), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
@@ -858,6 +858,89 @@ jobs:
   # is moved and its entry deleted; anything the checker cannot read is exit 2, a red
   # whatever `soft-fail` says. The `caller_inputs` floor arms it and onboard_repo.py
   # re-renders each caller and copy.
+  runtime-pins:
+    name: quality / runtime-pins
+    runs-on: ubuntu-slim  # runner: hosted (ubuntu-slim)
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+
+      - name: Mint a read-only token for org-config (private; the caller's own token cannot read it)
+        id: org-config-token
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          app-id: ${{ secrets.RELEASE_TRAIN_APP_ID }}
+          private-key: ${{ secrets.RELEASE_TRAIN_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: org-config
+          permission-contents: read
+
+      # THE TOOLS REF ((internal ref) D4): `job.workflow_sha` is the commit of THIS reusable
+      # file, so the checker and the inventory are the ones it was reviewed with;
+      # `tools-ref` overrides it for a test. An EMPTY ref is refused.
+      - name: Resolve the tools ref, refusing an empty one
+        id: tools-ref
+        env:
+          TOOLS_REF: ${{ 'main' }}
+          JOB_CONTEXT: ${{ toJSON(job) }}
+        run: |
+          if [ -z "$TOOLS_REF" ]; then
+            case "$JOB_CONTEXT" in
+              *'"workflow_sha"'*) TOOLS_REF="${JOB_CONTEXT#*\"workflow_sha\": \"}"; TOOLS_REF="${TOOLS_REF%%\"*}" ;;
+            esac
+          fi
+          if ! [[ "$TOOLS_REF" =~ ^[0-9a-f]{40}$ || ( -n "$TOOLS_REF" && "$TOOLS_REF" != *[![:alnum:]._/-]* ) ]]; then
+            echo "::error::the tools ref is empty or not a ref (${TOOLS_REF:-<empty>}); an empty ref would check out the tools repo's default branch instead of the commit this workflow was pinned at. Refusing."
+            exit 1
+          fi
+          echo "ref=$TOOLS_REF" >> "$GITHUB_OUTPUT"
+          echo "tools ref: $TOOLS_REF"
+      - name: Check out the checker and the inventory
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: tracebloc/org-config
+          token: ${{ steps.org-config-token.outputs.token }}
+          ref: ${{ 'main' }}
+          path: .org-config-tools
+          persist-credentials: false
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version-file: .org-config-tools/.python-version
+
+      # Retried, as the YAML run-block phase's install is: a PyPI hiccup on a gate is
+      # re-run unread. Without PyYAML the checker exits 2 (cannot tell), never clean.
+      - name: Install PyYAML for the checker and the inventory loader
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3; do
+            if python -m pip install --quiet --disable-pip-version-check \
+                 'pyyaml==6.0.2'; then
+              exit 0
+            fi
+            echo "::warning::pip install pyyaml failed (attempt ${attempt}/3)"
+            if [ "$attempt" -lt 3 ]; then
+              sleep $(( attempt * 5 ))
+            fi
+          done
+          echo "::error::could not install PyYAML after 3 attempts -- the runtime-pin check cannot run."
+          exit 1
+
+      - name: Every setup step reads its runtime version from a version file
+        env:
+          SOFT_FAIL: ${{ false }}
+          REPO: ${{ github.event.repository.name }}
+        run: |
+          set -euo pipefail
+          set -- --repo "$REPO" --inventory .org-config-tools/repo-inventory.yml
+          if [ "$SOFT_FAIL" = "true" ]; then
+            set -- "$@" --soft-fail
+          fi
+          python .org-config-tools/scripts/runtime-pin-check.py "$@" .github/workflows
+
   action-pins:
     name: quality / action-pins
     runs-on: ubuntu-slim  # runner: hosted (ubuntu-slim)
