@@ -1,7 +1,7 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/naming-guard.yml`
-# (blob 0f6cf44d88b4b4c90d2ce7096737203289b15cac) folded with the private source repo's own caller of it,
+# (blob b02578b0d4e61122c8a70cace45076fa0d18cc79) folded with the private source repo's own caller of it,
 # job `naming` of `.github/workflows/ci.yml` with that file's `on:` and
 # `permissions:` (blob 916e70428b7ecbaf72722e1d914397f1832885a1 of those lines; its
 # `concurrency:` is one group for every job it runs, so it is not
@@ -190,7 +190,7 @@ jobs:
 
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
         with:
-          python-version: '3.12'
+          python-version-file: .org-config-tools/.python-version
 
       # PyYAML, pinned: the canon is YAML, and the script refuses without it.
       - name: Install PyYAML for the canon read
