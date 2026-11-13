@@ -1,6 +1,6 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
-# Public-safe copy of `.github/workflows/commit-hygiene.yml` (blob 1eb5fd2ad71013e159b491f4563c029e43ccd5e1) for a PUBLIC repo:
+# Public-safe copy of `.github/workflows/commit-hygiene.yml` (blob ae755618496f674f5cf1fc139047b712161428e5) for a PUBLIC repo:
 # the same workflow, byte for byte, except that its comments are scrubbed as
 # described below and that 11 line(s) are LEFT OUT: the source brackets them
 # `# public-render: omit-begin` .. `# public-render: omit-end`, and each one wires a secret a
@@ -164,7 +164,7 @@ jobs:
 
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
         with:
-          python-version: '3.12'
+          python-version-file: .org-config-tools/.python-version
 
       # The checker builds the internal-reference rule from the inventory in that
       # checkout, which is parsed as YAML, not grepped -- the one dependency,

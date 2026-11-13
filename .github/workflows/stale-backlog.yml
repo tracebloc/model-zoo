@@ -1,7 +1,7 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/stale-backlog.yml`
-# (blob 8d01c4a2979b3e2ca50ddbf08f2d5f7a2eb0717d) folded with the private source repo's own caller of it,
+# (blob e195fd1eeb13394aea61d9c70d7e99d7794471fb) folded with the private source repo's own caller of it,
 # `.github/workflows/stale-backlog-caller.yml` (blob ed9ed7cdc54cd24c95d8a6d5b6ee74185b772230), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
@@ -152,7 +152,7 @@ jobs:
 
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
         with:
-          python-version: '3.12'
+          python-version-file: .org-config-tools/.python-version
 
       # The decision table runs BEFORE the sweep, in the caller's own run. A sweep
       # whose eligibility rule has regressed must not run at all: the failure is
