@@ -1,7 +1,7 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/code-quality.yml`
-# (blob 1922dc4518515277dfec6cb71c223c50195efc60) folded with the private source repo's own caller of it,
+# (blob c050862e8fbee9c040209736bbad12a125ebf586) folded with the private source repo's own caller of it,
 # job `quality` of `.github/workflows/ci.yml` with that file's `on:` and
 # `permissions:` (blob 784eceb2bec4993728e09adfc56d990878075adf of those lines; its
 # `concurrency:` is one group for every job it runs, so it is not
@@ -50,8 +50,14 @@
 # The comments below are the reusable's own and describe the reusable; where
 # they mention `inputs.*` or callers, read them as history.
 #
+# LEFT OUT by design: step `wait-org-config-token` of job `format-early-close`. It waits through a private
+# composite action a public repo cannot call; a public copy runs without the wait.
+# LEFT OUT by design: step `wait-org-config-token` of job `house-rules`. It waits through a private
+# composite action a public repo cannot call; a public copy runs without the wait.
 # LEFT OUT by design: step `runner-linux` of job `house-rules`. It checks a rule that applies
 # to private repos only, so a public repo has nothing for it to check.
+# LEFT OUT by design: step `wait-org-config-token` of job `runtime-pins`. It waits through a private
+# composite action a public repo cannot call; a public copy runs without the wait.
 
 name: Code quality
 
