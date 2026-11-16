@@ -17,12 +17,9 @@
 # this list: every test of a `*_rows.py` file, else the `test_row_*` and
 # `test_MUTATION_*` tests. Each listed file must give the weekly run a test.
 #
-# THE GATE COUNTS A NAME, NOT A ROW. tests/test_engine_pin_drift_guard.py holds
-# the rows for tools/check_engine_pin_drift.py. It also names
-# tools/verify_dumps_against_engine_pin.py, only to read `_PROVENANCE_KEYS`
-# from it, so the gate reports that tool covered although no row breaks it.
-# It cannot be listed below (an entry for a covered tool is STALE), so the
-# issue that owns the list, tracebloc/model-zoo#84, covers it too.
+# A ROW FILE DECLARES EACH TOOL IT BREAKS in a `# mutates:` header; the
+# grammar is step 1 of the ADOPTION RECIPE in
+# .github/workflows/mutation-coverage.yml.
 #
 # `exempt:` is a RATCHET: an entry whose tool gains a row is STALE and an entry
 # the base does not carry is NEW, both red, so the list only shrinks. To cover
