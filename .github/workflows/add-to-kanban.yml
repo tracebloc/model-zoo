@@ -1,6 +1,6 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
-# Public-safe copy of `.github/workflows/add-to-kanban.yml` (blob d3672b876f23f88387b01f3ca0b144a12518dc55) for a PUBLIC repo:
+# Public-safe copy of `.github/workflows/add-to-kanban.yml` (blob 4f6f4eef310c02652a5a30ec970b927ec136621d) for a PUBLIC repo:
 # the same workflow, byte for byte, except that its comments are scrubbed as
 # described below. Private repos carry the original; the conformance audit
 # compares a public repo's copy against THIS file and a private repo's
@@ -42,7 +42,9 @@ on:
 
 jobs:
   add-to-project:
-    runs-on: ubuntu-latest
+    # Slim, a third of the full runner's rate: the job is a token mint, one board write and,
+    # on a lost race, a `gh`/`jq` re-read -- tools the slim image carries.
+    runs-on: ubuntu-slim
     # Measured: add-to-project p95 9 s, max 11 s (n=90, three repos); the cap is 3x p95, floored at 5.
     timeout-minutes: 5
     # NO GITHUB_TOKEN AT ALL (#2181). Every call in this job authenticates
