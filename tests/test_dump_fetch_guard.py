@@ -1,3 +1,4 @@
+# mutates: tools/verify_dumps_against_engine_pin.py
 """The dump-fetch step in verify-dumps-engine-pin.yml must name the precondition
 it is missing, and must invoke the fetch hook with arguments the hook accepts
 (the arming overclaim).
@@ -857,9 +858,9 @@ def test_a_named_skip_reaches_the_verifier_and_it_loads_nothing(checkout: Checko
 
 
 # --------------------------------------------------------------------------
-# MUTATION ROWS for the public log. Each runs the real step and sees no entry
-# name in its output, prints the report instead, asserts the change applied,
-# and sees the leak the tests above assert against.
+# MUTATION ROWS. The two log rows run the real step printing its report instead
+# and see the entry names the tests above keep out of the public log; the
+# verifier row removes the verifier's unnamed-skip refusal and sees it accepted.
 # --------------------------------------------------------------------------
 def _mutate(text: str, old: str, new: str) -> str:
     assert text.count(old) == 1, f"mutation anchor is not there exactly once: {old!r}"
@@ -902,18 +903,42 @@ def test_MUTATION_the_verifier_report_printed_to_the_log_is_caught(checkout: Che
     assert _named(checkout.run_verify_step(reason, engine_pin_blocked=True, script=mutant))
 
 
+def test_MUTATION_an_unnamed_skip_is_accepted(checkout: Checkout):
+    """With its unnamed-skip refusal removed, the verifier accepts
+    `--dumps-not-fetched ' '`, so test_the_verifier_refuses_an_unnamed_skip
+    goes red."""
+    checkout.install_real_verifier()
+    checkout.write_manifest(_entries_manifest("alpha", "a" * 64, 1))
+    clean = _run_unnamed_skip(checkout)
+    assert clean.returncode == 2 and "needs a reason" in clean.stderr, clean.stderr
+    verifier = checkout.root / VERIFIER_REL
+    verifier.write_text(
+        _mutate(
+            verifier.read_text(),
+            "    if args.dumps_not_fetched is not None and not args.dumps_not_fetched.strip():",
+            "    if False:",
+        )
+    )
+    mutant = _run_unnamed_skip(checkout)
+    assert mutant.returncode != 2 or "needs a reason" not in mutant.stderr, mutant.stderr
+
+
+def _run_unnamed_skip(checkout: Checkout) -> subprocess.CompletedProcess:
+    return subprocess.run(
+        [sys.executable, str(VERIFIER_REL), "--dumps-not-fetched", " "],
+        cwd=checkout.root,
+        capture_output=True,
+        text=True,
+    )
+
+
 def test_the_verifier_refuses_an_unnamed_skip(checkout: Checkout):
     """`--dumps-not-fetched ''` would be exactly the unnamed skip this gate's
     history is made of. The step never passes it (it tests `-n` first); the
     tool refuses it anyway."""
     checkout.install_real_verifier()
     checkout.write_manifest(_entries_manifest("alpha", "a" * 64, 1))
-    proc = subprocess.run(
-        [sys.executable, str(VERIFIER_REL), "--dumps-not-fetched", " "],
-        cwd=checkout.root,
-        capture_output=True,
-        text=True,
-    )
+    proc = _run_unnamed_skip(checkout)
     assert proc.returncode == 2, proc.stdout
     assert "needs a reason" in proc.stderr, proc.stderr
 
