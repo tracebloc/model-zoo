@@ -14,7 +14,7 @@
 # lands the scheduled drift detection.
 #
 # pytest is not one of the engine's pins, so it is pinned in test.txt instead.
-scikit-learn==1.8.0
+scikit-learn==1.9.1
 xgboost==3.2.0
 lightgbm==4.6.0
 catboost==1.2.10
