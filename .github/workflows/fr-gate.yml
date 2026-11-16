@@ -1,8 +1,8 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/fr-gate.yml`
-# (blob 5b4efbdbee74fac601af01d20e8a5f476b90bfaa) folded with the private source repo's own caller of it,
-# `.github/workflows/fr-gate-caller.yml` (blob 9e2a962fd5cd5e74bf5ed1ee9d7008fc1195baa3), for a PUBLIC repo: GitHub lets a
+# (blob a306a9c85c871d47c82b95b59732d3e1754eef1a) folded with the private source repo's own caller of it,
+# `.github/workflows/fr-gate-caller.yml` (blob 798ba860c7bf40822ecda5ef2b803635efa1f4f7), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
 # reusable's jobs inline -- the triggers are the caller's; every `inputs.*` is
@@ -66,6 +66,7 @@ name: FR gate
 
 on:
   pull_request:
+    branches: [staging, main, master]
     types: [opened, reopened, synchronize, ready_for_review, edited, labeled, unlabeled]
 
 permissions:
@@ -73,12 +74,9 @@ permissions:
 jobs:
   gate:
     name: gate / gate
-    # THE BASE DECIDES ON THE JOB, NOT IN A STEP ((internal ref)). A job skipped by
-    # its `if:` takes no runner; a step-level skip took one on every event of
-    # every PR into `develop` only to print "not gated". The skipped job still
-    # posts `gate / gate`, as `skipped`, which branch protection counts as
-    # passing -- so a PR retargeted OUT of a promotion base still has its stale
-    # FAILURE superseded ((internal ref); the caller's header).
+    # THE BASE DECIDES ON THE JOB, NOT IN A STEP ((internal ref)): a job its `if:` skips takes
+    # no runner. The caller's `branches:` is this list, so no run starts off these bases;
+    # the `if:` still skips one that does, from a caller that carries no such filter.
     # This list and the `case` below are ONE rule in two spellings: the `case`
     # maps each base listed here to the Status it requires, and fails closed on
     # any other. fr-gate-selftest parses both and fails when they differ.
