@@ -1,7 +1,7 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/code-quality.yml`
-# (blob c050862e8fbee9c040209736bbad12a125ebf586) folded with the private source repo's own caller of it,
+# (blob 48f941a9614d91c23005979c1694c3670fcf8d7d) folded with the private source repo's own caller of it,
 # job `quality` of `.github/workflows/ci.yml` with that file's `on:` and
 # `permissions:` (blob 784eceb2bec4993728e09adfc56d990878075adf of those lines; its
 # `concurrency:` is one group for every job it runs, so it is not
@@ -80,7 +80,8 @@ name: Code quality
 #   runtime-pins every setup-python / setup-node step reads a version file (check 8b
 #                of the pipeline contract, (internal ref); armed by the inventory floor)
 #   format + pipefail early-close
-#                black --check (opt in with `format: true`) and the pipefail
+#                black --check or ruff format --check (opt in with `format: true`, tool
+#                picked by `formatter`) and the pipefail
 #                SIGPIPE gate (on by default, whole-tree) in ONE job, because
 #                both are required contexts on no branch ((internal ref) D6 lever 2,
 #                OQ9); that job's own header says how the halves stay independent.
@@ -396,21 +397,49 @@ jobs:
         with:
           python-version-file: .org-config-tools/.python-version
 
-      # Black walks the directory, not the git index, so the tools checkout would be
-      # judged under the caller's `black-version`. Removed, not excluded (`--exclude`
+      # Black and ruff walk the directory, not the git index, so the tools checkout
+      # would be judged under the caller's formatter. Removed, not excluded (`--exclude`
       # overrides the caller's excludes), after setup-python reads its `.python-version`.
-      - name: Drop the shared checker before black walks the tree
+      - name: Drop the shared checker before the formatter walks the tree
         if: ${{ !cancelled() && steps.gates.outputs.format == 'true' }}
         run: |
           set -euo pipefail
           rm -rf .org-config-tools
 
-      - name: Install black
-        if: ${{ !cancelled() && steps.gates.outputs.format == 'true' && (steps.files.outputs.mode == 'all' || steps.files.outputs.count != '0') }}
+      - name: Validate the formatter input
+        # The comparison is in bash: a workflow `==`/`!=` ignores case, so `Ruff` would
+        # skip this step while the installer's `case` rejects it.
+        if: ${{ !cancelled() && steps.gates.outputs.format == 'true' }}
         env:
-          BLACK_VERSION: ${{ '26.10.1' }}
+          FORMATTER: ${{ 'black' }}
         run: |
           set -euo pipefail
+          case "$FORMATTER" in
+            black|ruff) ;;
+            *)
+              echo "::error::formatter '$FORMATTER' is neither black nor ruff - failing closed."
+              exit 1 ;;
+          esac
+
+      - name: Install the formatter
+        if: ${{ !cancelled() && steps.gates.outputs.format == 'true' && (steps.files.outputs.mode == 'all' || steps.files.outputs.count != '0') }}
+        env:
+          FORMATTER: ${{ 'black' }}
+          BLACK_VERSION: ${{ '26.10.1' }}
+          RUFF_VERSION: ${{ '0.16.0' }}
+        run: |
+          set -euo pipefail
+          case "$FORMATTER" in
+            black) ;;
+            ruff)
+              # ruff-version is lint-pins.yml's ruff, the same pin the ruff job runs.
+              python -m pip install --disable-pip-version-check "ruff==$RUFF_VERSION"
+              ruff --version
+              exit 0 ;;
+            *)
+              echo "::error::formatter '$FORMATTER' is neither black nor ruff - failing closed."
+              exit 1 ;;
+          esac
           # `black-version` still decides the style, so the runner move changes
           # no caller's verdict -- which matters more here than for ruff, since
           # a black version that does not match the tree reports every file as
@@ -418,8 +447,75 @@ jobs:
           python -m pip install --disable-pip-version-check "black==$BLACK_VERSION"
           black --version
 
+      - name: ruff format --check
+        if: ${{ !cancelled() && steps.gates.outputs.format == 'true' && 'black' == 'ruff' && (steps.files.outputs.mode == 'all' || steps.files.outputs.count != '0') }}
+        env:
+          MODE: ${{ steps.files.outputs.mode }}
+          # The same additive soft-fail as black's step below.
+          SOFT_FAIL: ${{ (false || false) && 'true' || 'false' }}
+        run: |
+          set -uo pipefail
+          # No --isolated: ruff must read the repo's own [tool.ruff] / ruff.toml
+          # (line-length, exclude, [format]) or its verdict would differ from
+          # what contributors run locally. --no-cache: nothing to reuse here.
+          RC=0
+          if [ "$MODE" = "all" ]; then
+            ruff format --check --no-cache . > /tmp/ruff-format.out 2>&1 || RC=$?
+          else
+            # NUL-delimited: paths with spaces must survive. --force-exclude keeps
+            # the repo's excludes on explicitly passed paths.
+            tr '\n' '\0' < /tmp/fmt-files.txt | xargs -0 --no-run-if-empty \
+              ruff format --check --no-cache --force-exclude > /tmp/ruff-format.out 2>&1 || RC=$?
+          fi
+
+          COUNT=$(grep -c '^Would reformat' /tmp/ruff-format.out || true)
+          # An ERROR is not a formatting verdict: a file ruff cannot parse prints
+          # `error:` while the reformat count stays 0 (the (internal ref) conflation).
+          ERRS=$(grep -cE '^error' /tmp/ruff-format.out || true)
+
+          {
+            echo "### format (ruff ${{ '0.16.0' }})"
+            echo ""
+            if [ "${ERRS:-0}" -gt 0 ]; then
+              echo "ruff could not process ${ERRS} file(s) -- this is an error, not a formatting verdict."
+            elif [ "${COUNT:-0}" -gt 0 ]; then
+              echo "${COUNT} file(s) need reformatting. Run \`ruff format <file>\` (or \`pre-commit run ruff-format\`)."
+            else
+              echo "No formatting changes needed."
+            fi
+            if [ "$RC" != "0" ]; then
+              echo ""
+              echo '```'
+              head -50 /tmp/ruff-format.out
+              echo '```'
+            fi
+            echo ""
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          # Decide from ruff's OUTPUT, not its exit code: under xargs GNU xargs
+          # remaps any child status in 1-125 to 123, as for black below.
+          if [ "${ERRS:-0}" -gt 0 ]; then
+            echo "::error::ruff could not process ${ERRS} file(s) - failing closed (not a formatting verdict)."
+            cat /tmp/ruff-format.out
+            exit 1
+          fi
+          if [ "${COUNT:-0}" -gt 0 ]; then
+            cat /tmp/ruff-format.out
+            if [ "$SOFT_FAIL" = "true" ]; then
+              echo "soft-fail is on - reporting ${COUNT} unformatted file(s), not failing this job."
+              exit 0
+            fi
+            exit 1
+          fi
+          if [ "$RC" != "0" ]; then
+            echo "::error::ruff format exited $RC but reported no findings - failing closed."
+            cat /tmp/ruff-format.out
+            exit 1
+          fi
+          exit 0
+
       - name: black --check
-        if: ${{ !cancelled() && steps.gates.outputs.format == 'true' && (steps.files.outputs.mode == 'all' || steps.files.outputs.count != '0') }}
+        if: ${{ !cancelled() && steps.gates.outputs.format == 'true' && 'black' == 'black' && (steps.files.outputs.mode == 'all' || steps.files.outputs.count != '0') }}
         env:
           MODE: ${{ steps.files.outputs.mode }}
           # Additive soft-fail, per this input's contract: format is advisory
