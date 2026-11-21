@@ -6,6 +6,7 @@
 # once PyPI serves it, so that job runs these checks against the new SDK before
 # it merges. The SDK's own torch/torchvision caps match the engine's pins (it
 # validates on the minor the training images run), so this resolves against
-# pytorch.txt without overriding it.
+# pytorch.txt without overriding it. tools/check_sdk_extra_pins.py holds that
+# claim in the sdk-upload job before the install.
 -r pytorch.txt
 tracebloc[pytorch]==7.0.0
