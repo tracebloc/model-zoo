@@ -84,6 +84,26 @@ def test_row_a_narrowed_torch_cap_below_the_mirror_is_refused(tmp_path):
     assert f"torch=={v} is outside the SDK's range" in r.stderr
 
 
+@pytest.mark.parametrize(
+    ("pin", "spec", "holds"),
+    [
+        ("2.0.0", "2.0.0", True),  # the pin is the range's own lower bound
+        ("2.0.5", "2.0.0", True),
+        ("2.1", "2.0", True),
+        ("2.1.0", "2.0.0", False),  # the mutation: another minor
+        ("3.0.0", "2.0", False),  # the mutation: another major
+        ("1.9.0", "2.0.0", False),
+    ],
+)
+def test_row_a_compatible_release_range_is_judged_on_the_zero_stripped_pin(pin, spec, holds):
+    sys.path.insert(0, str(ROOT / "tools"))
+    try:
+        import check_sdk_extra_pins as tool
+    finally:
+        sys.path.remove(str(ROOT / "tools"))
+    assert tool._holds("~=", tool._ver(pin), spec) is holds
+
+
 @pytest.mark.parametrize("pkg", _PINNED)
 def test_row_every_pinned_package_is_held_not_only_torch(tmp_path, pkg):
     v = _mirror_versions()[pkg]

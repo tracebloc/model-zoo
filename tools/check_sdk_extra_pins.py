@@ -72,7 +72,9 @@ def _holds(op: str, have: tuple[int, ...], want_s: str) -> bool:
     base = [int(p) for p in want_s.split(".")]
     if len(base) < 2:
         raise Unreadable(f"~={want_s} needs at least two parts")
-    return have >= want and tuple(have[: len(base) - 1]) == tuple(base[:-1])
+    k = len(base) - 1
+    head = tuple(have) + (0,) * max(0, k - len(have))  # `have` is zero-stripped
+    return have >= want and head[:k] == tuple(base[:-1])
 
 
 def sdk_pin(text: str) -> str:
