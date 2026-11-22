@@ -1,7 +1,7 @@
 # GENERATED FILE -- DO NOT EDIT BY HAND.
 #
 # Self-contained copy of the reusable workflow `.github/workflows/fr-gate.yml`
-# (blob a306a9c85c871d47c82b95b59732d3e1754eef1a) folded with the private source repo's own caller of it,
+# (blob dae90971e0fbb7bae7bb22300f87d2721e5e1116) folded with the private source repo's own caller of it,
 # `.github/workflows/fr-gate-caller.yml` (blob 798ba860c7bf40822ecda5ef2b803635efa1f4f7), for a PUBLIC repo: GitHub lets a
 # public repo `uses:` a reusable workflow only from a public repo, and the
 # reusables live in the private source repo. So this file carries the
@@ -63,6 +63,10 @@ name: FR gate
 # commit->PR attribution (`commits/{sha}/pulls`) between base and head;
 # (internal ref) promotion PRs are transparent plumbing; with no PRs found the
 # promotion PR's own Status is checked (the walk script's `discover` mode).
+#
+# A (internal ref) release PR (a `release/` head on (internal ref) itself, into
+# `main`) never enters FR on staging: its `release:approved` is its review, so
+# the gate passes it on that label instead of walking ((internal ref) D126, D127).
 
 on:
   pull_request:
@@ -110,8 +114,35 @@ jobs:
             echo "skip=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Promotion-shape guard — only the train promotes
+      # THE RELEASE PR'S SHAPE ((internal ref) D126), as the release lane reads it: (internal ref)'s own
+      # `release/` branch into `main`. Only the shape is read here; the label is judged below,
+      # and anything else is walked as before.
+      - name: Is this a frontend-app release PR?
+        id: release-shape
         if: steps.skip.outputs.skip != 'true'
+        env:
+          REPO_NAME: ${{ github.event.repository.name }}
+          REPO_FULL: ${{ github.repository }}
+          BASE: ${{ github.base_ref }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+        run: |
+          why=""
+          if [ "$REPO_NAME" != "frontend-app" ]; then why="the release lane is frontend-app's, not ${REPO_NAME:-an unread repository}'s"
+          elif [ "$BASE" != "main" ]; then why="it targets '${BASE:-an unread base}', not 'main'"
+          elif [[ "$HEAD_REF" != release/?* ]]; then why="its head '${HEAD_REF:-unread}' is not a 'release/' branch"
+          elif [ "$HEAD_REPO" != "$REPO_FULL" ]; then why="its head is on '${HEAD_REPO:-an unread repository}', not on $REPO_FULL"
+          fi
+          if [ -n "$why" ]; then
+            echo "release=false" >> "$GITHUB_OUTPUT"
+            echo "Not a release PR ($why): the walk below judges it."
+          else
+            echo "release=true" >> "$GITHUB_OUTPUT"
+            echo "A release PR ($HEAD_REF into main): its release:approved label is judged below, and no walk runs."
+          fi
+
+      - name: Promotion-shape guard — only the train promotes
+        if: steps.skip.outputs.skip != 'true' && steps.release-shape.outputs.release != 'true'
         env:
           HEAD_REF: ${{ github.event.pull_request.head.ref }}
           LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
@@ -124,6 +155,7 @@ jobs:
           #   hotfix-backmerge/*    hotfix.yml's automated back-merges
           #   'hotfix' label        single-repo emergency fix (D14a, audited)
           #   'skip-fr-gate' label  full gate override (handled above, audited)
+          #   (internal ref) release/ the release lane (D126): skipped above, judged on its label below
           case "$HEAD_REF" in
             release-train/*|hotfix-backmerge/*) exit 0 ;;
           esac
@@ -139,6 +171,99 @@ jobs:
           fetch-depth: 0
           ref: ${{ github.event.pull_request.head.sha }}
 
+      # THE LABEL'S THREE READS, for a release PR only: (internal ref)'s `readApproval` reads the PR's
+      # labels and timeline (issues, pull-requests) and its branch's pushes (contents), on this
+      # repository alone. Read-only; no fallback, so a short scope is "cannot tell" below.
+      - name: Mint a read token for the release PR's label
+        id: release-token
+        if: steps.skip.outputs.skip != 'true' && steps.release-shape.outputs.release == 'true'
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          app-id: ${{ secrets.RELEASE_TRAIN_APP_ID }}
+          private-key: ${{ secrets.RELEASE_TRAIN_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-contents: read
+          permission-issues: read
+          permission-pull-requests: read
+
+      # A RELEASE PR PASSES ON ITS LABEL ((internal ref) D127): `release:approved`, last applied by a login
+      # (internal ref)'s `.github/release-approvers` names at the merge base, to this very head. Read as
+      # the release lane reads it ((internal ref) hotfix-design-rules.mjs `labelOnHead`): (internal ref)'s
+      # own `releaseApproval` and `readApproval`, from the MERGE BASE's scripts/, so a release PR cannot
+      # rewrite its judge, and a push after the label voids it. No label, a stale one or a non-approver's
+      # is a refusal (exit 1); anything unreadable is "cannot tell" (exit 3), as for the walk.
+      # The judge below is run by `node`; the slim image's node is not guaranteed, so the caller's
+      # `.nvmrc` names the version, as in mutation-nightly.yml. No `.nvmrc` leaves the image's node.
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        if: steps.skip.outputs.skip != 'true' && steps.release-shape.outputs.release == 'true' && hashFiles('.nvmrc') != ''
+        with:
+          node-version-file: .nvmrc
+
+      - name: A release PR passes on release:approved at its head
+        id: release
+        if: steps.skip.outputs.skip != 'true' && steps.release-shape.outputs.release == 'true'
+        env:
+          GH_TOKEN: ${{ steps.release-token.outputs.token }}
+          REPO_FULL: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          cannot_tell() {
+            echo "::error title=FR gate could not verify::FR gate could not verify -- $1. Re-run this check once it can be read."
+            exit 3
+          }
+          git fetch --quiet --no-tags origin "+refs/heads/main:refs/remotes/origin/main" || cannot_tell "main cannot be fetched"
+          base=$(git merge-base origin/main "$HEAD_SHA") || cannot_tell "the merge base of $HEAD_SHA and main cannot be read"
+          code=$(mktemp -d) || cannot_tell "no temporary directory"
+          git archive "$base" scripts | tar -x -C "$code" || cannot_tell "scripts/ cannot be read at the merge base $base"
+          judge=$(mktemp -d)/judge.mjs || cannot_tell "no temporary directory"
+          cat > "$judge" <<'JS'
+          import { join } from 'node:path'
+          import { pathToFileURL } from 'node:url'
+          const [code, root, base, head, repo, pr, headRef] = process.argv.slice(2)
+          const say = (word, why) => { console.log(`${word}\t${String(why).replace(/\s+/g, ' ')}`); process.exit(0) }
+          const load = async (file) => {
+            try { return await import(pathToFileURL(join(code, 'scripts', file)).href) } catch (err) {
+              say('unknown', `frontend-app's scripts/${file} cannot be loaded at the merge base (${err.message})`)
+            }
+          }
+          const gate = await load('release-gate.mjs')
+          const approval = await load('label-approval.mjs')
+          for (const [mod, file, name, type] of [[gate, 'release-gate.mjs', 'releaseApproval', 'function'],
+            [gate, 'release-gate.mjs', 'onlyWaits', 'function'], [gate, 'release-gate.mjs', 'RELEASE_LABEL', 'string'],
+            [approval, 'label-approval.mjs', 'readApproval', 'function']]) {
+            if (typeof mod[name] !== type) say('unknown', `frontend-app's scripts/${file} exports no \`${name}\` at the merge base`)
+          }
+          const label = gate.RELEASE_LABEL
+          let verdict
+          try {
+            verdict = gate.releaseApproval({ root, base, head,
+              readRelease: () => approval.readApproval({ repo, pr, headRef, headRepo: repo, baseRepo: repo }) })
+          } catch (err) { say('unknown', `\`${label}\` cannot be read (${err.message})`) }
+          if (verdict === null || typeof verdict !== 'object' || typeof verdict.approved !== 'boolean') {
+            say('unknown', `\`releaseApproval\` answered in a shape this gate does not read`)
+          }
+          if (verdict.approved !== true) say(gate.onlyWaits(verdict) ? 'refuse' : 'unknown', verdict.reason)
+          if (verdict.labelled !== head) {
+            say('refuse', `\`${label}\` was applied to ${verdict.labelled ?? 'a head that cannot be read'}, and the head is now ${head}: a push after the label voids it`)
+          }
+          say('pass', `a frontend-app release PR, released by ${verdict.by} (\`${label}\` applied to this head)`)
+          JS
+          verdict=$(node "$judge" "$code" "$PWD" "$base" "$HEAD_SHA" "$REPO_FULL" "$PR_NUMBER" "$HEAD_REF") || verdict=""
+          case "$verdict" in
+            pass$'\t'*)
+              echo "release=pass" >> "$GITHUB_OUTPUT"
+              echo "FR gate: ${verdict#*$'\t'}. Its label is its functional review, so no walk runs." ;;
+            refuse$'\t'*)
+              echo "::error title=FR gate release::${verdict#*$'\t'}. A release PR passes only on release:approved applied by an approver to its current head; a push after the label needs Release pressed again."
+              exit 1 ;;
+            unknown$'\t'*) cannot_tell "${verdict#*$'\t'}" ;;
+            *) cannot_tell "the release judge printed no verdict" ;;
+          esac
+
       # THE WALK LIVES HERE, NOT IN THE CALLING REPO ((internal ref), (internal ref) D6):
       # the release train needs the same walk to cut the prod hop at the FR
       # frontier, and a second copy would be the drift rule 9 forbids -- so the
@@ -148,7 +273,7 @@ jobs:
       # token minted further below.
       - name: Mint a read-only token for org-config (private; the caller's own token cannot read it)
         id: org-config-token
-        if: steps.skip.outputs.skip != 'true'
+        if: steps.skip.outputs.skip != 'true' && steps.release.outputs.release != 'pass'
         uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
         with:
           app-id: ${{ secrets.RELEASE_TRAIN_APP_ID }}
@@ -164,7 +289,7 @@ jobs:
       # actionlint's `job` schema (1.7.12) does not know `workflow_sha`.
       - name: Resolve the tools ref, refusing an empty one
         id: tools-ref
-        if: steps.skip.outputs.skip != 'true'
+        if: steps.skip.outputs.skip != 'true' && steps.release.outputs.release != 'pass'
         env:
           TOOLS_REF: ${{ 'main' }}
           JOB_CONTEXT: ${{ toJSON(job) }}
@@ -181,7 +306,7 @@ jobs:
           echo "ref=$TOOLS_REF" >> "$GITHUB_OUTPUT"
           echo "tools ref: $TOOLS_REF"
       - name: Check out the shared walk script
-        if: steps.skip.outputs.skip != 'true'
+        if: steps.skip.outputs.skip != 'true' && steps.release.outputs.release != 'pass'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: tracebloc/org-config
@@ -198,7 +323,7 @@ jobs:
       # is far better than it passing wrongly.
       - name: Mint an installation token
         id: app-token
-        if: steps.skip.outputs.skip != 'true'
+        if: steps.skip.outputs.skip != 'true' && steps.release.outputs.release != 'pass'
         uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
         with:
           app-id: ${{ secrets.RELEASE_TRAIN_APP_ID }}
@@ -219,7 +344,7 @@ jobs:
 
       - name: Discover items in this promotion
         id: items
-        if: steps.skip.outputs.skip != 'true'
+        if: steps.skip.outputs.skip != 'true' && steps.release.outputs.release != 'pass'
         env:
           BASE_REF: ${{ github.base_ref }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
@@ -238,7 +363,7 @@ jobs:
           bash .org-config-tools/scripts/fr-gate-walk.sh discover
 
       - name: Verify each item is in required Status
-        if: steps.skip.outputs.skip != 'true'
+        if: steps.skip.outputs.skip != 'true' && steps.release.outputs.release != 'pass'
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           ORG: ${{ 'tracebloc' }}
