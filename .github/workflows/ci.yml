@@ -107,6 +107,11 @@ jobs:
           cache-dependency-path: |
             .github/requirements/pytorch.txt
             .github/requirements/sdk.txt
+      - name: The mirror sits inside the pinned SDK's [pytorch] extra
+        run: |
+          pin="$(sed -n 's/^tracebloc\[pytorch\]==\([^ #]*\).*/\1/p' .github/requirements/sdk.txt)"
+          pip download --no-deps "tracebloc==$pin" -d "$RUNNER_TEMP/sdk-wheel"
+          python3 -I tools/check_sdk_extra_pins.py --wheel "$RUNNER_TEMP/sdk-wheel/tracebloc-$pin-py3-none-any.whl"
       - run: pip install -r .github/requirements/test.txt -r .github/requirements/sdk.txt
       - name: The pinned SDK's upload checks pass on every template as cloned
         env:
