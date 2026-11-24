@@ -44,6 +44,18 @@ shows the shape. Presence is asserted by the conformance audit
   make this PR a draft, or reword a line that only gives context. Low severity and a
   flag only: never request changes for it, and never treat it as a reason to hold the PR.
 
+**Shared files** (a committed file that other PRs also change)
+
+- **A layout that makes unrelated PRs collide.** A file many PRs change keeps one item per
+  line, stores no total, count, hash or history it could compute, and is found rather
+  than listed. Flag a PR that adds to such a file a total, count or hash it could
+  compute; that adds a new hand-kept registry where a script could read a folder; or
+  that grows one long line listing many items. A pin that cannot be computed (an action
+  SHA, a checksum a download is verified against) and a value a check holds the code to
+  on purpose (a ratchet such as a line ceiling) are no finding. Quote the rule's first
+  sentence. Low severity and a flag only: never request changes for it, and never treat
+  it as a reason to hold the PR.
+
 **Instruction files** (a root `CLAUDE.md`, or any file under `.claude/rules/`)
 
 - **Text that belongs in a narrower tier.** These files load into every session they
