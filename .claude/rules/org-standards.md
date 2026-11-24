@@ -13,6 +13,7 @@ A digest, one line per rule, of the binding org-standards.md. Read its section b
 ### Branches & PRs
 
 - On the train, branch off and target `develop`, never `staging` or `main`.
+- A (internal ref) release PR targets `main`, as a hotfix does ((internal ref) D126).
 - Off it, `repo-inventory.yml` says the model; never create a missing `develop`.
 - `git fetch`, branch from the tip of `develop`, one author, no stacking; a day-old branch merges `develop` before review.
 - One self-contained change per PR, split at 1000+ lines; refactors apart from behaviour.
@@ -43,6 +44,7 @@ A digest, one line per rule, of the binding org-standards.md. Read its section b
 <!-- unreachable-finding-path:end -->
 - A recurring finding becomes a `.cursor/BUGBOT.md` rule; style rules live in tooling, not prose.
 - Never commit secrets, tokens or customer data; keep internal refs out of public PR text.
+- A file many PRs change keeps one item per line, stores no total, count, hash or history it could compute, and is found rather than listed.
 - A guard reads the real thing and fails closed: derive, never restate; "cannot tell" is a finding.
 - A guard is proven by breaking it: assert the mutation applied; for an enum, alias or vocabulary, derive the input domain from the producer's declared surface and test all of it; arm while green; a red nightly is a bug.
 - Comments give the current reason once, in three lines or fewer; no history, line numbers or "today".
@@ -53,7 +55,7 @@ A digest, one line per rule, of the binding org-standards.md. Read its section b
 - Every ticket has a `Status`, new ones `Backlog`; a `work-type:bug` goes straight to `Ready`.
 - `off-board` is only for an issue that is a ledger or a bot's record.
 - Take from `Ready` first; a `Backlog` pull is normal: say what you take.
-- No dev-side review: FR is once, on staging, by `/fr-pass` or `Ready for prod`; self-signoff counts.
+- No dev-side review; a risk class is reviewed on its PR (D9); a green snapshot, else a pass or `/fr-pass`, moves a card to `Ready for prod`; self-signoff counts.
 - `fr-gate` blocks: fix the board or the work; exit 3: re-run it. `skip-fr-gate` is for emergencies.
 
 ### Releases & publishing
@@ -74,6 +76,6 @@ A digest, one line per rule, of the binding org-standards.md. Read its section b
 ### AI-assisted sessions (Claude Code, etc.)
 
 - A session never merges, closes another's PR, deletes another's branch or force-pushes unless told.
-- Functional sign-off is a person's: a session never comments `/fr-pass` or removes `fr-hold`.
+- Functional sign-off is a person's: a session never comments `/fr-pass`, removes `fr-hold`, gives an R1/R2 pass or answers a `stop-verdict`.
 - New guidance goes to the narrowest file that loads when needed: `<dir>/CLAUDE.md`, or `.claude/rules/<topic>.md` with `paths:`; reference to `docs/`; history to the commit message. The root changes only for a new command or a rule every session needs.
 - If your change makes a CLAUDE.md, `.claude/rules/` file, BUGBOT.md or runbook false, fix it in the same PR.
