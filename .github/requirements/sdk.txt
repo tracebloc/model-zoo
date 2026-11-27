@@ -9,4 +9,4 @@
 # pytorch.txt without overriding it. tools/check_sdk_extra_pins.py holds that
 # claim in the sdk-upload job before the install.
 -r pytorch.txt
-tracebloc[pytorch]==7.0.5
+tracebloc[pytorch]==7.0.6
